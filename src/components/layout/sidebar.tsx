@@ -66,7 +66,7 @@ export function Sidebar({ user }: SidebarProps) {
           </div>
         </div>
         <form action={logout}>
-          <Button variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground">
+          <Button type="submit" variant="ghost" size="sm" className="w-full justify-start gap-2 text-muted-foreground">
             <LogOut className="h-4 w-4" />
             Sair
           </Button>
