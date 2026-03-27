@@ -1,7 +1,6 @@
 "use client";
 
 import { useTransition } from "react";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -69,10 +68,11 @@ function ParticipantActions({
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger>
-        <Button variant="ghost" size="icon" className="h-7 w-7" disabled={isPending}>
-          <MoreHorizontal className="h-4 w-4" />
-        </Button>
+      <DropdownMenuTrigger
+        disabled={isPending}
+        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
+      >
+        <MoreHorizontal className="h-4 w-4" />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         {!participant.buyInPaid && participant.status === "registered" && (
