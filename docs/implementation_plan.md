@@ -157,10 +157,10 @@ src/
 
 | Fase | Descrição | Status |
 |------|-----------|--------|
-| 0 | Bootstrap + Git | ⏳ Pronto para executar |
-| 0.5 | Discussão de design | 🔲 Pendente |
-| 1 | Auth (login, registro, roles, RLS) | 🔲 Pendente |
-| 2 | Torneios CRUD | 🔲 Pendente |
+| 0 | Bootstrap + Git | ✅ Concluído |
+| 0.5 | Discussão de design | ✅ Concluído |
+| 1 | Auth (login, registro, roles, RLS) | ✅ Concluído |
+| 2 | Torneios CRUD | ✅ Concluído |
 | 3 | Participantes & Financeiro | 🔲 Pendente |
 | 4 | Mesa ao Vivo & Timer Realtime | 🔲 Pendente |
 | 5 | Ranking & Estatísticas | 🔲 Pendente |

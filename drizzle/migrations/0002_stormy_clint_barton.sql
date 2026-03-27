@@ -1,0 +1,1 @@
+ALTER TABLE "blind_structures" ADD COLUMN "is_addon_level" boolean DEFAULT false NOT NULL;

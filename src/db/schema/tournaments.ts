@@ -1,0 +1,29 @@
+import { pgTable, serial, integer, text, boolean, timestamp, uuid } from "drizzle-orm/pg-core";
+import { seasons } from "./seasons";
+import { users } from "./users";
+
+export const tournaments = pgTable("tournaments", {
+  id: serial("id").primaryKey(),
+  seasonId: integer("season_id").references(() => seasons.id),
+  name: text("name").notNull(),
+  date: timestamp("date", { withTimezone: true }).notNull(),
+  status: text("status", {
+    enum: ["pending", "running", "finished", "cancelled"],
+  }).notNull().default("pending"),
+  buyInAmount: integer("buy_in_amount").notNull(),
+  rebuyAmount: integer("rebuy_amount").notNull().default(0),
+  addonAmount: integer("addon_amount").notNull().default(0),
+  initialChips: integer("initial_chips").notNull(),
+  rebuyChips: integer("rebuy_chips").notNull().default(0),
+  addonChips: integer("addon_chips").notNull().default(0),
+  maxRebuys: integer("max_rebuys").notNull().default(0),
+  allowAddon: boolean("allow_addon").notNull().default(false),
+  prizePoolOverride: integer("prize_pool_override"),
+  currentBlindLevel: integer("current_blind_level").notNull().default(0),
+  timerRunning: boolean("timer_running").notNull().default(false),
+  timerRemainingSecs: integer("timer_remaining_secs"),
+  timerStartedAt: timestamp("timer_started_at", { withTimezone: true }),
+  createdBy: uuid("created_by").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+});

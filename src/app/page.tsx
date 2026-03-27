@@ -1,12 +1,15 @@
-export default function Home() {
-  return (
-    <main className="flex min-h-screen items-center justify-center">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold">SPQTC Tournament Manager</h1>
-        <p className="mt-2 text-muted-foreground">
-          Gerenciador de torneios de poker
-        </p>
-      </div>
-    </main>
-  );
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+
+export default async function Home() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (user) {
+    redirect("/dashboard");
+  } else {
+    redirect("/login");
+  }
 }

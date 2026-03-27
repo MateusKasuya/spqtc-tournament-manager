@@ -1,3 +1,10 @@
-// Schema definitions will be added in Phase 1+
-// Each table gets its own file and is re-exported here
-export {};
+export { users } from "./users";
+export { seasons } from "./seasons";
+export { tournaments } from "./tournaments";
+export { blindStructures } from "./blind_structures";
+export { prizeStructures } from "./prize_structures";
+export { blindTemplates } from "./blind_templates";
+export type { BlindTemplateLevels } from "./blind_templates";
+export { tournamentResults } from "./tournament_results";
+export { prizeTemplates } from "./prize_templates";
+export type { PrizeTemplateLevels } from "./prize_templates";

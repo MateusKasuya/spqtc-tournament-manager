@@ -1,0 +1,1 @@
+ALTER TABLE "blind_structures" ADD COLUMN "is_big_ante" boolean DEFAULT false NOT NULL;
