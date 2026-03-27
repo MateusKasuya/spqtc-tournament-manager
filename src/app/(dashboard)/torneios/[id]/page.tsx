@@ -19,6 +19,7 @@ import { PayoutDialog } from "@/components/tournament/payout-dialog";
 import { DeleteTournamentButton } from "@/components/tournament/delete-tournament-button";
 import { CopyInviteLinkButton } from "@/components/tournament/copy-invite-link-button";
 import { SelfRegisterButton } from "@/components/tournament/self-register-button";
+import { TournamentStatusButton } from "@/components/tournament/tournament-status-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -128,6 +129,10 @@ export default async function TorneioPage({ params }: PageProps) {
             </Link>
           )}
           {isActive && <CopyInviteLinkButton tournamentId={tournamentId} />}
+          <TournamentStatusButton
+            tournamentId={tournamentId}
+            currentStatus={tournament.status as "pending" | "running" | "finished" | "cancelled"}
+          />
           <DeleteTournamentButton tournamentId={tournamentId} />
         </div>
       )}

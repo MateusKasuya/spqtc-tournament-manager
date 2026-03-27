@@ -117,6 +117,23 @@ export async function updateTournament(id: number, formData: FormData) {
   redirect(`/torneios/${id}`);
 }
 
+export async function updateTournamentStatus(
+  id: number,
+  status: "pending" | "running" | "finished" | "cancelled"
+) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth;
+
+  await db
+    .update(tournaments)
+    .set({ status, updatedAt: new Date() })
+    .where(eq(tournaments.id, id));
+
+  revalidatePath(`/torneios/${id}`);
+  revalidatePath("/torneios");
+  return { success: true };
+}
+
 export async function deleteTournament(id: number) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
