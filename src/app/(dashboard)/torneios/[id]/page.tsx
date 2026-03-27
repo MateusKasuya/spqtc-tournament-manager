@@ -260,64 +260,65 @@ export default async function TorneioPage({ params }: PageProps) {
 
         {/* Premios */}
         <TabsContent value="prizes" className="mt-4 space-y-6">
-          {tournament.status !== "finished" && (
-            <div className="space-y-3">
-              {isAdmin && (
-                <div className="flex justify-end gap-2">
-                  {prizeData.length > 0 && (
-                    <DeletePrizeStructureButton tournamentId={tournamentId} />
-                  )}
-                  <PrizeStructureEditor
-                    tournamentId={tournamentId}
-                    initialPositions={prizeData}
-                    savedTemplates={prizeTemplatesList}
-                  />
-                </div>
-              )}
-              {prizeData.length > 0 ? (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Posicao</TableHead>
-                      <TableHead>Percentual</TableHead>
-                      <TableHead>Valor estimado</TableHead>
+          {/* Estrutura de premios — editavel antes de finalizar, read-only depois */}
+          <div className="space-y-3">
+            {isAdmin && tournament.status !== "finished" && (
+              <div className="flex justify-end gap-2">
+                {prizeData.length > 0 && (
+                  <DeletePrizeStructureButton tournamentId={tournamentId} />
+                )}
+                <PrizeStructureEditor
+                  tournamentId={tournamentId}
+                  initialPositions={prizeData}
+                  savedTemplates={prizeTemplatesList}
+                />
+              </div>
+            )}
+            {prizeData.length > 0 ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Posicao</TableHead>
+                    <TableHead>Percentual</TableHead>
+                    <TableHead>Valor</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {prizeData.map((p) => (
+                    <TableRow key={p.position}>
+                      <TableCell className="font-medium">{p.position}º lugar</TableCell>
+                      <TableCell>{p.percentage}%</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {formatCurrency(Math.round(prizePool * p.percentage / 100))}
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {prizeData.map((p) => (
-                      <TableRow key={p.position}>
-                        <TableCell className="font-medium">{p.position}º lugar</TableCell>
-                        <TableCell>{p.percentage}%</TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {formatCurrency(Math.round(prizePool * p.percentage / 100))}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              ) : (
-                <p className="text-muted-foreground text-sm text-center py-6">
-                  Nenhum preset de premios configurado
-                </p>
-              )}
-            </div>
-          )}
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <p className="text-muted-foreground text-sm text-center py-6">
+                Nenhuma estrutura de premios configurada
+              </p>
+            )}
+          </div>
 
-          {["running", "finished"].includes(tournament.status) && isAdmin && prizeData.length > 0 && (
+          {["running", "finished"].includes(tournament.status) && isAdmin && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold">Distribuicao de premios</h3>
-                <PayoutDialog
-                  tournamentId={tournamentId}
-                  prizePool={prizePool}
-                  prizePositions={prizeData}
-                  participants={participantsList.map((p) => ({
-                    userId: p.userId,
-                    name: p.name,
-                    nickname: p.nickname,
-                    finishPosition: p.finishPosition ?? null,
-                  }))}
-                />
+                {prizeData.length > 0 && (
+                  <PayoutDialog
+                    tournamentId={tournamentId}
+                    prizePool={prizePool}
+                    prizePositions={prizeData}
+                    participants={participantsList.map((p) => ({
+                      userId: p.userId,
+                      name: p.name,
+                      nickname: p.nickname,
+                      finishPosition: p.finishPosition ?? null,
+                    }))}
+                  />
+                )}
               </div>
 
               {participantsList.some((p) => p.prizeAmount > 0) && (
