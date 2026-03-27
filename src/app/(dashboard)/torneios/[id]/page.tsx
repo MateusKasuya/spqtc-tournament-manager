@@ -306,19 +306,17 @@ export default async function TorneioPage({ params }: PageProps) {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold">Distribuicao de premios</h3>
-                {prizeData.length > 0 && (
-                  <PayoutDialog
-                    tournamentId={tournamentId}
-                    prizePool={prizePool}
-                    prizePositions={prizeData}
-                    participants={participantsList.map((p) => ({
-                      userId: p.userId,
-                      name: p.name,
-                      nickname: p.nickname,
-                      finishPosition: p.finishPosition ?? null,
-                    }))}
-                  />
-                )}
+                <PayoutDialog
+                  tournamentId={tournamentId}
+                  prizePool={prizePool}
+                  prizePositions={prizeData}
+                  participants={participantsList.map((p) => ({
+                    userId: p.userId,
+                    name: p.name,
+                    nickname: p.nickname,
+                    finishPosition: p.finishPosition ?? null,
+                  }))}
+                />
               </div>
 
               {participantsList.some((p) => p.prizeAmount > 0) && (

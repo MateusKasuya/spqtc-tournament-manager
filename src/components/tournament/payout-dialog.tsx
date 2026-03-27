@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { distributePayouts } from "@/actions/participants";
 import { formatCurrency } from "@/lib/format";
-import { Trophy } from "lucide-react";
+import { Trophy, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface ParticipantOption {
@@ -71,6 +71,17 @@ export function PayoutDialog({
     setEntries((prev) => prev.map((e, i) => (i === index ? { ...e, [field]: value } : e)));
   }
 
+  function addEntry() {
+    const nextPos = entries.length > 0 ? Math.max(...entries.map((e) => e.position)) + 1 : 1;
+    setEntries((prev) => [...prev, { position: nextPos, userId: "", amount: "" }]);
+  }
+
+  function removeEntry(index: number) {
+    setEntries((prev) =>
+      prev.filter((_, i) => i !== index).map((e, i) => ({ ...e, position: i + 1 }))
+    );
+  }
+
   function handleDistribute() {
     startTransition(async () => {
       const payouts = entries
@@ -106,13 +117,27 @@ export function PayoutDialog({
             Prize pool: <span className="font-semibold">{formatCurrency(prizePool)}</span>
           </p>
           <div className="space-y-3">
+            {entries.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-2">
+                Nenhuma posicao adicionada. Clique em "Adicionar posicao" abaixo.
+              </p>
+            )}
             {entries.map((entry, index) => {
               const pct = prizePositions[index]?.percentage ?? 0;
               return (
                 <div key={entry.position} className="rounded-lg border p-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">{entry.position}º lugar</span>
-                    <span className="text-xs text-muted-foreground">{pct}%</span>
+                    <div className="flex items-center gap-2">
+                      {pct > 0 && <span className="text-xs text-muted-foreground">{pct}%</span>}
+                      <button
+                        type="button"
+                        onClick={() => removeEntry(index)}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
@@ -145,6 +170,10 @@ export function PayoutDialog({
                 </div>
               );
             })}
+            <Button variant="outline" size="sm" className="w-full" onClick={addEntry}>
+              <Plus className="h-4 w-4 mr-1" />
+              Adicionar posicao
+            </Button>
           </div>
           <div className="flex justify-end gap-2 pt-2 border-t">
             <Button variant="outline" onClick={() => setOpen(false)}>
