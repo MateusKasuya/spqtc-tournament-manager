@@ -82,7 +82,7 @@ export function DateTimePicker({ value, onChange }: DateTimePickerProps) {
         </PopoverContent>
       </Popover>
 
-      <Select value={selectedHour} onValueChange={handleHourChange}>
+      <Select value={selectedHour} onValueChange={(v) => handleHourChange(v ?? "")}>
         <SelectTrigger className="w-16">
           <SelectValue>{selectedHour}</SelectValue>
         </SelectTrigger>
@@ -97,7 +97,7 @@ export function DateTimePicker({ value, onChange }: DateTimePickerProps) {
 
       <span className="flex items-center text-muted-foreground font-medium">:</span>
 
-      <Select value={selectedMinute} onValueChange={handleMinuteChange}>
+      <Select value={selectedMinute} onValueChange={(v) => handleMinuteChange(v ?? "")}>
         <SelectTrigger className="w-16">
           <SelectValue>{selectedMinute}</SelectValue>
         </SelectTrigger>

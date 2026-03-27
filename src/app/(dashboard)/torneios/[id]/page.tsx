@@ -1,25 +1,31 @@
 import { notFound, redirect } from "next/navigation";
 import { getProfile } from "@/lib/get-profile";
-import { getTournamentById, getBlindStructure, getPrizeStructure, getTournamentResults } from "@/db/queries/tournaments";
+import { getTournamentById, getBlindStructure, getPrizeStructure } from "@/db/queries/tournaments";
 import { getBlindTemplates } from "@/db/queries/blind-templates";
 import { getPrizeTemplates } from "@/db/queries/prize-templates";
 import { getSeasonById } from "@/db/queries/seasons";
+import { getParticipants } from "@/db/queries/participants";
+import { getTournamentFinancialSummary } from "@/db/queries/transactions";
+import { getAllUsers } from "@/db/queries/users";
 import { StatusBadge } from "@/components/tournament/status-badge";
 import { BlindStructureTable } from "@/components/tournament/blind-structure-table";
 import { BlindStructureEditor } from "@/components/tournament/blind-structure-editor";
 import { PrizeStructureEditor } from "@/components/tournament/prize-structure-editor";
-import { TournamentResultsEditor } from "@/components/tournament/tournament-results-editor";
 import { DeletePrizeStructureButton } from "@/components/tournament/delete-prize-structure-button";
+import { ParticipantList } from "@/components/tournament/participant-list";
+import { AddParticipantDialog } from "@/components/tournament/add-participant-dialog";
+import { FinancialSummary } from "@/components/tournament/financial-summary";
+import { PayoutDialog } from "@/components/tournament/payout-dialog";
+import { DeleteTournamentButton } from "@/components/tournament/delete-tournament-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { buttonVariants } from "@/components/ui/button-variants";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { formatCurrency, formatChips } from "@/lib/format";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ArrowLeft, Pencil } from "lucide-react";
 import Link from "next/link";
-import { DeleteTournamentButton } from "@/components/tournament/delete-tournament-button";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -30,28 +36,36 @@ export default async function TorneioPage({ params }: PageProps) {
   const tournamentId = Number(id);
   if (isNaN(tournamentId)) notFound();
 
-  const [profile, tournament, blindLevels, prizePositions, blindTemplates, prizeTemplatesList, tournamentResultsData] = await Promise.all([
+  const [profile, tournament, blindLevels, prizePositions, blindTemplates, prizeTemplatesList, participantsList, financialSummary, allUsers] = await Promise.all([
     getProfile(),
     getTournamentById(tournamentId),
     getBlindStructure(tournamentId),
     getPrizeStructure(tournamentId),
     getBlindTemplates(),
     getPrizeTemplates(),
-    getTournamentResults(tournamentId),
+    getParticipants(tournamentId),
+    getTournamentFinancialSummary(tournamentId),
+    getAllUsers(),
   ]);
 
   if (!profile) redirect("/login");
-
   if (!tournament) notFound();
 
   const season = tournament.seasonId ? await getSeasonById(tournament.seasonId) : null;
   const isAdmin = profile?.role === "admin";
   const canEdit = isAdmin && !["finished", "cancelled"].includes(tournament.status);
+  const isActive = ["pending", "running"].includes(tournament.status);
 
   const prizeData = prizePositions.map((p) => ({
     position: p.position,
     percentage: Number(p.percentage),
   }));
+
+  const participantUserIds = new Set(participantsList.map((p) => p.userId));
+  const availableUsers = allUsers.filter((u) => !participantUserIds.has(u.id));
+
+  const prizePool = tournament.prizePoolOverride ??
+    (financialSummary.buy_in + financialSummary.rebuy + financialSummary.addon);
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -93,10 +107,19 @@ export default async function TorneioPage({ params }: PageProps) {
       <Tabs defaultValue="overview">
         <TabsList>
           <TabsTrigger value="overview">Visao Geral</TabsTrigger>
+          <TabsTrigger value="players">
+            Jogadores
+            {participantsList.length > 0 && (
+              <span className="ml-1.5 text-xs bg-muted rounded-full px-1.5 py-0.5">
+                {participantsList.length}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="blinds">Blinds</TabsTrigger>
           <TabsTrigger value="prizes">Premios</TabsTrigger>
         </TabsList>
 
+        {/* Visao Geral */}
         <TabsContent value="overview" className="space-y-4 mt-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Card>
@@ -151,8 +174,38 @@ export default async function TorneioPage({ params }: PageProps) {
               )}
             </CardContent>
           </Card>
+
+          <FinancialSummary
+            summary={financialSummary}
+            prizePoolOverride={tournament.prizePoolOverride}
+          />
         </TabsContent>
 
+        {/* Jogadores */}
+        <TabsContent value="players" className="mt-4 space-y-4">
+          {isAdmin && isActive && (
+            <div className="flex justify-end">
+              <AddParticipantDialog
+                tournamentId={tournamentId}
+                availableUsers={availableUsers}
+              />
+            </div>
+          )}
+          <ParticipantList
+            participants={participantsList.map((p) => ({
+              ...p,
+              status: p.status as string,
+              finishPosition: p.finishPosition ?? null,
+            }))}
+            isAdmin={isAdmin && isActive}
+            allowAddon={tournament.allowAddon}
+            buyInAmount={tournament.buyInAmount}
+            rebuyAmount={tournament.rebuyAmount}
+            addonAmount={tournament.addonAmount}
+          />
+        </TabsContent>
+
+        {/* Blinds */}
         <TabsContent value="blinds" className="mt-4 space-y-4">
           {isAdmin && (
             <div className="flex justify-end">
@@ -172,8 +225,8 @@ export default async function TorneioPage({ params }: PageProps) {
           )}
         </TabsContent>
 
+        {/* Premios */}
         <TabsContent value="prizes" className="mt-4 space-y-6">
-          {/* Preset de percentuais — editavel antes de finalizar */}
           {tournament.status !== "finished" && (
             <div className="space-y-3">
               {isAdmin && (
@@ -194,6 +247,7 @@ export default async function TorneioPage({ params }: PageProps) {
                     <TableRow>
                       <TableHead>Posicao</TableHead>
                       <TableHead>Percentual</TableHead>
+                      <TableHead>Valor estimado</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -201,6 +255,9 @@ export default async function TorneioPage({ params }: PageProps) {
                       <TableRow key={p.position}>
                         <TableCell className="font-medium">{p.position}º lugar</TableCell>
                         <TableCell>{p.percentage}%</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {formatCurrency(Math.round(prizePool * p.percentage / 100))}
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -213,62 +270,69 @@ export default async function TorneioPage({ params }: PageProps) {
             </div>
           )}
 
-          {/* Resultado real — durante e apos o torneio */}
-          {["running", "finished"].includes(tournament.status) && isAdmin && (
+          {["running", "finished"].includes(tournament.status) && isAdmin && prizeData.length > 0 && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Resultado</h3>
-                <TournamentResultsEditor
+                <h3 className="text-sm font-semibold">Distribuicao de premios</h3>
+                <PayoutDialog
                   tournamentId={tournamentId}
-                  initialResults={tournamentResultsData}
-                  prizeData={prizeData}
-                  buyInAmount={tournament.buyInAmount}
+                  prizePool={prizePool}
+                  prizePositions={prizeData}
+                  participants={participantsList.map((p) => ({
+                    userId: p.userId,
+                    name: p.name,
+                    nickname: p.nickname,
+                    finishPosition: p.finishPosition ?? null,
+                  }))}
                 />
               </div>
-              {tournamentResultsData.length > 0 ? (
+
+              {participantsList.some((p) => p.prizeAmount > 0) && (
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Posicao</TableHead>
-                      <TableHead>Valor pago</TableHead>
-                      <TableHead>Obs.</TableHead>
+                      <TableHead>Jogador</TableHead>
+                      <TableHead>Premio</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {tournamentResultsData.map((r) => (
-                      <TableRow key={r.position}>
-                        <TableCell className="font-medium">{r.position}º lugar</TableCell>
-                        <TableCell>{formatCurrency(r.amountPaid)}</TableCell>
-                        <TableCell className="text-muted-foreground text-sm">{r.notes ?? "—"}</TableCell>
-                      </TableRow>
-                    ))}
+                    {participantsList
+                      .filter((p) => p.prizeAmount > 0)
+                      .sort((a, b) => (a.finishPosition ?? 99) - (b.finishPosition ?? 99))
+                      .map((p) => (
+                        <TableRow key={p.id}>
+                          <TableCell className="font-medium">{p.finishPosition}º lugar</TableCell>
+                          <TableCell>{p.nickname ? `${p.name} (${p.nickname})` : p.name}</TableCell>
+                          <TableCell>{formatCurrency(p.prizeAmount)}</TableCell>
+                        </TableRow>
+                      ))}
                   </TableBody>
                 </Table>
-              ) : (
-                <p className="text-muted-foreground text-sm text-center py-6">
-                  Resultado ainda nao registrado
-                </p>
               )}
             </div>
           )}
 
-          {["running", "finished"].includes(tournament.status) && !isAdmin && tournamentResultsData.length > 0 && (
+          {["running", "finished"].includes(tournament.status) && !isAdmin && participantsList.some((p) => p.prizeAmount > 0) && (
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Posicao</TableHead>
-                  <TableHead>Valor pago</TableHead>
-                  <TableHead>Obs.</TableHead>
+                  <TableHead>Jogador</TableHead>
+                  <TableHead>Premio</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {tournamentResultsData.map((r) => (
-                  <TableRow key={r.position}>
-                    <TableCell className="font-medium">{r.position}º lugar</TableCell>
-                    <TableCell>{formatCurrency(r.amountPaid)}</TableCell>
-                    <TableCell className="text-muted-foreground text-sm">{r.notes ?? "—"}</TableCell>
-                  </TableRow>
-                ))}
+                {participantsList
+                  .filter((p) => p.prizeAmount > 0)
+                  .sort((a, b) => (a.finishPosition ?? 99) - (b.finishPosition ?? 99))
+                  .map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell className="font-medium">{p.finishPosition}º lugar</TableCell>
+                      <TableCell>{p.nickname ? `${p.name} (${p.nickname})` : p.name}</TableCell>
+                      <TableCell>{formatCurrency(p.prizeAmount)}</TableCell>
+                    </TableRow>
+                  ))}
               </TableBody>
             </Table>
           )}

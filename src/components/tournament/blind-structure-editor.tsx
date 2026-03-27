@@ -139,7 +139,7 @@ export function BlindStructureEditor({
         toast.success("Template salvo!");
         setSavingTemplate(false);
         setTemplateName("");
-        if (result.template) {
+        if ("template" in result && result.template) {
           setTemplates((prev) => [result.template!, ...prev]);
         }
       }
@@ -176,7 +176,7 @@ export function BlindStructureEditor({
         <div className="space-y-4">
           {/* Barra de templates + adicionar nivel */}
           <div className="flex items-center gap-2">
-            <Select value={selectedTemplate} onValueChange={loadTemplate}>
+            <Select value={selectedTemplate} onValueChange={(v) => loadTemplate(v ?? "")}>
               <SelectTrigger className="flex-1">
                 <SelectValue placeholder="Carregar template...">
                   {selectedTemplate === "__default__"

@@ -121,7 +121,7 @@ export function PrizeStructureEditor({
         toast.success("Template salvo!");
         setSavingTemplate(false);
         setTemplateName("");
-        if (result.template) setTemplates((prev) => [result.template!, ...prev]);
+        if ("template" in result && result.template) setTemplates((prev) => [result.template!, ...prev]);
       }
     });
   }
@@ -154,7 +154,7 @@ export function PrizeStructureEditor({
         <div className="space-y-4">
           {/* Templates */}
           <div className="flex items-center gap-2">
-            <Select value={selectedTemplate} onValueChange={loadTemplate}>
+            <Select value={selectedTemplate} onValueChange={(v) => loadTemplate(v ?? "")}>
               <SelectTrigger className="flex-1">
                 <SelectValue placeholder="Carregar template...">
                   {selectedTemplate === "__default__"
