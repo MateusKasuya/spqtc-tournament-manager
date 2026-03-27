@@ -18,6 +18,7 @@ import { FinancialSummary } from "@/components/tournament/financial-summary";
 import { PayoutDialog } from "@/components/tournament/payout-dialog";
 import { DeleteTournamentButton } from "@/components/tournament/delete-tournament-button";
 import { CopyInviteLinkButton } from "@/components/tournament/copy-invite-link-button";
+import { SelfRegisterButton } from "@/components/tournament/self-register-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -64,6 +65,7 @@ export default async function TorneioPage({ params }: PageProps) {
 
   const participantUserIds = new Set(participantsList.map((p) => p.userId));
   const availableUsers = allUsers.filter((u) => !participantUserIds.has(u.id));
+  const isRegistered = participantUserIds.has(profile.id);
 
   const prizePool = tournament.prizePoolOverride ??
     (financialSummary.buy_in + financialSummary.rebuy + financialSummary.addon);
@@ -89,6 +91,30 @@ export default async function TorneioPage({ params }: PageProps) {
           status={tournament.status as "pending" | "running" | "finished" | "cancelled"}
         />
       </div>
+
+      {!isAdmin && isActive && (
+        <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
+          <div>
+            <p className="text-sm font-medium">
+              {isRegistered ? "Voce esta inscrito neste torneio" : "Quer participar?"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {isRegistered
+                ? "O admin confirmara seu buy-in no dia do evento"
+                : "Inscreva-se agora. O admin confirmara seu buy-in no dia do evento"}
+            </p>
+          </div>
+          {isRegistered ? (
+            <span className="text-xs font-medium text-green-600 bg-green-50 border border-green-200 rounded-full px-3 py-1 shrink-0 dark:text-green-400 dark:bg-green-950 dark:border-green-800">
+              Inscrito
+            </span>
+          ) : (
+            <div className="shrink-0">
+              <SelfRegisterButton tournamentId={tournamentId} />
+            </div>
+          )}
+        </div>
+      )}
 
       {isAdmin && (
         <div className="flex flex-wrap gap-2">
