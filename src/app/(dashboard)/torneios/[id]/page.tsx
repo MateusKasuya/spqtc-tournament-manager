@@ -17,6 +17,7 @@ import { AddParticipantDialog } from "@/components/tournament/add-participant-di
 import { FinancialSummary } from "@/components/tournament/financial-summary";
 import { PayoutDialog } from "@/components/tournament/payout-dialog";
 import { DeleteTournamentButton } from "@/components/tournament/delete-tournament-button";
+import { CopyInviteLinkButton } from "@/components/tournament/copy-invite-link-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -90,7 +91,7 @@ export default async function TorneioPage({ params }: PageProps) {
       </div>
 
       {isAdmin && (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {canEdit && (
             <Link
               href={`/torneios/${tournamentId}/editar`}
@@ -100,6 +101,7 @@ export default async function TorneioPage({ params }: PageProps) {
               Editar
             </Link>
           )}
+          {isActive && <CopyInviteLinkButton tournamentId={tournamentId} />}
           <DeleteTournamentButton tournamentId={tournamentId} />
         </div>
       )}

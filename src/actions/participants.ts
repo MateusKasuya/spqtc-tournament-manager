@@ -7,6 +7,14 @@ import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { getParticipantById, getParticipantByUserAndTournament, getPlayingCount } from "@/db/queries/participants";
 
+async function getAuthUser() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user;
+}
+
 async function requireAdmin() {
   const supabase = await createClient();
   const {
@@ -241,5 +249,29 @@ export async function distributePayouts(
   }
 
   revalidatePath(`/torneios/${tournamentId}`);
+  return { success: true };
+}
+
+export async function selfRegister(tournamentId: number) {
+  const user = await getAuthUser();
+  if (!user) return { error: "Nao autenticado" };
+
+  const [tournament] = await db
+    .select({ status: tournaments.status })
+    .from(tournaments)
+    .where(eq(tournaments.id, tournamentId));
+
+  if (!tournament) return { error: "Torneio nao encontrado" };
+  if (["finished", "cancelled"].includes(tournament.status)) {
+    return { error: "Inscricoes encerradas para este torneio" };
+  }
+
+  const existing = await getParticipantByUserAndTournament(user.id, tournamentId);
+  if (existing) return { error: "Voce ja esta inscrito neste torneio" };
+
+  await db.insert(participants).values({ tournamentId, userId: user.id });
+
+  revalidatePath(`/torneios/${tournamentId}`);
+  revalidatePath(`/torneios/${tournamentId}/inscricao`);
   return { success: true };
 }

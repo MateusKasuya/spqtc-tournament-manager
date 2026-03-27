@@ -38,6 +38,13 @@ export function AddParticipantDialog({ tournamentId, availableUsers }: AddPartic
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [isPending, startTransition] = useTransition();
 
+  const selectedUser = availableUsers.find((u) => u.id === selectedUserId) ?? null;
+  const selectedLabel = selectedUser
+    ? selectedUser.nickname
+      ? `${selectedUser.name} (${selectedUser.nickname})`
+      : selectedUser.name
+    : null;
+
   function handleAdd() {
     if (!selectedUserId) return;
     startTransition(async () => {
@@ -67,7 +74,9 @@ export function AddParticipantDialog({ tournamentId, availableUsers }: AddPartic
             <Label>Jogador</Label>
             <Select value={selectedUserId} onValueChange={(v) => setSelectedUserId(v ?? "")}>
               <SelectTrigger>
-                <SelectValue placeholder="Selecione um jogador..." />
+                <SelectValue placeholder="Selecione um jogador...">
+                  {selectedLabel}
+                </SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {availableUsers.length === 0 ? (
