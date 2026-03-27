@@ -3,13 +3,6 @@
 import { useTransition } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   confirmBuyIn,
   addRebuy,
   addAddon,
@@ -18,7 +11,7 @@ import {
   removeParticipant,
 } from "@/actions/participants";
 import { formatCurrency } from "@/lib/format";
-import { MoreHorizontal, Trophy, Skull, RotateCcw, Trash2, DollarSign, RefreshCw, Plus } from "lucide-react";
+import { Trophy, Skull, RotateCcw, Trash2, DollarSign, RefreshCw, Plus } from "lucide-react";
 import { toast } from "sonner";
 
 interface Participant {
@@ -50,6 +43,36 @@ const STATUS_BADGE: Record<string, { label: string; variant: "default" | "second
   finished: { label: "Finalizado", variant: "outline" },
 };
 
+function ActionButton({
+  onClick,
+  disabled,
+  title,
+  destructive,
+  children,
+}: {
+  onClick: () => void;
+  disabled: boolean;
+  title: string;
+  destructive?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`inline-flex h-7 w-7 items-center justify-center rounded-md border text-xs font-medium transition-colors disabled:opacity-40 disabled:pointer-events-none
+        ${destructive
+          ? "border-destructive/30 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+          : "border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        }`}
+    >
+      {children}
+    </button>
+  );
+}
+
 function ParticipantActions({
   participant,
   allowAddon,
@@ -67,62 +90,69 @@ function ParticipantActions({
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        disabled={isPending}
-        className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-50"
-      >
-        <MoreHorizontal className="h-4 w-4" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {!participant.buyInPaid && participant.status === "registered" && (
-          <DropdownMenuItem onClick={() => run(() => confirmBuyIn(participant.id))}>
-            <DollarSign className="h-4 w-4 mr-2" />
-            Confirmar buy-in
-          </DropdownMenuItem>
-        )}
-        {participant.status === "playing" && (
-          <>
-            <DropdownMenuItem onClick={() => run(() => addRebuy(participant.id))}>
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Rebuy
-            </DropdownMenuItem>
-            {allowAddon && !participant.addonUsed && (
-              <DropdownMenuItem onClick={() => run(() => addAddon(participant.id))}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add-on
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => run(() => eliminatePlayer(participant.id))}
+    <div className="flex items-center gap-1">
+      {participant.status === "registered" && !participant.buyInPaid && (
+        <ActionButton
+          onClick={() => run(() => confirmBuyIn(participant.id))}
+          disabled={isPending}
+          title="Confirmar buy-in"
+        >
+          <DollarSign className="h-3.5 w-3.5" />
+        </ActionButton>
+      )}
+
+      {participant.status === "playing" && (
+        <>
+          <ActionButton
+            onClick={() => run(() => addRebuy(participant.id))}
+            disabled={isPending}
+            title="Rebuy"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </ActionButton>
+
+          {allowAddon && !participant.addonUsed && (
+            <ActionButton
+              onClick={() => run(() => addAddon(participant.id))}
+              disabled={isPending}
+              title="Add-on"
             >
-              <Skull className="h-4 w-4 mr-2" />
-              Eliminar
-            </DropdownMenuItem>
-          </>
-        )}
-        {participant.status === "eliminated" && (
-          <DropdownMenuItem onClick={() => run(() => undoElimination(participant.id))}>
-            <RotateCcw className="h-4 w-4 mr-2" />
-            Desfazer eliminacao
-          </DropdownMenuItem>
-        )}
-        {participant.status === "registered" && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onClick={() => run(() => removeParticipant(participant.id))}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              Remover
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+              <Plus className="h-3.5 w-3.5" />
+            </ActionButton>
+          )}
+
+          <ActionButton
+            onClick={() => run(() => eliminatePlayer(participant.id))}
+            disabled={isPending}
+            title="Eliminar"
+            destructive
+          >
+            <Skull className="h-3.5 w-3.5" />
+          </ActionButton>
+        </>
+      )}
+
+      {participant.status === "eliminated" && (
+        <ActionButton
+          onClick={() => run(() => undoElimination(participant.id))}
+          disabled={isPending}
+          title="Desfazer eliminacao"
+        >
+          <RotateCcw className="h-3.5 w-3.5" />
+        </ActionButton>
+      )}
+
+      {participant.status === "registered" && (
+        <ActionButton
+          onClick={() => run(() => removeParticipant(participant.id))}
+          disabled={isPending}
+          title="Remover jogador"
+          destructive
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </ActionButton>
+      )}
+    </div>
   );
 }
 
@@ -180,10 +210,10 @@ export function ParticipantList({
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              {isAdmin && <ParticipantActions participant={p} allowAddon={allowAddon} />}
               <Badge variant={badge.variant} className="text-xs">
                 {badge.label}
               </Badge>
-              {isAdmin && <ParticipantActions participant={p} allowAddon={allowAddon} />}
             </div>
           </div>
         );
