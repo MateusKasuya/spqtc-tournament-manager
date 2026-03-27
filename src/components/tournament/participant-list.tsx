@@ -46,13 +46,13 @@ const STATUS_BADGE: Record<string, { label: string; variant: "default" | "second
 function ActionButton({
   onClick,
   disabled,
-  title,
+  label,
   destructive,
   children,
 }: {
   onClick: () => void;
   disabled: boolean;
-  title: string;
+  label: string;
   destructive?: boolean;
   children: React.ReactNode;
 }) {
@@ -61,14 +61,14 @@ function ActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      title={title}
-      className={`inline-flex h-7 w-7 items-center justify-center rounded-md border text-xs font-medium transition-colors disabled:opacity-40 disabled:pointer-events-none
+      className={`inline-flex flex-col items-center justify-center gap-0.5 rounded-md border px-2 py-1 transition-colors disabled:opacity-40 disabled:pointer-events-none
         ${destructive
           ? "border-destructive/30 text-destructive hover:bg-destructive hover:text-destructive-foreground"
           : "border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground"
         }`}
     >
       {children}
+      <span className="text-[10px] leading-none font-medium">{label}</span>
     </button>
   );
 }
@@ -95,7 +95,7 @@ function ParticipantActions({
         <ActionButton
           onClick={() => run(() => confirmBuyIn(participant.id))}
           disabled={isPending}
-          title="Confirmar buy-in"
+          label="Confirmar buy-in"
         >
           <DollarSign className="h-3.5 w-3.5" />
         </ActionButton>
@@ -106,7 +106,7 @@ function ParticipantActions({
           <ActionButton
             onClick={() => run(() => addRebuy(participant.id))}
             disabled={isPending}
-            title="Rebuy"
+            label="Rebuy"
           >
             <RefreshCw className="h-3.5 w-3.5" />
           </ActionButton>
@@ -115,7 +115,7 @@ function ParticipantActions({
             <ActionButton
               onClick={() => run(() => addAddon(participant.id))}
               disabled={isPending}
-              title="Add-on"
+              label="Add-on"
             >
               <Plus className="h-3.5 w-3.5" />
             </ActionButton>
@@ -124,7 +124,7 @@ function ParticipantActions({
           <ActionButton
             onClick={() => run(() => eliminatePlayer(participant.id))}
             disabled={isPending}
-            title="Eliminar"
+            label="Eliminar"
             destructive
           >
             <Skull className="h-3.5 w-3.5" />
@@ -136,7 +136,7 @@ function ParticipantActions({
         <ActionButton
           onClick={() => run(() => undoElimination(participant.id))}
           disabled={isPending}
-          title="Desfazer eliminacao"
+          label="Desfazer eliminacao"
         >
           <RotateCcw className="h-3.5 w-3.5" />
         </ActionButton>
@@ -146,7 +146,7 @@ function ParticipantActions({
         <ActionButton
           onClick={() => run(() => removeParticipant(participant.id))}
           disabled={isPending}
-          title="Remover jogador"
+          label="Remover jogador"
           destructive
         >
           <Trash2 className="h-3.5 w-3.5" />
