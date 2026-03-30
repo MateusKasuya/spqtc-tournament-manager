@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { tournaments, seasons, blindStructures, prizeStructures, tournamentResults } from "@/db/schema";
+import { tournaments, seasons, blindStructures, prizeStructures } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 
 export async function getTournaments() {
@@ -50,10 +50,3 @@ export async function getPrizeStructure(tournamentId: number) {
     .orderBy(prizeStructures.position);
 }
 
-export async function getTournamentResults(tournamentId: number) {
-  return db
-    .select()
-    .from(tournamentResults)
-    .where(eq(tournamentResults.tournamentId, tournamentId))
-    .orderBy(tournamentResults.position);
-}

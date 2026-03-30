@@ -7,6 +7,5 @@ export { blindTemplates } from "./blind_templates";
 export type { BlindTemplateLevels } from "./blind_templates";
 export { prizeTemplates } from "./prize_templates";
 export type { PrizeTemplateLevels } from "./prize_templates";
-export { tournamentResults } from "./tournament_results";
 export { participants } from "./participants";
 export { transactions } from "./transactions";

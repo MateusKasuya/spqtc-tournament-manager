@@ -8,7 +8,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { DEFAULT_BLIND_STRUCTURE } from "@/lib/tournament-defaults";
-import { tournamentResults } from "@/db/schema";
 
 const tournamentSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
@@ -179,25 +178,6 @@ export async function deletePrizeStructure(tournamentId: number) {
   if ("error" in auth) return auth;
 
   await db.delete(prizeStructures).where(eq(prizeStructures.tournamentId, tournamentId));
-
-  revalidatePath(`/torneios/${tournamentId}`);
-  return { success: true };
-}
-
-export async function saveTournamentResults(
-  tournamentId: number,
-  results: { position: number; amountPaid: number; notes: string | null }[]
-) {
-  const auth = await requireAdmin();
-  if ("error" in auth) return auth;
-
-  await db.delete(tournamentResults).where(eq(tournamentResults.tournamentId, tournamentId));
-
-  if (results.length > 0) {
-    await db.insert(tournamentResults).values(
-      results.map((r) => ({ tournamentId, ...r }))
-    );
-  }
 
   revalidatePath(`/torneios/${tournamentId}`);
   return { success: true };
