@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
 import { tournaments, blindStructures, prizeStructures } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -178,6 +178,156 @@ export async function deletePrizeStructure(tournamentId: number) {
   if ("error" in auth) return auth;
 
   await db.delete(prizeStructures).where(eq(prizeStructures.tournamentId, tournamentId));
+
+  revalidatePath(`/torneios/${tournamentId}`);
+  return { success: true };
+}
+
+export async function startTimer(tournamentId: number) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth;
+
+  const [tournament] = await db
+    .select({
+      timerRemainingSecs: tournaments.timerRemainingSecs,
+      currentBlindLevel: tournaments.currentBlindLevel,
+    })
+    .from(tournaments)
+    .where(eq(tournaments.id, tournamentId));
+
+  if (!tournament) return { error: "Torneio nao encontrado" };
+
+  let remainingSecs = tournament.timerRemainingSecs;
+
+  if (remainingSecs === null || remainingSecs === undefined) {
+    const blinds = await db
+      .select({ durationMinutes: blindStructures.durationMinutes })
+      .from(blindStructures)
+      .where(
+        and(
+          eq(blindStructures.tournamentId, tournamentId),
+          eq(blindStructures.level, tournament.currentBlindLevel)
+        )
+      );
+    remainingSecs = (blinds[0]?.durationMinutes ?? 15) * 60;
+  }
+
+  await db
+    .update(tournaments)
+    .set({
+      timerRunning: true,
+      timerStartedAt: new Date(),
+      timerRemainingSecs: remainingSecs,
+      updatedAt: new Date(),
+    })
+    .where(eq(tournaments.id, tournamentId));
+
+  revalidatePath(`/torneios/${tournamentId}`);
+  return { success: true };
+}
+
+export async function pauseTimer(tournamentId: number) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth;
+
+  const [tournament] = await db
+    .select({
+      timerRemainingSecs: tournaments.timerRemainingSecs,
+      timerStartedAt: tournaments.timerStartedAt,
+    })
+    .from(tournaments)
+    .where(eq(tournaments.id, tournamentId));
+
+  if (!tournament || !tournament.timerStartedAt) return { error: "Timer nao esta rodando" };
+
+  const elapsed = Math.floor((Date.now() - new Date(tournament.timerStartedAt).getTime()) / 1000);
+  const remaining = Math.max(0, (tournament.timerRemainingSecs ?? 0) - elapsed);
+
+  await db
+    .update(tournaments)
+    .set({
+      timerRunning: false,
+      timerStartedAt: null,
+      timerRemainingSecs: remaining,
+      updatedAt: new Date(),
+    })
+    .where(eq(tournaments.id, tournamentId));
+
+  revalidatePath(`/torneios/${tournamentId}`);
+  return { success: true };
+}
+
+export async function advanceBlindLevel(tournamentId: number) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth;
+
+  const [tournament] = await db
+    .select({
+      currentBlindLevel: tournaments.currentBlindLevel,
+      timerRunning: tournaments.timerRunning,
+    })
+    .from(tournaments)
+    .where(eq(tournaments.id, tournamentId));
+
+  if (!tournament) return { error: "Torneio nao encontrado" };
+
+  const blinds = await db
+    .select()
+    .from(blindStructures)
+    .where(eq(blindStructures.tournamentId, tournamentId))
+    .orderBy(blindStructures.level);
+
+  const currentIndex = blinds.findIndex((b) => b.level === tournament.currentBlindLevel);
+  const nextLevel = blinds[currentIndex + 1];
+
+  if (!nextLevel) return { error: "Ja esta no ultimo nivel" };
+
+  await db
+    .update(tournaments)
+    .set({
+      currentBlindLevel: nextLevel.level,
+      timerRemainingSecs: nextLevel.durationMinutes * 60,
+      timerStartedAt: tournament.timerRunning ? new Date() : null,
+      updatedAt: new Date(),
+    })
+    .where(eq(tournaments.id, tournamentId));
+
+  revalidatePath(`/torneios/${tournamentId}`);
+  return { success: true };
+}
+
+export async function goBackBlindLevel(tournamentId: number) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth;
+
+  const [tournament] = await db
+    .select({ currentBlindLevel: tournaments.currentBlindLevel })
+    .from(tournaments)
+    .where(eq(tournaments.id, tournamentId));
+
+  if (!tournament) return { error: "Torneio nao encontrado" };
+
+  const blinds = await db
+    .select()
+    .from(blindStructures)
+    .where(eq(blindStructures.tournamentId, tournamentId))
+    .orderBy(blindStructures.level);
+
+  const currentIndex = blinds.findIndex((b) => b.level === tournament.currentBlindLevel);
+  const prevLevel = blinds[currentIndex - 1];
+
+  if (!prevLevel) return { error: "Ja esta no primeiro nivel" };
+
+  await db
+    .update(tournaments)
+    .set({
+      currentBlindLevel: prevLevel.level,
+      timerRemainingSecs: prevLevel.durationMinutes * 60,
+      timerRunning: false,
+      timerStartedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(tournaments.id, tournamentId));
 
   revalidatePath(`/torneios/${tournamentId}`);
   return { success: true };

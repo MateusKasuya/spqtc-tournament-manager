@@ -27,7 +27,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { formatCurrency, formatChips } from "@/lib/format";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ArrowLeft, Pencil } from "lucide-react";
+import { ArrowLeft, Pencil, Monitor } from "lucide-react";
 import Link from "next/link";
 
 interface PageProps {
@@ -115,6 +115,16 @@ export default async function TorneioPage({ params }: PageProps) {
             </div>
           )}
         </div>
+      )}
+
+      {tournament.status === "running" && (
+        <Link
+          href={`/torneios/${tournamentId}/mesa`}
+          className={buttonVariants({ variant: "default", size: "sm" })}
+        >
+          <Monitor className="h-4 w-4 mr-2" />
+          Mesa ao Vivo
+        </Link>
       )}
 
       {isAdmin && (

@@ -194,6 +194,21 @@ export async function eliminatePlayer(participantId: number) {
         .set({ status: "finished", finishPosition: 1 })
         .where(eq(participants.id, champion.id));
     }
+
+    // Pausar o timer automaticamente
+    const [t] = await db
+      .select({ timerRunning: tournaments.timerRunning, timerRemainingSecs: tournaments.timerRemainingSecs, timerStartedAt: tournaments.timerStartedAt })
+      .from(tournaments)
+      .where(eq(tournaments.id, participant.tournamentId));
+
+    if (t?.timerRunning && t.timerStartedAt) {
+      const elapsed = Math.floor((Date.now() - new Date(t.timerStartedAt).getTime()) / 1000);
+      const remaining = Math.max(0, (t.timerRemainingSecs ?? 0) - elapsed);
+      await db
+        .update(tournaments)
+        .set({ timerRunning: false, timerStartedAt: null, timerRemainingSecs: remaining, updatedAt: new Date() })
+        .where(eq(tournaments.id, participant.tournamentId));
+    }
   }
 
   revalidatePath(`/torneios/${participant.tournamentId}`);
@@ -206,12 +221,27 @@ export async function undoElimination(participantId: number) {
 
   const participant = await getParticipantById(participantId);
   if (!participant) return { error: "Participante nao encontrado" };
-  if (participant.status !== "eliminated") return { error: "Jogador nao esta eliminado" };
+  if (participant.status !== "eliminated" && participant.status !== "finished") {
+    return { error: "Jogador nao esta eliminado" };
+  }
 
   await db
     .update(participants)
     .set({ status: "playing", finishPosition: null, eliminatedAt: null })
     .where(eq(participants.id, participantId));
+
+  // Se havia um campeao automatico (finished), reverte ele tambem
+  if (participant.status === "eliminated") {
+    await db
+      .update(participants)
+      .set({ status: "playing", finishPosition: null })
+      .where(
+        and(
+          eq(participants.tournamentId, participant.tournamentId),
+          eq(participants.status, "finished")
+        )
+      );
+  }
 
   revalidatePath(`/torneios/${participant.tournamentId}`);
   return { success: true };
