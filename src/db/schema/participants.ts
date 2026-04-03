@@ -1,14 +1,14 @@
-import { pgTable, serial, integer, text, boolean, timestamp, uuid, numeric, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, boolean, timestamp, numeric, unique } from "drizzle-orm/pg-core";
 import { tournaments } from "./tournaments";
-import { users } from "./users";
+import { players } from "./players";
 
 export const participants = pgTable("participants", {
   id: serial("id").primaryKey(),
   tournamentId: integer("tournament_id")
     .references(() => tournaments.id, { onDelete: "cascade" })
     .notNull(),
-  userId: uuid("user_id")
-    .references(() => users.id)
+  playerId: integer("player_id")
+    .references(() => players.id)
     .notNull(),
   buyInPaid: boolean("buy_in_paid").notNull().default(false),
   rebuyCount: integer("rebuy_count").notNull().default(0),
@@ -22,5 +22,5 @@ export const participants = pgTable("participants", {
   }).notNull().default("registered"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [
-  unique().on(table.tournamentId, table.userId),
+  unique().on(table.tournamentId, table.playerId),
 ]);

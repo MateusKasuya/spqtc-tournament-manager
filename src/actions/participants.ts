@@ -1,38 +1,13 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
 import { participants, transactions, tournaments } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
-import { getParticipantById, getParticipantByUserAndTournament, getPlayingCount } from "@/db/queries/participants";
+import { requireAdmin } from "@/lib/require-admin";
+import { getParticipantById, getParticipantByPlayerAndTournament, getPlayingCount } from "@/db/queries/participants";
 
-async function getAuthUser() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  return user;
-}
-
-async function requireAdmin() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "Nao autenticado" };
-
-  const { data: profile } = await supabase
-    .from("users")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  if (profile?.role !== "admin") return { error: "Apenas admins podem fazer isso" };
-  return { user };
-}
-
-export async function addParticipant(tournamentId: number, userId: string) {
+export async function addParticipant(tournamentId: number, playerId: number) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
@@ -46,10 +21,10 @@ export async function addParticipant(tournamentId: number, userId: string) {
     return { error: "Nao e possivel adicionar jogadores a este torneio" };
   }
 
-  const existing = await getParticipantByUserAndTournament(userId, tournamentId);
+  const existing = await getParticipantByPlayerAndTournament(playerId, tournamentId);
   if (existing) return { error: "Jogador ja inscrito neste torneio" };
 
-  await db.insert(participants).values({ tournamentId, userId });
+  await db.insert(participants).values({ tournamentId, playerId });
 
   revalidatePath(`/torneios/${tournamentId}`);
   return { success: true };
@@ -91,7 +66,7 @@ export async function confirmBuyIn(participantId: number) {
 
   await db.insert(transactions).values({
     tournamentId: participant.tournamentId,
-    userId: participant.userId,
+    playerId: participant.playerId,
     type: "buy_in",
     amount: tournament.buyInAmount,
   });
@@ -125,7 +100,7 @@ export async function addRebuy(participantId: number) {
 
   await db.insert(transactions).values({
     tournamentId: participant.tournamentId,
-    userId: participant.userId,
+    playerId: participant.playerId,
     type: "rebuy",
     amount: tournament.rebuyAmount,
   });
@@ -156,7 +131,7 @@ export async function addAddon(participantId: number) {
 
   await db.insert(transactions).values({
     tournamentId: participant.tournamentId,
-    userId: participant.userId,
+    playerId: participant.playerId,
     type: "addon",
     amount: tournament.addonAmount,
   });
@@ -174,14 +149,13 @@ export async function eliminatePlayer(participantId: number) {
   if (participant.status !== "playing") return { error: "Jogador nao esta em jogo" };
 
   const playingCount = await getPlayingCount(participant.tournamentId);
-  const finishPosition = playingCount; // ex: 5 jogando -> eliminado fica em 5o
+  const finishPosition = playingCount;
 
   await db
     .update(participants)
     .set({ status: "eliminated", finishPosition, eliminatedAt: new Date() })
     .where(eq(participants.id, participantId));
 
-  // Se restou apenas 1 jogando, esse e o campeao
   if (playingCount - 1 === 1) {
     const [champion] = await db
       .select({ id: participants.id })
@@ -195,7 +169,6 @@ export async function eliminatePlayer(participantId: number) {
         .where(eq(participants.id, champion.id));
     }
 
-    // Pausar o timer automaticamente
     const [t] = await db
       .select({ timerRunning: tournaments.timerRunning, timerRemainingSecs: tournaments.timerRemainingSecs, timerStartedAt: tournaments.timerStartedAt })
       .from(tournaments)
@@ -230,7 +203,6 @@ export async function undoElimination(participantId: number) {
     .set({ status: "playing", finishPosition: null, eliminatedAt: null })
     .where(eq(participants.id, participantId));
 
-  // Se havia um campeao automatico (finished), reverte ele tambem
   if (participant.status === "eliminated") {
     await db
       .update(participants)
@@ -249,22 +221,20 @@ export async function undoElimination(participantId: number) {
 
 export async function distributePayouts(
   tournamentId: number,
-  payouts: { userId: string; amount: number; position: number }[]
+  payouts: { playerId: number; amount: number; position: number }[]
 ) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  // Remove premios anteriores
   await db
     .delete(transactions)
     .where(and(eq(transactions.tournamentId, tournamentId), eq(transactions.type, "prize")));
 
-  // Insere novos premios e atualiza prize_amount nos participantes
   for (const payout of payouts) {
     if (payout.amount > 0) {
       await db.insert(transactions).values({
         tournamentId,
-        userId: payout.userId,
+        playerId: payout.playerId,
         type: "prize",
         amount: payout.amount,
       });
@@ -273,35 +243,11 @@ export async function distributePayouts(
         .update(participants)
         .set({ prizeAmount: payout.amount })
         .where(
-          and(eq(participants.tournamentId, tournamentId), eq(participants.userId, payout.userId))
+          and(eq(participants.tournamentId, tournamentId), eq(participants.playerId, payout.playerId))
         );
     }
   }
 
   revalidatePath(`/torneios/${tournamentId}`);
-  return { success: true };
-}
-
-export async function selfRegister(tournamentId: number) {
-  const user = await getAuthUser();
-  if (!user) return { error: "Nao autenticado" };
-
-  const [tournament] = await db
-    .select({ status: tournaments.status })
-    .from(tournaments)
-    .where(eq(tournaments.id, tournamentId));
-
-  if (!tournament) return { error: "Torneio nao encontrado" };
-  if (["finished", "cancelled"].includes(tournament.status)) {
-    return { error: "Inscricoes encerradas para este torneio" };
-  }
-
-  const existing = await getParticipantByUserAndTournament(user.id, tournamentId);
-  if (existing) return { error: "Voce ja esta inscrito neste torneio" };
-
-  await db.insert(participants).values({ tournamentId, userId: user.id });
-
-  revalidatePath(`/torneios/${tournamentId}`);
-  revalidatePath(`/torneios/${tournamentId}/inscricao`);
   return { success: true };
 }

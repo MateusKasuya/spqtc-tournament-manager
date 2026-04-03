@@ -18,7 +18,7 @@ import { Trophy, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 interface ParticipantOption {
-  userId: string;
+  playerId: number;
   name: string;
   nickname: string | null;
   finishPosition: number | null;
@@ -31,7 +31,7 @@ interface PrizePosition {
 
 interface PayoutEntry {
   position: number;
-  userId: string;
+  playerId: string;
   amount: string;
 }
 
@@ -61,19 +61,19 @@ export function PayoutDialog({
       const calculated = Math.round((prizePool * p.percentage) / 100);
       return {
         position: p.position,
-        userId: player?.userId ?? "",
+        playerId: player ? String(player.playerId) : "",
         amount: (calculated / 100).toFixed(2),
       };
     })
   );
 
-  function updateEntry(index: number, field: "userId" | "amount", value: string) {
+  function updateEntry(index: number, field: "playerId" | "amount", value: string) {
     setEntries((prev) => prev.map((e, i) => (i === index ? { ...e, [field]: value } : e)));
   }
 
   function addEntry() {
     const nextPos = entries.length > 0 ? Math.max(...entries.map((e) => e.position)) + 1 : 1;
-    setEntries((prev) => [...prev, { position: nextPos, userId: "", amount: "" }]);
+    setEntries((prev) => [...prev, { position: nextPos, playerId: "", amount: "" }]);
   }
 
   function removeEntry(index: number) {
@@ -85,9 +85,9 @@ export function PayoutDialog({
   function handleDistribute() {
     startTransition(async () => {
       const payouts = entries
-        .filter((e) => e.userId)
+        .filter((e) => e.playerId)
         .map((e) => ({
-          userId: e.userId,
+          playerId: Number(e.playerId),
           amount: Math.round(parseFloat(e.amount.replace(",", ".") || "0") * 100),
           position: e.position,
         }));
@@ -144,12 +144,12 @@ export function PayoutDialog({
                       <Label className="text-xs text-muted-foreground">Jogador</Label>
                       <select
                         className="w-full h-8 rounded-md border border-input bg-background px-2 text-sm"
-                        value={entry.userId}
-                        onChange={(e) => updateEntry(index, "userId", e.target.value)}
+                        value={entry.playerId}
+                        onChange={(e) => updateEntry(index, "playerId", e.target.value)}
                       >
                         <option value="">Selecione...</option>
                         {participants.map((p) => (
-                          <option key={p.userId} value={p.userId}>
+                          <option key={p.playerId} value={String(p.playerId)}>
                             {p.nickname ? `${p.name} (${p.nickname})` : p.name}
                           </option>
                         ))}

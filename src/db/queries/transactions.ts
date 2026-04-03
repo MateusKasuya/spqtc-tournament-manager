@@ -1,20 +1,20 @@
 import { db } from "@/db";
-import { transactions, users } from "@/db/schema";
+import { transactions, players } from "@/db/schema";
 import { eq, sum } from "drizzle-orm";
 
 export async function getTransactions(tournamentId: number) {
   return db
     .select({
       id: transactions.id,
-      userId: transactions.userId,
-      name: users.name,
-      nickname: users.nickname,
+      playerId: transactions.playerId,
+      name: players.name,
+      nickname: players.nickname,
       type: transactions.type,
       amount: transactions.amount,
       createdAt: transactions.createdAt,
     })
     .from(transactions)
-    .innerJoin(users, eq(transactions.userId, users.id))
+    .innerJoin(players, eq(transactions.playerId, players.id))
     .where(eq(transactions.tournamentId, tournamentId))
     .orderBy(transactions.createdAt);
 }

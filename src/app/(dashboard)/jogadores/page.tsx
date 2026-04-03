@@ -1,0 +1,55 @@
+import { redirect } from "next/navigation";
+import { getProfile } from "@/lib/get-profile";
+import { getAllPlayers } from "@/db/queries/players";
+import { CreatePlayerDialog } from "@/components/player/create-player-dialog";
+import { EditPlayerDialog } from "@/components/player/edit-player-dialog";
+import { DeletePlayerButton } from "@/components/player/delete-player-button";
+
+export default async function JogadoresPage() {
+  const profile = await getProfile();
+  if (!profile) redirect("/login");
+  if (profile.role !== "admin") redirect("/dashboard");
+
+  const playersList = await getAllPlayers();
+
+  return (
+    <div className="space-y-6 max-w-2xl">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold">Jogadores</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            {playersList.length} jogador{playersList.length !== 1 ? "es" : ""} cadastrado{playersList.length !== 1 ? "s" : ""}
+          </p>
+        </div>
+        <CreatePlayerDialog />
+      </div>
+
+      {playersList.length === 0 ? (
+        <div className="text-center py-12 text-muted-foreground">
+          <p className="text-sm">Nenhum jogador cadastrado ainda.</p>
+          <p className="text-xs mt-1">Clique em "Novo Jogador" para adicionar.</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {playersList.map((player) => (
+            <div
+              key={player.id}
+              className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3"
+            >
+              <div>
+                <p className="text-sm font-medium">{player.name}</p>
+                {player.nickname && (
+                  <p className="text-xs text-muted-foreground">{player.nickname}</p>
+                )}
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <EditPlayerDialog player={player} />
+                <DeletePlayerButton playerId={player.id} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

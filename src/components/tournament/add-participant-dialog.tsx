@@ -22,38 +22,38 @@ import { addParticipant } from "@/actions/participants";
 import { UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
-interface User {
-  id: string;
+interface Player {
+  id: number;
   name: string;
   nickname: string | null;
 }
 
 interface AddParticipantDialogProps {
   tournamentId: number;
-  availableUsers: User[];
+  availablePlayers: Player[];
 }
 
-export function AddParticipantDialog({ tournamentId, availableUsers }: AddParticipantDialogProps) {
+export function AddParticipantDialog({ tournamentId, availablePlayers }: AddParticipantDialogProps) {
   const [open, setOpen] = useState(false);
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
   const [isPending, startTransition] = useTransition();
 
-  const selectedUser = availableUsers.find((u) => u.id === selectedUserId) ?? null;
-  const selectedLabel = selectedUser
-    ? selectedUser.nickname
-      ? `${selectedUser.name} (${selectedUser.nickname})`
-      : selectedUser.name
+  const selectedPlayer = availablePlayers.find((p) => p.id === Number(selectedPlayerId)) ?? null;
+  const selectedLabel = selectedPlayer
+    ? selectedPlayer.nickname
+      ? `${selectedPlayer.name} (${selectedPlayer.nickname})`
+      : selectedPlayer.name
     : null;
 
   function handleAdd() {
-    if (!selectedUserId) return;
+    if (!selectedPlayerId) return;
     startTransition(async () => {
-      const result = await addParticipant(tournamentId, selectedUserId);
+      const result = await addParticipant(tournamentId, Number(selectedPlayerId));
       if (result && "error" in result) {
         toast.error(result.error);
       } else {
         toast.success("Jogador adicionado!");
-        setSelectedUserId("");
+        setSelectedPlayerId("");
         setOpen(false);
       }
     });
@@ -72,21 +72,21 @@ export function AddParticipantDialog({ tournamentId, availableUsers }: AddPartic
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Jogador</Label>
-            <Select value={selectedUserId} onValueChange={(v) => setSelectedUserId(v ?? "")}>
+            <Select value={selectedPlayerId} onValueChange={(v) => setSelectedPlayerId(v ?? "")}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione um jogador...">
                   {selectedLabel}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {availableUsers.length === 0 ? (
+                {availablePlayers.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-3">
                     Todos os jogadores ja estao inscritos
                   </p>
                 ) : (
-                  availableUsers.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.nickname ? `${u.name} (${u.nickname})` : u.name}
+                  availablePlayers.map((p) => (
+                    <SelectItem key={p.id} value={String(p.id)}>
+                      {p.nickname ? `${p.name} (${p.nickname})` : p.name}
                     </SelectItem>
                   ))
                 )}
@@ -97,7 +97,7 @@ export function AddParticipantDialog({ tournamentId, availableUsers }: AddPartic
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleAdd} disabled={isPending || !selectedUserId}>
+            <Button onClick={handleAdd} disabled={isPending || !selectedPlayerId}>
               {isPending ? "Adicionando..." : "Adicionar"}
             </Button>
           </div>

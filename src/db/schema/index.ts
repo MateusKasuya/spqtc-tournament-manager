@@ -1,4 +1,5 @@
 export { users } from "./users";
+export { players } from "./players";
 export { seasons } from "./seasons";
 export { tournaments } from "./tournaments";
 export { blindStructures } from "./blind_structures";

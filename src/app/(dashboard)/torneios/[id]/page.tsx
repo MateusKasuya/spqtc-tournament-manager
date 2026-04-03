@@ -6,7 +6,7 @@ import { getPrizeTemplates } from "@/db/queries/prize-templates";
 import { getSeasonById } from "@/db/queries/seasons";
 import { getParticipants } from "@/db/queries/participants";
 import { getTournamentFinancialSummary } from "@/db/queries/transactions";
-import { getAllUsers } from "@/db/queries/users";
+import { getAllPlayers } from "@/db/queries/players";
 import { StatusBadge } from "@/components/tournament/status-badge";
 import { BlindStructureTable } from "@/components/tournament/blind-structure-table";
 import { BlindStructureEditor } from "@/components/tournament/blind-structure-editor";
@@ -17,8 +17,6 @@ import { AddParticipantDialog } from "@/components/tournament/add-participant-di
 import { FinancialSummary } from "@/components/tournament/financial-summary";
 import { PayoutDialog } from "@/components/tournament/payout-dialog";
 import { DeleteTournamentButton } from "@/components/tournament/delete-tournament-button";
-import { CopyInviteLinkButton } from "@/components/tournament/copy-invite-link-button";
-import { SelfRegisterButton } from "@/components/tournament/self-register-button";
 import { TournamentStatusButton } from "@/components/tournament/tournament-status-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -39,7 +37,7 @@ export default async function TorneioPage({ params }: PageProps) {
   const tournamentId = Number(id);
   if (isNaN(tournamentId)) notFound();
 
-  const [profile, tournament, blindLevels, prizePositions, blindTemplates, prizeTemplatesList, participantsList, financialSummary, allUsers] = await Promise.all([
+  const [profile, tournament, blindLevels, prizePositions, blindTemplates, prizeTemplatesList, participantsList, financialSummary, allPlayers] = await Promise.all([
     getProfile(),
     getTournamentById(tournamentId),
     getBlindStructure(tournamentId),
@@ -48,7 +46,7 @@ export default async function TorneioPage({ params }: PageProps) {
     getPrizeTemplates(),
     getParticipants(tournamentId),
     getTournamentFinancialSummary(tournamentId),
-    getAllUsers(),
+    getAllPlayers(),
   ]);
 
   if (!profile) redirect("/login");
@@ -64,9 +62,8 @@ export default async function TorneioPage({ params }: PageProps) {
     percentage: Number(p.percentage),
   }));
 
-  const participantUserIds = new Set(participantsList.map((p) => p.userId));
-  const availableUsers = allUsers.filter((u) => !participantUserIds.has(u.id));
-  const isRegistered = participantUserIds.has(profile.id);
+  const participantPlayerIds = new Set(participantsList.map((p) => p.playerId));
+  const availablePlayers = allPlayers.filter((p) => !participantPlayerIds.has(p.id));
 
   const prizePool = tournament.prizePoolOverride ??
     (financialSummary.buy_in + financialSummary.rebuy + financialSummary.addon);
@@ -93,30 +90,6 @@ export default async function TorneioPage({ params }: PageProps) {
         />
       </div>
 
-      {!isAdmin && isActive && (
-        <div className="flex items-center justify-between gap-4 rounded-lg border p-4">
-          <div>
-            <p className="text-sm font-medium">
-              {isRegistered ? "Voce esta inscrito neste torneio" : "Quer participar?"}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {isRegistered
-                ? "O admin confirmara seu buy-in no dia do evento"
-                : "Inscreva-se agora. O admin confirmara seu buy-in no dia do evento"}
-            </p>
-          </div>
-          {isRegistered ? (
-            <span className="text-xs font-medium text-green-600 bg-green-50 border border-green-200 rounded-full px-3 py-1 shrink-0 dark:text-green-400 dark:bg-green-950 dark:border-green-800">
-              Inscrito
-            </span>
-          ) : (
-            <div className="shrink-0">
-              <SelfRegisterButton tournamentId={tournamentId} />
-            </div>
-          )}
-        </div>
-      )}
-
       {tournament.status === "running" && (
         <Link
           href={`/torneios/${tournamentId}/mesa`}
@@ -138,7 +111,6 @@ export default async function TorneioPage({ params }: PageProps) {
               Editar
             </Link>
           )}
-          {isActive && <CopyInviteLinkButton tournamentId={tournamentId} />}
           <TournamentStatusButton
             tournamentId={tournamentId}
             currentStatus={tournament.status as "pending" | "running" | "finished" | "cancelled"}
@@ -230,7 +202,7 @@ export default async function TorneioPage({ params }: PageProps) {
             <div className="flex justify-end">
               <AddParticipantDialog
                 tournamentId={tournamentId}
-                availableUsers={availableUsers}
+                availablePlayers={availablePlayers}
               />
             </div>
           )}
@@ -270,7 +242,6 @@ export default async function TorneioPage({ params }: PageProps) {
 
         {/* Premios */}
         <TabsContent value="prizes" className="mt-4 space-y-6">
-          {/* Estrutura de premios — editavel antes de finalizar, read-only depois */}
           <div className="space-y-3">
             {isAdmin && tournament.status !== "finished" && (
               <div className="flex justify-end gap-2">
@@ -321,7 +292,7 @@ export default async function TorneioPage({ params }: PageProps) {
                   prizePool={prizePool}
                   prizePositions={prizeData}
                   participants={participantsList.map((p) => ({
-                    userId: p.userId,
+                    playerId: p.playerId,
                     name: p.name,
                     nickname: p.nickname,
                     finishPosition: p.finishPosition ?? null,

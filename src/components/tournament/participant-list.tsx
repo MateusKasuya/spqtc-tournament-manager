@@ -16,7 +16,7 @@ import { toast } from "sonner";
 
 interface Participant {
   id: number;
-  userId: string;
+  playerId: number;
   name: string;
   nickname: string | null;
   buyInPaid: boolean;

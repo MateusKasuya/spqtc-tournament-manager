@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { participants, users } from "@/db/schema";
+import { participants, players } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 
 export async function getParticipants(tournamentId: number) {
@@ -7,9 +7,9 @@ export async function getParticipants(tournamentId: number) {
     .select({
       id: participants.id,
       tournamentId: participants.tournamentId,
-      userId: participants.userId,
-      name: users.name,
-      nickname: users.nickname,
+      playerId: participants.playerId,
+      name: players.name,
+      nickname: players.nickname,
       buyInPaid: participants.buyInPaid,
       rebuyCount: participants.rebuyCount,
       addonUsed: participants.addonUsed,
@@ -21,7 +21,7 @@ export async function getParticipants(tournamentId: number) {
       createdAt: participants.createdAt,
     })
     .from(participants)
-    .innerJoin(users, eq(participants.userId, users.id))
+    .innerJoin(players, eq(participants.playerId, players.id))
     .where(eq(participants.tournamentId, tournamentId))
     .orderBy(participants.createdAt);
 }
@@ -34,11 +34,11 @@ export async function getParticipantById(id: number) {
   return participant ?? null;
 }
 
-export async function getParticipantByUserAndTournament(userId: string, tournamentId: number) {
+export async function getParticipantByPlayerAndTournament(playerId: number, tournamentId: number) {
   const [participant] = await db
     .select()
     .from(participants)
-    .where(and(eq(participants.userId, userId), eq(participants.tournamentId, tournamentId)));
+    .where(and(eq(participants.playerId, playerId), eq(participants.tournamentId, tournamentId)));
   return participant ?? null;
 }
 

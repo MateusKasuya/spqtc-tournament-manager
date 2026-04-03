@@ -57,6 +57,13 @@
       "when": 1774633210351,
       "tag": "0007_giant_jocasta",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1775248548551,
+      "tag": "0008_sour_prima",
+      "breakpoints": true
     }
   ]
 }

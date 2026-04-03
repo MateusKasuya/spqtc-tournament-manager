@@ -1,14 +1,14 @@
-import { pgTable, serial, integer, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
 import { tournaments } from "./tournaments";
-import { users } from "./users";
+import { players } from "./players";
 
 export const transactions = pgTable("transactions", {
   id: serial("id").primaryKey(),
   tournamentId: integer("tournament_id")
     .references(() => tournaments.id, { onDelete: "cascade" })
     .notNull(),
-  userId: uuid("user_id")
-    .references(() => users.id)
+  playerId: integer("player_id")
+    .references(() => players.id)
     .notNull(),
   type: text("type", {
     enum: ["buy_in", "rebuy", "addon", "prize"],
