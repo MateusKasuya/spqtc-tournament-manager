@@ -43,6 +43,7 @@ export default async function MesaPage({ params }: PageProps) {
       tournament={{
         ...tournament,
         timerStartedAt: tournament.timerStartedAt?.toISOString() ?? null,
+        breakActive: tournament.breakActive ?? false,
       }}
       blindLevels={blindLevels}
       participants={participants.map((p) => ({

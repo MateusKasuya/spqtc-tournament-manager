@@ -9,11 +9,12 @@ interface FinancialSummaryProps {
     prize: number;
   };
   prizePoolOverride: number | null;
+  rankingFund: number;
 }
 
-export function FinancialSummary({ summary, prizePoolOverride }: FinancialSummaryProps) {
-  const calculated = summary.buy_in + summary.rebuy + summary.addon;
-  const prizePool = prizePoolOverride ?? calculated;
+export function FinancialSummary({ summary, prizePoolOverride, rankingFund }: FinancialSummaryProps) {
+  const rawPot = summary.buy_in + summary.rebuy + summary.addon;
+  const prizePool = prizePoolOverride ?? (rawPot - rankingFund);
   const balance = prizePool - summary.prize;
 
   return (
@@ -34,6 +35,12 @@ export function FinancialSummary({ summary, prizePoolOverride }: FinancialSummar
           <span className="text-muted-foreground">Add-ons</span>
           <span>{formatCurrency(summary.addon)}</span>
         </div>
+        {rankingFund > 0 && (
+          <div className="flex justify-between text-muted-foreground">
+            <span>Fundo de ranking</span>
+            <span>- {formatCurrency(rankingFund)}</span>
+          </div>
+        )}
         <div className="flex justify-between font-semibold border-t pt-1 mt-1">
           <span>
             Prize pool

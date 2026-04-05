@@ -15,22 +15,21 @@ interface BlindLevel {
 interface BlindInfoProps {
   currentLevel: BlindLevel;
   nextLevel: BlindLevel | null;
+  breakActive?: boolean;
 }
 
-export function BlindInfo({ currentLevel, nextLevel }: BlindInfoProps) {
-  if (currentLevel.isBreak) {
+export function BlindInfo({ currentLevel, nextLevel, breakActive }: BlindInfoProps) {
+  if (breakActive || currentLevel.isBreak) {
+    const resumeLevel = breakActive ? currentLevel : nextLevel;
     return (
       <div className="flex flex-col items-center gap-2 text-center">
         <span className="rounded-md bg-amber-100 px-4 py-1.5 text-lg font-bold text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
           INTERVALO
         </span>
-        <p className="text-sm text-muted-foreground">
-          {currentLevel.durationMinutes} minutos
-        </p>
-        {nextLevel && !nextLevel.isBreak && (
+        {resumeLevel && !resumeLevel.isBreak && (
           <p className="text-xs text-muted-foreground">
-            Proximo: SB {formatChips(nextLevel.smallBlind)} / BB {formatChips(nextLevel.bigBlind)}
-            {nextLevel.ante > 0 && ` / Ante ${formatChips(nextLevel.ante)}`}
+            Retorna: SB {formatChips(resumeLevel.smallBlind)} / BB {formatChips(resumeLevel.bigBlind)}
+            {resumeLevel.ante > 0 && ` / Ante ${formatChips(resumeLevel.ante)}`}
           </p>
         )}
       </div>

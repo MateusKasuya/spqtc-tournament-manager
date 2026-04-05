@@ -65,8 +65,12 @@ export default async function TorneioPage({ params }: PageProps) {
   const participantPlayerIds = new Set(participantsList.map((p) => p.playerId));
   const availablePlayers = allPlayers.filter((p) => !participantPlayerIds.has(p.id));
 
-  const prizePool = tournament.prizePoolOverride ??
-    (financialSummary.buy_in + financialSummary.rebuy + financialSummary.addon);
+  const rawPot = financialSummary.buy_in + financialSummary.rebuy + financialSummary.addon;
+  const buyInCount = tournament.buyInAmount > 0
+    ? Math.round(financialSummary.buy_in / tournament.buyInAmount)
+    : 0;
+  const rankingFund = buyInCount * tournament.rankingFeeAmount;
+  const prizePool = tournament.prizePoolOverride ?? (rawPot - rankingFund);
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -193,6 +197,7 @@ export default async function TorneioPage({ params }: PageProps) {
           <FinancialSummary
             summary={financialSummary}
             prizePoolOverride={tournament.prizePoolOverride}
+            rankingFund={rankingFund}
           />
         </TabsContent>
 

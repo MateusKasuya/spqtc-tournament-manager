@@ -39,6 +39,7 @@ interface TournamentFormProps {
     addonChips: number;
     maxRebuys: number;
     allowAddon: boolean;
+    rankingFeeAmount: number;
   };
 }
 
@@ -55,8 +56,8 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const [allowAddon, setAllowAddon] = useState(initialData?.allowAddon ?? false);
-  const [unlimited, setUnlimited] = useState(initialData ? initialData.maxRebuys === 0 : false);
+  const [allowAddon, setAllowAddon] = useState(initialData?.allowAddon ?? true);
+  const [unlimited, setUnlimited] = useState(initialData ? initialData.maxRebuys === 0 : true);
   const [selectedSeason, setSelectedSeason] = useState(
     initialData?.seasonId?.toString() ?? ""
   );
@@ -64,7 +65,7 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
   const [dateTime, setDateTime] = useState<Date | undefined>(
     initialData ? new Date(initialData.date) : (() => {
       const d = new Date();
-      d.setHours(20, 0, 0, 0);
+      d.setHours(19, 0, 0, 0);
       return d;
     })()
   );
@@ -91,6 +92,9 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
   const [addonAmount, setAddonAmount] = useState(
     initialData ? centsToReais(initialData.addonAmount) : "30.00"
   );
+  const [rankingFeeAmount, setRankingFeeAmount] = useState(
+    initialData ? centsToReais(initialData.rankingFeeAmount) : "20.00"
+  );
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -105,7 +109,7 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
     }
 
     // Converter R$ para centavos
-    for (const field of ["buyInAmount", "rebuyAmount", "addonAmount"]) {
+    for (const field of ["buyInAmount", "rebuyAmount", "addonAmount", "rankingFeeAmount"]) {
       const val = raw.get(field) as string;
       if (val !== null && val !== "") {
         raw.set(field, String(Math.round(parseFloat(val.replace(",", ".")) * 100)));
@@ -323,6 +327,29 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
               />
             </div>
           )}
+        </div>
+      </section>
+
+      {/* Ranking */}
+      <section className="space-y-4">
+        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
+          Ranking
+        </h2>
+        <div className="space-y-2">
+          <Label htmlFor="rankingFeeAmount">Taxa de ranking por buy-in (R$)</Label>
+          <Input
+            id="rankingFeeAmount"
+            name="rankingFeeAmount"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="0,00"
+            value={rankingFeeAmount}
+            onChange={(e) => setRankingFeeAmount(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Valor descontado de cada buy-in para o fundo de ranking. Rebuys e add-ons vao 100% pro pote.
+          </p>
         </div>
       </section>
 

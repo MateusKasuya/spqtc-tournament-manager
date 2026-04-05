@@ -10,6 +10,7 @@ type TournamentTimerFields = {
   timerRemainingSecs: number | null;
   timerStartedAt: Date | string | null;
   status: string;
+  breakActive: boolean;
 };
 
 export function useTournamentRealtime<T extends TournamentTimerFields>(
@@ -50,6 +51,7 @@ export function useTournamentRealtime<T extends TournamentTimerFields>(
               ? (raw.timer_started_at as string | null)
               : prev.timerStartedAt,
             status: (raw.status as string) ?? prev.status,
+            breakActive: raw.break_active !== undefined ? (raw.break_active as boolean) : prev.breakActive,
           }));
         }
       )

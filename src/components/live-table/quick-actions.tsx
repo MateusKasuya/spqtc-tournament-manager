@@ -2,8 +2,8 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { eliminatePlayer, addRebuy, addAddon, undoElimination } from "@/actions/participants";
-import { Skull, RefreshCw, Plus, RotateCcw } from "lucide-react";
+import { eliminatePlayer, addRebuy, addAddon, undoElimination, confirmBuyIn } from "@/actions/participants";
+import { Skull, RefreshCw, Plus, RotateCcw, CheckCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/format";
 import { toast } from "sonner";
@@ -159,7 +159,7 @@ function ParticipantRow({
 
 export function QuickActions({ participants, tournament }: QuickActionsProps) {
   const active = participants.filter(
-    (p) => p.status === "playing" || p.status === "eliminated" || p.status === "finished"
+    (p) => p.status === "registered" || p.status === "playing" || p.status === "eliminated" || p.status === "finished"
   );
 
   if (active.length === 0) return null;
@@ -227,6 +227,7 @@ function ParticipantRowFiltered({
     });
   }
 
+  const isRegistered = participant.status === "registered";
   const isPlaying = participant.status === "playing";
   const isEliminated = participant.status === "eliminated";
   const isFinished = participant.status === "finished";
@@ -243,6 +244,8 @@ function ParticipantRowFiltered({
           <span className="text-sm">🏆 1º</span>
         ) : isEliminated && participant.finishPosition ? (
           <span className="text-sm text-muted-foreground">{participant.finishPosition}º</span>
+        ) : isRegistered ? (
+          <Badge variant="outline" className="text-xs text-muted-foreground">Aguardando</Badge>
         ) : (
           <Badge variant="default" className="text-xs">Jogando</Badge>
         )}
@@ -270,6 +273,18 @@ function ParticipantRowFiltered({
 
       <td className="py-2 pr-4">
         <div className="flex items-center justify-end gap-1">
+          {isRegistered && (
+            <button
+              type="button"
+              onClick={() => run(() => confirmBuyIn(participant.id))}
+              disabled={isPending}
+              title="Confirmar Buy-in"
+              className="inline-flex flex-col items-center gap-0.5 rounded-md border border-green-600/40 px-2 py-1 text-green-600 transition-colors hover:bg-green-600 hover:text-white disabled:opacity-40 disabled:pointer-events-none"
+            >
+              <CheckCircle className="h-3.5 w-3.5" />
+              <span className="text-[10px] leading-none font-medium">Buy-in</span>
+            </button>
+          )}
           {isPlaying && (
             <>
               {tournament.rebuyAmount > 0 && (

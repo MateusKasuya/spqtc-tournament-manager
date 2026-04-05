@@ -64,6 +64,20 @@
       "when": 1775248548551,
       "tag": "0008_sour_prima",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1743724800000,
+      "tag": "0009_pot_deduction",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1775088000000,
+      "tag": "0010_break_active",
+      "breakpoints": true
     }
   ]
 }

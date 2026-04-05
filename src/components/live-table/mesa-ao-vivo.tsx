@@ -11,7 +11,7 @@ import { TimerControls } from "./timer-controls";
 import { BlindInfo } from "./blind-info";
 import { TournamentStats } from "./tournament-stats";
 import { QuickActions } from "./quick-actions";
-import { advanceBlindLevel, updateTournamentStatus } from "@/actions/tournaments";
+import { advanceBlindLevel, updateTournamentStatus, endBreak } from "@/actions/tournaments";
 import { playLevelSound } from "@/lib/play-level-sound";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -60,7 +60,9 @@ interface Tournament {
   addonAmount: number;
   allowAddon: boolean;
   prizePoolOverride: number | null;
+  rankingFeeAmount: number;
   name: string;
+  breakActive: boolean;
 }
 
 interface MesaAoVivoProps {
@@ -103,15 +105,22 @@ export function MesaAoVivo({
   useEffect(() => {
     if (remainingSeconds === 0 && isRunning && isAdmin && !autoAdvancedRef.current) {
       autoAdvancedRef.current = true;
-      playLevelSound();
-      startTransition(async () => {
-        await advanceBlindLevel(tournament.id);
-      });
+      if (liveTournament.breakActive) {
+        playLevelSound();
+        startTransition(async () => {
+          await endBreak(tournament.id);
+        });
+      } else {
+        playLevelSound();
+        startTransition(async () => {
+          await advanceBlindLevel(tournament.id);
+        });
+      }
     }
     if (remainingSeconds > 0) {
       autoAdvancedRef.current = false;
     }
-  }, [remainingSeconds, isRunning, isAdmin, tournament.id]);
+  }, [remainingSeconds, isRunning, isAdmin, tournament.id, liveTournament.breakActive]);
 
   if (!currentLevel) {
     return (
@@ -145,11 +154,15 @@ export function MesaAoVivo({
         <TimerDisplay
           remainingSeconds={remainingSeconds}
           isRunning={isRunning}
-          isBreak={currentLevel.isBreak}
+          isBreak={liveTournament.breakActive || currentLevel.isBreak}
           totalSeconds={totalSeconds}
         />
 
-        <BlindInfo currentLevel={currentLevel} nextLevel={nextLevel} />
+        <BlindInfo
+          currentLevel={currentLevel}
+          nextLevel={nextLevel}
+          breakActive={liveTournament.breakActive}
+        />
 
         {isAdmin && (
           <TimerControls
@@ -157,6 +170,7 @@ export function MesaAoVivo({
             isRunning={isRunning}
             currentLevelIndex={currentIndex}
             totalLevels={blindLevels.length}
+            breakActive={liveTournament.breakActive}
           />
         )}
       </div>

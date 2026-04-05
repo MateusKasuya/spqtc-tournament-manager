@@ -55,6 +55,9 @@ interface BlindStructureEditorProps {
   savedTemplates: SavedTemplate[];
 }
 
+// Colunas: # | SB | BB | Min | B.Ante | Break | Add-on | Ações
+const GRID = "grid-cols-[1.5rem_minmax(4.5rem,1fr)_minmax(4.5rem,1fr)_3rem_3rem_3rem_3rem_4.5rem]";
+
 export function BlindStructureEditor({
   tournamentId,
   initialLevels,
@@ -82,10 +85,19 @@ export function BlindStructureEditor({
   }
 
   function addLevel() {
-    const nextLevel = levels.length + 1;
+    const last = levels[levels.length - 1];
     setLevels((prev) => [
       ...prev,
-      { level: nextLevel, smallBlind: 0, bigBlind: 0, ante: 0, durationMinutes: 15, isBreak: false, isAddonLevel: false, isBigAnte: false },
+      {
+        level: prev.length + 1,
+        smallBlind: last?.smallBlind ?? 0,
+        bigBlind: last?.bigBlind ?? 0,
+        ante: last?.ante ?? 0,
+        durationMinutes: last?.durationMinutes ?? 15,
+        isBreak: false,
+        isAddonLevel: false,
+        isBigAnte: last?.isBigAnte ?? false,
+      },
     ]);
   }
 
@@ -168,26 +180,26 @@ export function BlindStructureEditor({
         <Pencil className="h-4 w-4 mr-2" />
         Editar Blinds
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="w-[min(700px,95vw)] max-w-none sm:max-w-none max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Editar estrutura de blinds</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Barra de templates + adicionar nivel */}
+          {/* Templates */}
           <div className="flex items-center gap-2">
             <Select value={selectedTemplate} onValueChange={(v) => loadTemplate(v ?? "")}>
               <SelectTrigger className="flex-1">
                 <SelectValue placeholder="Carregar template...">
                   {selectedTemplate === "__default__"
-                    ? "Template padrao"
+                    ? "Template padrão"
                     : selectedTemplate
                     ? templates.find((t) => String(t.id) === selectedTemplate)?.name
                     : undefined}
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="__default__">Template padrao</SelectItem>
+                <SelectItem value="__default__">Template padrão</SelectItem>
                 {templates.map((t) => (
                   <SelectItem key={t.id} value={String(t.id)}>
                     {t.name}
@@ -198,9 +210,7 @@ export function BlindStructureEditor({
 
             {selectedTemplateObj && (
               <Popover open={deletePopoverOpen} onOpenChange={setDeletePopoverOpen}>
-                <PopoverTrigger
-                  className={buttonVariants({ variant: "outline", size: "icon" })}
-                >
+                <PopoverTrigger className={buttonVariants({ variant: "outline", size: "icon" })}>
                   <Trash2 className="h-4 w-4 text-muted-foreground" />
                 </PopoverTrigger>
                 <PopoverContent className="w-auto" side="bottom" align="end">
@@ -226,17 +236,19 @@ export function BlindStructureEditor({
 
             <Button size="sm" onClick={addLevel}>
               <Plus className="h-4 w-4 mr-1" />
-              Adicionar nivel
+              Adicionar nível
             </Button>
           </div>
 
-          {/* Tabela de niveis */}
-          <div className="space-y-1.5">
-            <div className="grid grid-cols-[1.5rem_1fr_1fr_2.5rem_2.5rem_2.5rem_4.5rem] gap-1.5 text-xs font-medium text-muted-foreground px-1">
-              <span>#</span>
-              <span>BB</span>
-              <span>Min</span>
-              <span className="text-center">Big Ante</span>
+          {/* Tabela de níveis */}
+          <div className="space-y-1">
+            {/* Cabeçalho */}
+            <div className={cn("grid gap-1.5 text-xs font-medium text-muted-foreground px-1", GRID)}>
+              <span className="text-center">#</span>
+              <span className="text-center">SB</span>
+              <span className="text-center">BB</span>
+              <span className="text-center">Min</span>
+              <span className="text-center">B.Ante</span>
               <span className="text-center">Break</span>
               <span className="text-center">Add-on</span>
               <span />
@@ -246,28 +258,42 @@ export function BlindStructureEditor({
               <div
                 key={index}
                 className={cn(
-                  "grid grid-cols-[1.5rem_1fr_1fr_2.5rem_2.5rem_2.5rem_4.5rem] gap-1.5 items-center",
-                  level.isAddonLevel && "bg-primary/5 rounded-md px-0.5"
+                  "grid gap-1.5 items-center rounded-md px-1 py-0.5",
+                  GRID,
+                  level.isBreak && "bg-muted/40",
+                  level.isAddonLevel && "bg-primary/5 ring-1 ring-primary/20"
                 )}
               >
-                <span className="text-xs text-muted-foreground text-center">
+                <span className="text-xs text-muted-foreground text-center font-medium">
                   {level.level}
                 </span>
+
+                <Input
+                  type="number"
+                  min="0"
+                  value={level.smallBlind}
+                  onChange={(e) => updateLevel(index, "smallBlind", Number(e.target.value))}
+                  disabled={level.isBreak}
+                  className="h-8 px-1.5 text-sm text-center text-foreground [color-scheme:dark]"
+                />
+
                 <Input
                   type="number"
                   min="0"
                   value={level.bigBlind}
                   onChange={(e) => updateLevel(index, "bigBlind", Number(e.target.value))}
                   disabled={level.isBreak}
-                  className="h-8 px-1.5 text-sm text-center"
+                  className="h-8 px-1.5 text-sm text-center text-foreground [color-scheme:dark]"
                 />
+
                 <Input
                   type="number"
                   min="1"
                   value={level.durationMinutes}
                   onChange={(e) => updateLevel(index, "durationMinutes", Number(e.target.value))}
-                  className="h-8 px-1.5 text-sm text-center"
+                  className="h-8 px-1.5 text-sm text-center text-foreground [color-scheme:dark]"
                 />
+
                 <div className="flex justify-center">
                   <Checkbox
                     checked={level.isBigAnte}
@@ -275,16 +301,19 @@ export function BlindStructureEditor({
                     disabled={level.isBreak}
                   />
                 </div>
+
                 <div className="flex justify-center">
                   <Checkbox
                     checked={level.isBreak}
                     onCheckedChange={(checked) => updateLevel(index, "isBreak", !!checked)}
                   />
                 </div>
+
                 <div className="flex justify-center">
                   <button
                     type="button"
                     onClick={() => setAddonLevel(index)}
+                    title="Marcar como nível de add-on"
                     className={cn(
                       "h-4 w-4 rounded-full border-2 transition-colors",
                       level.isAddonLevel
@@ -293,6 +322,7 @@ export function BlindStructureEditor({
                     )}
                   />
                 </div>
+
                 <div className="flex items-center gap-0.5">
                   <Button
                     variant="ghost"

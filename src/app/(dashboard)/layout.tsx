@@ -22,7 +22,7 @@ export default async function DashboardLayout({
         <div className="p-4 md:p-6">{children}</div>
       </main>
 
-      <BottomNav />
+      <BottomNav user={profile} />
     </div>
   );
 }

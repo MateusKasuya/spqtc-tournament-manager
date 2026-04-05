@@ -29,10 +29,10 @@ export function BlindStructureTable({ levels }: BlindStructureTableProps) {
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead className="w-16">Nivel</TableHead>
-          <TableHead>Big Blind</TableHead>
-          <TableHead className="w-24">Big Ante</TableHead>
-          <TableHead className="w-24">Duracao</TableHead>
+          <TableHead className="w-12">Nível</TableHead>
+          <TableHead>SB / BB</TableHead>
+          <TableHead className="w-20">Big Ante</TableHead>
+          <TableHead className="w-24">Duração</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -46,13 +46,15 @@ export function BlindStructureTable({ levels }: BlindStructureTableProps) {
           >
             <TableCell className="font-medium">{level.level}</TableCell>
             <TableCell>
-              {level.isBreak ? "—" : formatChips(level.bigBlind)}
+              {level.isBreak
+                ? "Break"
+                : `${formatChips(level.smallBlind)} / ${formatChips(level.bigBlind)}`}
             </TableCell>
             <TableCell>
               {level.isBreak ? "—" : level.isBigAnte ? "Sim" : "—"}
             </TableCell>
             <TableCell>
-              <span>{level.isBreak ? `Break ${level.durationMinutes}min` : `${level.durationMinutes}min`}</span>
+              <span>{level.durationMinutes}min</span>
               {level.isAddonLevel && (
                 <span className="ml-2 text-xs font-medium text-primary">Add-on</span>
               )}

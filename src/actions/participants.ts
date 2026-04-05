@@ -26,7 +26,29 @@ export async function addParticipant(tournamentId: number, playerId: number) {
 
   await db.insert(participants).values({ tournamentId, playerId });
 
-  revalidatePath(`/torneios/${tournamentId}`);
+  revalidatePath(`/torneios/${tournamentId}`, "layout");
+  return { success: true };
+}
+
+export async function addParticipants(tournamentId: number, playerIds: number[]) {
+  if (playerIds.length === 0) return { error: "Nenhum jogador selecionado" };
+
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth;
+
+  const [tournament] = await db
+    .select({ status: tournaments.status })
+    .from(tournaments)
+    .where(eq(tournaments.id, tournamentId));
+
+  if (!tournament) return { error: "Torneio nao encontrado" };
+  if (["finished", "cancelled"].includes(tournament.status)) {
+    return { error: "Nao e possivel adicionar jogadores a este torneio" };
+  }
+
+  await db.insert(participants).values(playerIds.map((playerId) => ({ tournamentId, playerId })));
+
+  revalidatePath(`/torneios/${tournamentId}`, "layout");
   return { success: true };
 }
 
@@ -42,7 +64,7 @@ export async function removeParticipant(participantId: number) {
 
   await db.delete(participants).where(eq(participants.id, participantId));
 
-  revalidatePath(`/torneios/${participant.tournamentId}`);
+  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };
 }
 
@@ -71,7 +93,7 @@ export async function confirmBuyIn(participantId: number) {
     amount: tournament.buyInAmount,
   });
 
-  revalidatePath(`/torneios/${participant.tournamentId}`);
+  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };
 }
 
@@ -105,7 +127,7 @@ export async function addRebuy(participantId: number) {
     amount: tournament.rebuyAmount,
   });
 
-  revalidatePath(`/torneios/${participant.tournamentId}`);
+  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };
 }
 
@@ -136,7 +158,7 @@ export async function addAddon(participantId: number) {
     amount: tournament.addonAmount,
   });
 
-  revalidatePath(`/torneios/${participant.tournamentId}`);
+  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };
 }
 
@@ -184,7 +206,7 @@ export async function eliminatePlayer(participantId: number) {
     }
   }
 
-  revalidatePath(`/torneios/${participant.tournamentId}`);
+  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };
 }
 
@@ -215,7 +237,7 @@ export async function undoElimination(participantId: number) {
       );
   }
 
-  revalidatePath(`/torneios/${participant.tournamentId}`);
+  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };
 }
 
@@ -248,6 +270,6 @@ export async function distributePayouts(
     }
   }
 
-  revalidatePath(`/torneios/${tournamentId}`);
+  revalidatePath(`/torneios/${tournamentId}`, "layout");
   return { success: true };
 }

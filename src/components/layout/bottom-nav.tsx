@@ -5,13 +5,19 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { NAV_ITEMS } from "@/lib/navigation";
 
-export function BottomNav() {
+interface BottomNavProps {
+  user: {
+    role: string;
+  } | null;
+}
+
+export function BottomNav({ user }: BottomNavProps) {
   const pathname = usePathname();
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-background md:hidden">
       <div className="flex items-center justify-around h-16">
-        {NAV_ITEMS.map((item) => {
+        {NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === "admin").map((item) => {
           const Icon = item.icon;
           const isActive =
             item.href === "/dashboard"

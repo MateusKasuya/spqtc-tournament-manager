@@ -161,11 +161,11 @@ src/
 | 0.5 | Discussão de design | ✅ Concluído |
 | 1 | Auth (login, registro, roles, RLS) | ✅ Concluído |
 | 2 | Torneios CRUD | ✅ Concluído |
-| 3 | Participantes & Financeiro | 🔲 Pendente |
-| 4 | Mesa ao Vivo & Timer Realtime | 🔲 Pendente |
-| 5 | Ranking & Estatísticas | 🔲 Pendente |
-| 6 | Relatórios | 🔲 Pendente |
-| 7 | Polish & Deploy | 🔲 Pendente |
+| Extra | Players desvinculados de Auth | ✅ Concluído |
+| 3 | Participantes & Financeiro | ✅ Concluído |
+| 4 | Mesa ao Vivo & Timer Realtime | ✅ Concluído |
+| 5 | Ranking & Estatísticas | ✅ Concluído |
+| 6 | Polish & Deploy | 🔲 Pendente |
 
 ---
 

@@ -56,6 +56,7 @@ export default async function EditarTorneioPage({ params }: PageProps) {
           addonChips: tournament.addonChips,
           maxRebuys: tournament.maxRebuys,
           allowAddon: tournament.allowAddon,
+          rankingFeeAmount: tournament.rankingFeeAmount,
         }}
       />
     </div>

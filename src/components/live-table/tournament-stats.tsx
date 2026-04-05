@@ -13,6 +13,7 @@ interface Tournament {
   rebuyChips: number;
   addonChips: number;
   prizePoolOverride: number | null;
+  rankingFeeAmount: number;
 }
 
 interface FinancialSummary {
@@ -61,9 +62,10 @@ export function TournamentStats({ participants, tournament, financialSummary }: 
 
   const avgStack = playingCount > 0 ? Math.round(totalChips / playingCount) : 0;
 
+  const rankingFund = paidCount * tournament.rankingFeeAmount;
   const prizePool =
     tournament.prizePoolOverride ??
-    (financialSummary.buy_in + financialSummary.rebuy + financialSummary.addon);
+    (financialSummary.buy_in + financialSummary.rebuy + financialSummary.addon - rankingFund);
 
   return (
     <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
