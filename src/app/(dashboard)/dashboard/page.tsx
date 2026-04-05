@@ -2,13 +2,14 @@ import { redirect } from "next/navigation";
 import { getProfile } from "@/lib/get-profile";
 import { getTournaments } from "@/db/queries/tournaments";
 import { getActiveSeason } from "@/db/queries/seasons";
+import { getSeasonRanking } from "@/db/queries/ranking";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { StatusBadge } from "@/components/tournament/status-badge";
 import { formatCurrency } from "@/lib/format";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarDays, Plus, Trophy } from "lucide-react";
+import { CalendarDays, Plus, Trophy, Medal } from "lucide-react";
 import Link from "next/link";
 
 export default async function DashboardPage() {
@@ -19,6 +20,8 @@ export default async function DashboardPage() {
     getActiveSeason(),
     getTournaments(),
   ]);
+
+  const topRanking = activeSeason ? await getSeasonRanking(activeSeason.id) : [];
 
   const isAdmin = profile?.role === "admin";
 
@@ -120,6 +123,38 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {topRanking.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center justify-between">
+              <span>Ranking — {activeSeason?.name}</span>
+              <Link href="/ranking" className="text-xs text-primary hover:underline">
+                Ver completo
+              </Link>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1.5">
+            {topRanking.slice(0, 5).map((entry, index) => (
+              <Link
+                key={entry.playerId}
+                href={`/jogadores/${entry.playerId}`}
+                className="flex items-center justify-between py-1 hover:opacity-75 transition-opacity"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground w-5 text-right">
+                    {index + 1}°
+                  </span>
+                  <span className="text-sm font-medium">
+                    {entry.playerNickname ?? entry.playerName}
+                  </span>
+                </div>
+                <span className="text-sm font-semibold">{Number(entry.totalPoints ?? 0)} pts</span>
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      )}
 
       {isAdmin && (
         <div className="flex gap-3">

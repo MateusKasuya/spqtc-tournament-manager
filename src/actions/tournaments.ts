@@ -2,12 +2,13 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
-import { tournaments, blindStructures, prizeStructures } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { tournaments, blindStructures, prizeStructures, participants } from "@/db/schema";
+import { eq, and, isNotNull } from "drizzle-orm";
+import { getPointsForPosition } from "@/lib/points-table";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { DEFAULT_BLIND_STRUCTURE } from "@/lib/tournament-defaults";
+import { DEFAULT_BLIND_STRUCTURE, DEFAULT_PRIZE_STRUCTURE } from "@/lib/tournament-defaults";
 
 const tournamentSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
@@ -21,6 +22,7 @@ const tournamentSchema = z.object({
   addonChips: z.number().min(0).default(0),
   maxRebuys: z.number().min(0).default(0),
   allowAddon: z.boolean().default(false),
+  rankingFeeAmount: z.number().min(0).default(0),
 });
 
 async function requireAdmin() {
@@ -57,6 +59,7 @@ export async function createTournament(formData: FormData) {
     addonChips: Number(formData.get("addonChips") ?? 0),
     maxRebuys: Number(formData.get("maxRebuys") ?? 0),
     allowAddon: formData.get("allowAddon") === "true",
+    rankingFeeAmount: Number(formData.get("rankingFeeAmount") ?? 0),
   });
 
   if (!parsed.success) return { error: parsed.error.issues[0].message };
@@ -74,6 +77,14 @@ export async function createTournament(formData: FormData) {
     DEFAULT_BLIND_STRUCTURE.map((level) => ({
       tournamentId: tournament.id,
       ...level,
+    }))
+  );
+
+  await db.insert(prizeStructures).values(
+    DEFAULT_PRIZE_STRUCTURE.map((p) => ({
+      tournamentId: tournament.id,
+      position: p.position,
+      percentage: String(p.percentage),
     }))
   );
 
@@ -98,6 +109,7 @@ export async function updateTournament(id: number, formData: FormData) {
     addonChips: Number(formData.get("addonChips") ?? 0),
     maxRebuys: Number(formData.get("maxRebuys") ?? 0),
     allowAddon: formData.get("allowAddon") === "true",
+    rankingFeeAmount: Number(formData.get("rankingFeeAmount") ?? 0),
   });
 
   if (!parsed.success) return { error: parsed.error.issues[0].message };
@@ -128,8 +140,26 @@ export async function updateTournamentStatus(
     .set({ status, updatedAt: new Date() })
     .where(eq(tournaments.id, id));
 
+  if (status === "finished") {
+    const finishedParticipants = await db
+      .select({ id: participants.id, finishPosition: participants.finishPosition })
+      .from(participants)
+      .where(and(eq(participants.tournamentId, id), isNotNull(participants.finishPosition)));
+
+    for (const p of finishedParticipants) {
+      if (p.finishPosition) {
+        const points = getPointsForPosition(p.finishPosition);
+        await db
+          .update(participants)
+          .set({ pointsEarned: String(points) })
+          .where(eq(participants.id, p.id));
+      }
+    }
+  }
+
   revalidatePath(`/torneios/${id}`);
   revalidatePath("/torneios");
+  revalidatePath("/ranking");
   return { success: true };
 }
 
@@ -323,6 +353,71 @@ export async function goBackBlindLevel(tournamentId: number) {
     .set({
       currentBlindLevel: prevLevel.level,
       timerRemainingSecs: prevLevel.durationMinutes * 60,
+      timerRunning: false,
+      timerStartedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(tournaments.id, tournamentId));
+
+  revalidatePath(`/torneios/${tournamentId}`);
+  return { success: true };
+}
+
+export async function startBreak(tournamentId: number, durationMinutes: number) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth;
+
+  const [tournament] = await db
+    .select({
+      timerRemainingSecs: tournaments.timerRemainingSecs,
+      timerStartedAt: tournaments.timerStartedAt,
+      timerRunning: tournaments.timerRunning,
+    })
+    .from(tournaments)
+    .where(eq(tournaments.id, tournamentId));
+
+  if (!tournament) return { error: "Torneio nao encontrado" };
+
+  // Calcula o tempo restante atual para salvar antes do intervalo
+  let levelRemaining = tournament.timerRemainingSecs ?? 0;
+  if (tournament.timerRunning && tournament.timerStartedAt) {
+    const elapsed = Math.floor((Date.now() - new Date(tournament.timerStartedAt).getTime()) / 1000);
+    levelRemaining = Math.max(0, levelRemaining - elapsed);
+  }
+
+  await db
+    .update(tournaments)
+    .set({
+      breakActive: true,
+      levelRemainingSecs: levelRemaining,
+      timerRemainingSecs: durationMinutes * 60,
+      timerRunning: true,
+      timerStartedAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .where(eq(tournaments.id, tournamentId));
+
+  revalidatePath(`/torneios/${tournamentId}`);
+  return { success: true };
+}
+
+export async function endBreak(tournamentId: number) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth;
+
+  const [tournament] = await db
+    .select({ levelRemainingSecs: tournaments.levelRemainingSecs })
+    .from(tournaments)
+    .where(eq(tournaments.id, tournamentId));
+
+  if (!tournament) return { error: "Torneio nao encontrado" };
+
+  await db
+    .update(tournaments)
+    .set({
+      breakActive: false,
+      levelRemainingSecs: null,
+      timerRemainingSecs: tournament.levelRemainingSecs ?? 0,
       timerRunning: false,
       timerStartedAt: null,
       updatedAt: new Date(),

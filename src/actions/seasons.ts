@@ -89,5 +89,19 @@ export async function deleteSeason(id: number) {
   await db.delete(seasons).where(eq(seasons.id, id));
 
   revalidatePath("/torneios");
+  revalidatePath("/temporadas");
   return { success: "Temporada excluida!" };
+}
+
+export async function toggleSeasonActive(id: number) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth;
+
+  await db.update(seasons).set({ isActive: false });
+  await db.update(seasons).set({ isActive: true }).where(eq(seasons.id, id));
+
+  revalidatePath("/temporadas");
+  revalidatePath("/ranking");
+  revalidatePath("/torneios");
+  return { success: "Temporada ativada!" };
 }
