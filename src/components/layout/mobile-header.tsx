@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -34,12 +35,14 @@ export function MobileHeader({ user }: MobileHeaderProps) {
           </Avatar>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-48">
-          <DropdownMenuLabel>
-            <p className="font-medium">{user?.name ?? "Jogador"}</p>
-            <p className="text-xs text-muted-foreground capitalize font-normal">
-              {user?.role ?? "player"}
-            </p>
-          </DropdownMenuLabel>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>
+              <p className="font-medium">{user?.name ?? "Jogador"}</p>
+              <p className="text-xs text-muted-foreground capitalize font-normal">
+                {user?.role ?? "player"}
+              </p>
+            </DropdownMenuLabel>
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
           <DropdownMenuItem>
             <form action={logout} className="w-full">
