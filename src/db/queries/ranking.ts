@@ -1,50 +1,59 @@
 import { db } from "@/db";
-import { participants, players, tournaments, transactions } from "@/db/schema";
+import { participants, players, tournaments } from "@/db/schema";
 import { eq, and, sum, count, desc, sql, isNotNull } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 
-export async function getSeasonRanking(seasonId: number) {
-  return db
-    .select({
-      playerId: participants.playerId,
-      playerName: players.name,
-      playerNickname: players.nickname,
-      totalPoints: sum(participants.pointsEarned).as("total_points"),
-      tournamentsPlayed: count(participants.id).as("tournaments_played"),
-      bestPosition: sql<number>`MIN(${participants.finishPosition})`.as("best_position"),
-      wins: sql<number>`COUNT(CASE WHEN ${participants.finishPosition} = 1 THEN 1 END)`.as("wins"),
-    })
-    .from(participants)
-    .innerJoin(players, eq(participants.playerId, players.id))
-    .innerJoin(tournaments, eq(participants.tournamentId, tournaments.id))
-    .where(
-      and(
-        eq(tournaments.seasonId, seasonId),
-        eq(tournaments.status, "finished"),
-        isNotNull(participants.finishPosition)
+export const getSeasonRanking = unstable_cache(
+  async (seasonId: number) => {
+    return db
+      .select({
+        playerId: participants.playerId,
+        playerName: players.name,
+        playerNickname: players.nickname,
+        totalPoints: sum(participants.pointsEarned).as("total_points"),
+        tournamentsPlayed: count(participants.id).as("tournaments_played"),
+        bestPosition: sql<number>`MIN(${participants.finishPosition})`.as("best_position"),
+        wins: sql<number>`COUNT(CASE WHEN ${participants.finishPosition} = 1 THEN 1 END)`.as("wins"),
+      })
+      .from(participants)
+      .innerJoin(players, eq(participants.playerId, players.id))
+      .innerJoin(tournaments, eq(participants.tournamentId, tournaments.id))
+      .where(
+        and(
+          eq(tournaments.seasonId, seasonId),
+          eq(tournaments.status, "finished"),
+          isNotNull(participants.finishPosition)
+        )
       )
-    )
-    .groupBy(participants.playerId, players.name, players.nickname)
-    .orderBy(desc(sql`total_points`));
-}
+      .groupBy(participants.playerId, players.name, players.nickname)
+      .orderBy(desc(sql`total_points`));
+  },
+  ["season-ranking"],
+  { revalidate: 60, tags: ["ranking"] }
+);
 
-export async function getSeasonPointsByTournament(seasonId: number) {
-  return db
-    .select({
-      playerId: participants.playerId,
-      tournamentId: tournaments.id,
-      finishPosition: participants.finishPosition,
-      pointsEarned: participants.pointsEarned,
-    })
-    .from(participants)
-    .innerJoin(tournaments, eq(participants.tournamentId, tournaments.id))
-    .where(
-      and(
-        eq(tournaments.seasonId, seasonId),
-        eq(tournaments.status, "finished")
+export const getSeasonPointsByTournament = unstable_cache(
+  async (seasonId: number) => {
+    return db
+      .select({
+        playerId: participants.playerId,
+        tournamentId: tournaments.id,
+        finishPosition: participants.finishPosition,
+        pointsEarned: participants.pointsEarned,
+      })
+      .from(participants)
+      .innerJoin(tournaments, eq(participants.tournamentId, tournaments.id))
+      .where(
+        and(
+          eq(tournaments.seasonId, seasonId),
+          eq(tournaments.status, "finished")
+        )
       )
-    )
-    .orderBy(tournaments.date);
-}
+      .orderBy(tournaments.date);
+  },
+  ["season-points-by-tournament"],
+  { revalidate: 60, tags: ["ranking"] }
+);
 
 export async function getPlayerStats(playerId: number) {
   const [stats] = await db

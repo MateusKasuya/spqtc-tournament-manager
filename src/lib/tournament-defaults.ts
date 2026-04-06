@@ -6,7 +6,7 @@ export const DEFAULT_PRIZE_STRUCTURE = [
   { position: 5, percentage: 5 },
 ];
 
-export function getDefaultPrizeStructure(_playerCount: number) {
+export function getDefaultPrizeStructure() {
   return DEFAULT_PRIZE_STRUCTURE;
 }
 

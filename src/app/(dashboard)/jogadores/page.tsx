@@ -27,7 +27,7 @@ export default async function JogadoresPage() {
       {playersList.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <p className="text-sm">Nenhum jogador cadastrado ainda.</p>
-          <p className="text-xs mt-1">Clique em "Novo Jogador" para adicionar.</p>
+          <p className="text-xs mt-1">Clique em &quot;Novo Jogador&quot; para adicionar.</p>
         </div>
       ) : (
         <div className="space-y-2">

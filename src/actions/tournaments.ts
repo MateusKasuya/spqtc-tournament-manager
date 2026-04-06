@@ -3,9 +3,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
 import { tournaments, blindStructures, prizeStructures, participants } from "@/db/schema";
-import { eq, and, isNotNull } from "drizzle-orm";
+import { eq, and, isNotNull, gt, asc } from "drizzle-orm";
 import { getPointsForPosition } from "@/lib/points-table";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { DEFAULT_BLIND_STRUCTURE, DEFAULT_PRIZE_STRUCTURE } from "@/lib/tournament-defaults";
@@ -135,26 +135,40 @@ export async function updateTournamentStatus(
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  await db
-    .update(tournaments)
-    .set({ status, updatedAt: new Date() })
-    .where(eq(tournaments.id, id));
+  await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ status: tournaments.status })
+      .from(tournaments)
+      .where(eq(tournaments.id, id));
 
-  if (status === "finished") {
-    const finishedParticipants = await db
-      .select({ id: participants.id, finishPosition: participants.finishPosition })
-      .from(participants)
-      .where(and(eq(participants.tournamentId, id), isNotNull(participants.finishPosition)));
+    if (!current) return;
+    if (status === "finished" && current.status === "finished") return;
 
-    for (const p of finishedParticipants) {
-      if (p.finishPosition) {
-        const points = getPointsForPosition(p.finishPosition);
-        await db
-          .update(participants)
-          .set({ pointsEarned: String(points) })
-          .where(eq(participants.id, p.id));
+    await tx
+      .update(tournaments)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(tournaments.id, id));
+
+    if (status === "finished") {
+      const finishedParticipants = await tx
+        .select({ id: participants.id, finishPosition: participants.finishPosition })
+        .from(participants)
+        .where(and(eq(participants.tournamentId, id), isNotNull(participants.finishPosition)));
+
+      for (const p of finishedParticipants) {
+        if (p.finishPosition) {
+          const points = getPointsForPosition(p.finishPosition);
+          await tx
+            .update(participants)
+            .set({ pointsEarned: String(points) })
+            .where(eq(participants.id, p.id));
+        }
       }
     }
+  });
+
+  if (status === "finished") {
+    revalidateTag("ranking");
   }
 
   revalidatePath(`/torneios/${id}`);
@@ -301,14 +315,17 @@ export async function advanceBlindLevel(tournamentId: number) {
 
   if (!tournament) return { error: "Torneio nao encontrado" };
 
-  const blinds = await db
+  const [nextLevel] = await db
     .select()
     .from(blindStructures)
-    .where(eq(blindStructures.tournamentId, tournamentId))
-    .orderBy(blindStructures.level);
-
-  const currentIndex = blinds.findIndex((b) => b.level === tournament.currentBlindLevel);
-  const nextLevel = blinds[currentIndex + 1];
+    .where(
+      and(
+        eq(blindStructures.tournamentId, tournamentId),
+        gt(blindStructures.level, tournament.currentBlindLevel)
+      )
+    )
+    .orderBy(asc(blindStructures.level))
+    .limit(1);
 
   if (!nextLevel) return { error: "Ja esta no ultimo nivel" };
 

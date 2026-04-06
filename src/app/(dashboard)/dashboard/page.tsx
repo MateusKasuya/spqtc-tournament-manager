@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/tournament/status-badge";
 import { formatCurrency } from "@/lib/format";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarDays, Plus, Trophy, Medal } from "lucide-react";
+import { CalendarDays, Plus, Trophy } from "lucide-react";
 import Link from "next/link";
 
 export default async function DashboardPage() {

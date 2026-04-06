@@ -38,10 +38,15 @@ export function EditPlayerDialog({ player }: EditPlayerDialogProps) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <button type="button" className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors">
-          <Pencil className="h-3.5 w-3.5" />
-        </button>
+      <DialogTrigger
+        render={
+          <button
+            type="button"
+            className="inline-flex items-center justify-center h-8 w-8 rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          />
+        }
+      >
+        <Pencil className="h-3.5 w-3.5" />
       </DialogTrigger>
       <DialogContent className="max-w-sm">
         <DialogHeader>
