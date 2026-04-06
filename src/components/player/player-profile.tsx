@@ -29,12 +29,12 @@ interface PlayerProfileProps {
     tournamentDate: Date;
     buyInAmount: number;
     rebuyAmount: number;
+    addonAmount: number;
     finishPosition: number | null;
     pointsEarned: string;
     prizeAmount: number;
     rebuyCount: number;
     addonUsed: boolean;
-    actualAddonCost: number;
   }[];
   seasonName: string | null;
 }
@@ -52,7 +52,7 @@ function StatCard({ label, value }: { label: string; value: string }) {
 
 export function PlayerProfile({ player, stats, seasonHistory, seasonName }: PlayerProfileProps) {
   const totalGastos = seasonHistory.reduce((sum, e) => {
-    return sum + e.buyInAmount + e.rebuyCount * e.rebuyAmount + Number(e.actualAddonCost);
+    return sum + e.buyInAmount + e.rebuyCount * e.rebuyAmount + (e.addonUsed ? e.addonAmount : 0);
   }, 0);
 
   const totalPremio = seasonHistory.reduce((sum, e) => sum + e.prizeAmount, 0);
@@ -115,7 +115,7 @@ export function PlayerProfile({ player, stats, seasonHistory, seasonName }: Play
                   </TableHeader>
                   <TableBody>
                     {seasonHistory.map((entry) => {
-                      const gastos = entry.buyInAmount + entry.rebuyCount * entry.rebuyAmount + Number(entry.actualAddonCost);
+                      const gastos = entry.buyInAmount + entry.rebuyCount * entry.rebuyAmount + (entry.addonUsed ? entry.addonAmount : 0);
                       return (
                         <TableRow key={entry.tournamentId}>
                           <TableCell>
