@@ -12,7 +12,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
 import { addParticipants } from "@/actions/participants";
 import { UserPlus } from "lucide-react";
 import { toast } from "sonner";

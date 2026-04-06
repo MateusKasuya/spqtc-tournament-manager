@@ -119,7 +119,7 @@ export function PayoutDialog({
           <div className="space-y-3">
             {entries.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-2">
-                Nenhuma posicao adicionada. Clique em "Adicionar posicao" abaixo.
+                Nenhuma posicao adicionada. Clique em &quot;Adicionar posicao&quot; abaixo.
               </p>
             )}
             {entries.map((entry, index) => {

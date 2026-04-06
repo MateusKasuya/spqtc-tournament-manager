@@ -25,6 +25,8 @@ export function useCountdown(timer: TimerState) {
     Math.max(0, computeRemaining(timer))
   );
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef(timer);
+  timerRef.current = timer;
 
   useEffect(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -33,7 +35,7 @@ export function useCountdown(timer: TimerState) {
       setRemainingSeconds(Math.max(0, computeRemaining(timer)));
 
       intervalRef.current = setInterval(() => {
-        const remaining = computeRemaining(timer);
+        const remaining = computeRemaining(timerRef.current);
         setRemainingSeconds(Math.max(0, remaining));
 
         if (remaining <= 0 && intervalRef.current) {
@@ -47,6 +49,7 @@ export function useCountdown(timer: TimerState) {
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [timer.timerRunning, timer.timerRemainingSecs, timer.timerStartedAt]);
 
   return {

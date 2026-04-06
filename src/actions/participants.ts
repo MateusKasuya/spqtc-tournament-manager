@@ -173,38 +173,40 @@ export async function eliminatePlayer(participantId: number) {
   const playingCount = await getPlayingCount(participant.tournamentId);
   const finishPosition = playingCount;
 
-  await db
-    .update(participants)
-    .set({ status: "eliminated", finishPosition, eliminatedAt: new Date() })
-    .where(eq(participants.id, participantId));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(participants)
+      .set({ status: "eliminated", finishPosition, eliminatedAt: new Date() })
+      .where(eq(participants.id, participantId));
 
-  if (playingCount - 1 === 1) {
-    const [champion] = await db
-      .select({ id: participants.id })
-      .from(participants)
-      .where(and(eq(participants.tournamentId, participant.tournamentId), eq(participants.status, "playing")));
+    if (playingCount - 1 === 1) {
+      const [champion] = await tx
+        .select({ id: participants.id })
+        .from(participants)
+        .where(and(eq(participants.tournamentId, participant.tournamentId), eq(participants.status, "playing")));
 
-    if (champion) {
-      await db
-        .update(participants)
-        .set({ status: "finished", finishPosition: 1 })
-        .where(eq(participants.id, champion.id));
-    }
+      if (champion) {
+        await tx
+          .update(participants)
+          .set({ status: "finished", finishPosition: 1 })
+          .where(eq(participants.id, champion.id));
+      }
 
-    const [t] = await db
-      .select({ timerRunning: tournaments.timerRunning, timerRemainingSecs: tournaments.timerRemainingSecs, timerStartedAt: tournaments.timerStartedAt })
-      .from(tournaments)
-      .where(eq(tournaments.id, participant.tournamentId));
-
-    if (t?.timerRunning && t.timerStartedAt) {
-      const elapsed = Math.floor((Date.now() - new Date(t.timerStartedAt).getTime()) / 1000);
-      const remaining = Math.max(0, (t.timerRemainingSecs ?? 0) - elapsed);
-      await db
-        .update(tournaments)
-        .set({ timerRunning: false, timerStartedAt: null, timerRemainingSecs: remaining, updatedAt: new Date() })
+      const [t] = await tx
+        .select({ timerRunning: tournaments.timerRunning, timerRemainingSecs: tournaments.timerRemainingSecs, timerStartedAt: tournaments.timerStartedAt })
+        .from(tournaments)
         .where(eq(tournaments.id, participant.tournamentId));
+
+      if (t?.timerRunning && t.timerStartedAt) {
+        const elapsed = Math.floor((Date.now() - new Date(t.timerStartedAt).getTime()) / 1000);
+        const remaining = Math.max(0, (t.timerRemainingSecs ?? 0) - elapsed);
+        await tx
+          .update(tournaments)
+          .set({ timerRunning: false, timerStartedAt: null, timerRemainingSecs: remaining, updatedAt: new Date() })
+          .where(eq(tournaments.id, participant.tournamentId));
+      }
     }
-  }
+  });
 
   revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };
@@ -252,23 +254,27 @@ export async function distributePayouts(
     .delete(transactions)
     .where(and(eq(transactions.tournamentId, tournamentId), eq(transactions.type, "prize")));
 
-  for (const payout of payouts) {
-    if (payout.amount > 0) {
-      await db.insert(transactions).values({
-        tournamentId,
-        playerId: payout.playerId,
-        type: "prize",
-        amount: payout.amount,
-      });
+  const transactionValues = payouts
+    .filter((p) => p.amount > 0)
+    .map((p) => ({
+      tournamentId,
+      playerId: p.playerId,
+      type: "prize" as const,
+      amount: p.amount,
+    }));
 
-      await db
-        .update(participants)
-        .set({ prizeAmount: payout.amount })
-        .where(
-          and(eq(participants.tournamentId, tournamentId), eq(participants.playerId, payout.playerId))
-        );
-    }
+  if (transactionValues.length > 0) {
+    await db.insert(transactions).values(transactionValues);
   }
+
+  await Promise.all(
+    payouts.map((p) =>
+      db
+        .update(participants)
+        .set({ prizeAmount: p.amount, finishPosition: p.position })
+        .where(and(eq(participants.tournamentId, tournamentId), eq(participants.playerId, p.playerId)))
+    )
+  );
 
   revalidatePath(`/torneios/${tournamentId}`, "layout");
   return { success: true };

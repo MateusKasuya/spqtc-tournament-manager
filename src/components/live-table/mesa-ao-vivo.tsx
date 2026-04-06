@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { useTournamentRealtime } from "@/hooks/use-tournament-realtime";
 import { useParticipantsRealtime } from "@/hooks/use-participants-realtime";
 import { useCountdown } from "@/hooks/use-countdown";
@@ -80,16 +79,9 @@ export function MesaAoVivo({
   financialSummary,
   isAdmin,
 }: MesaAoVivoProps) {
-  const router = useRouter();
   const liveTournament = useTournamentRealtime(tournament.id, tournament);
   useParticipantsRealtime(tournament.id);
   const { remainingSeconds, isRunning } = useCountdown(liveTournament);
-
-  // Polling como fallback caso Realtime não entregue eventos
-  useEffect(() => {
-    const interval = setInterval(() => router.refresh(), 5000);
-    return () => clearInterval(interval);
-  }, [router]);
 
   const currentIndex = blindLevels.findIndex((b) => b.level === liveTournament.currentBlindLevel);
   const currentLevel = blindLevels[currentIndex] ?? blindLevels[0];

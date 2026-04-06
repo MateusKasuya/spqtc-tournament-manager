@@ -44,21 +44,19 @@ interface SavedTemplate {
 interface PrizeStructureEditorProps {
   tournamentId: number;
   initialPositions: PrizePosition[];
-  participantCount?: number;
   savedTemplates?: SavedTemplate[];
 }
 
 export function PrizeStructureEditor({
   tournamentId,
   initialPositions,
-  participantCount = 10,
   savedTemplates: initialTemplates = [],
 }: PrizeStructureEditorProps) {
   const [open, setOpen] = useState(false);
   const [positions, setPositions] = useState<PrizePosition[]>(
     initialPositions.length > 0
       ? initialPositions
-      : getDefaultPrizeStructure(participantCount)
+      : getDefaultPrizeStructure()
   );
   const [isPending, startTransition] = useTransition();
   const [templates, setTemplates] = useState(initialTemplates);
@@ -92,7 +90,7 @@ export function PrizeStructureEditor({
   function loadTemplate(value: string) {
     setSelectedTemplate(value);
     if (value === "__default__") {
-      setPositions(getDefaultPrizeStructure(participantCount));
+      setPositions(getDefaultPrizeStructure());
       return;
     }
     const t = templates.find((t) => String(t.id) === value);

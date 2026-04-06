@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { updateTournamentStatus } from "@/actions/tournaments";
 import { toast } from "sonner";
-import { PlayCircle, FlagTriangleRight, XCircle } from "lucide-react";
+import { PlayCircle, FlagTriangleRight } from "lucide-react";
 
 const NEXT_STATUS = {
   pending: { value: "running", label: "Iniciar torneio", icon: PlayCircle },
