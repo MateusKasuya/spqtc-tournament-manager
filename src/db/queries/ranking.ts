@@ -86,17 +86,12 @@ export async function getPlayerSeasonHistory(playerId: number, seasonId: number)
       tournamentDate: tournaments.date,
       buyInAmount: tournaments.buyInAmount,
       rebuyAmount: tournaments.rebuyAmount,
+      addonAmount: tournaments.addonAmount,
       finishPosition: participants.finishPosition,
       pointsEarned: participants.pointsEarned,
       prizeAmount: participants.prizeAmount,
       rebuyCount: participants.rebuyCount,
       addonUsed: participants.addonUsed,
-      actualAddonCost: sql<number>`COALESCE((
-        SELECT SUM(t.amount) FROM transactions t
-        WHERE t.player_id = ${participants.playerId}
-        AND t.tournament_id = ${tournaments.id}
-        AND t.type = 'addon'
-      ), 0)`.as("actual_addon_cost"),
     })
     .from(participants)
     .innerJoin(tournaments, eq(participants.tournamentId, tournaments.id))
