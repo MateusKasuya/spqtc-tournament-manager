@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { login } from "@/actions/auth";
 import { Logo } from "@/components/layout/logo";
@@ -81,6 +82,12 @@ function LoginForm() {
             </Button>
           </form>
 
+          <p className="mt-4 text-center text-sm text-muted-foreground">
+            Não tem conta?{" "}
+            <Link href="/cadastro" className="text-brand hover:underline">
+              Cadastrar
+            </Link>
+          </p>
         </div>
       </div>
     </div>
