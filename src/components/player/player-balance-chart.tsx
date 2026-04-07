@@ -9,8 +9,6 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 
 interface ChartEntry {
   label: string;
@@ -59,8 +57,9 @@ export function PlayerBalanceChart({ data }: PlayerBalanceChartProps) {
           width={55}
         />
         <Tooltip
-          formatter={(value: number) => {
-            const reais = value / 100;
+          formatter={(value) => {
+            const cents = typeof value === "number" ? value : 0;
+            const reais = cents / 100;
             const formatted = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Math.abs(reais));
             return [(reais >= 0 ? "+" : "-") + formatted, "Saldo acumulado"];
           }}
