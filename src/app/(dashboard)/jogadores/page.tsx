@@ -4,6 +4,7 @@ import { getAllPlayers } from "@/db/queries/players";
 import { CreatePlayerDialog } from "@/components/player/create-player-dialog";
 import { EditPlayerDialog } from "@/components/player/edit-player-dialog";
 import { DeletePlayerButton } from "@/components/player/delete-player-button";
+import Link from "next/link";
 
 export default async function JogadoresPage() {
   const profile = await getProfile();
@@ -36,12 +37,15 @@ export default async function JogadoresPage() {
               key={player.id}
               className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3"
             >
-              <div>
+              <Link
+                href={`/jogadores/${player.id}`}
+                className="flex-1 min-w-0 hover:opacity-70 transition-opacity"
+              >
                 <p className="text-sm font-medium">{player.name}</p>
                 {player.nickname && (
                   <p className="text-xs text-muted-foreground">{player.nickname}</p>
                 )}
-              </div>
+              </Link>
               <div className="flex items-center gap-1 shrink-0">
                 <EditPlayerDialog player={player} />
                 <DeletePlayerButton playerId={player.id} />
