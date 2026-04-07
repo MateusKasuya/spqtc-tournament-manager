@@ -12,6 +12,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { PlayerBalanceChart } from "./player-balance-chart";
 
 interface PlayerProfileProps {
   player: { id: number; name: string; nickname: string | null };
@@ -58,6 +59,17 @@ export function PlayerProfile({ player, stats, seasonHistory, seasonName }: Play
   const totalPremio = seasonHistory.reduce((sum, e) => sum + e.prizeAmount, 0);
   const saldo = totalPremio - totalGastos;
 
+  const chartData = seasonHistory.reduce<{ label: string; saldo: number }[]>((acc, e) => {
+    const gastos = e.buyInAmount + e.rebuyCount * e.rebuyAmount + (e.addonUsed ? e.addonAmount : 0);
+    const saldoEtapa = e.prizeAmount - gastos;
+    const prev = acc.length > 0 ? acc[acc.length - 1].saldo : 0;
+    acc.push({
+      label: format(new Date(e.tournamentDate), "d/M", { locale: ptBR }),
+      saldo: Number((prev + saldoEtapa).toFixed(2)),
+    });
+    return acc;
+  }, []);
+
   return (
     <div className="space-y-6 max-w-2xl">
       <div className="flex items-center gap-3">
@@ -83,6 +95,17 @@ export function PlayerProfile({ player, stats, seasonHistory, seasonName }: Play
           value={stats?.bestPosition ? `${stats.bestPosition}°` : "-"}
         />
       </div>
+
+      {chartData.length > 1 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Evolução do saldo</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <PlayerBalanceChart data={chartData} />
+          </CardContent>
+        </Card>
+      )}
 
       {seasonName && (
         <Card>
