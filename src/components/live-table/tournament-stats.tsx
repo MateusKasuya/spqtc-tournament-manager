@@ -41,10 +41,10 @@ function StatCard({ icon, label, value, sub }: StatCardProps) {
     <div className="flex flex-col gap-1 rounded-lg border p-3">
       <div className="flex items-center gap-1.5 text-muted-foreground">
         {icon}
-        <span className="text-xs font-medium">{label}</span>
+        <span className="text-sm font-medium">{label}</span>
       </div>
-      <p className="text-lg font-bold tabular-nums">{value}</p>
-      {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+      <p className="text-xl font-bold tabular-nums">{value}</p>
+      {sub && <p className="text-sm text-muted-foreground">{sub}</p>}
     </div>
   );
 }

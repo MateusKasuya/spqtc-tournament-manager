@@ -13,6 +13,7 @@ export async function getParticipants(tournamentId: number) {
       buyInPaid: participants.buyInPaid,
       rebuyCount: participants.rebuyCount,
       addonUsed: participants.addonUsed,
+      bonusChipUsed: participants.bonusChipUsed,
       finishPosition: participants.finishPosition,
       pointsEarned: participants.pointsEarned,
       prizeAmount: participants.prizeAmount,

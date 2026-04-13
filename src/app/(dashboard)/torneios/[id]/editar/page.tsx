@@ -54,6 +54,7 @@ export default async function EditarTorneioPage({ params }: PageProps) {
           initialChips: tournament.initialChips,
           rebuyChips: tournament.rebuyChips,
           addonChips: tournament.addonChips,
+          bonusChipAmount: tournament.bonusChipAmount,
           maxRebuys: tournament.maxRebuys,
           allowAddon: tournament.allowAddon,
           rankingFeeAmount: tournament.rankingFeeAmount,

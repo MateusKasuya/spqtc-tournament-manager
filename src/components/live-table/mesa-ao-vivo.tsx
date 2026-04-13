@@ -10,6 +10,7 @@ import { TimerControls } from "./timer-controls";
 import { BlindInfo } from "./blind-info";
 import { TournamentStats } from "./tournament-stats";
 import { QuickActions } from "./quick-actions";
+import { StickyTimerBar } from "./sticky-timer-bar";
 import { advanceBlindLevel, updateTournamentStatus, endBreak } from "@/actions/tournaments";
 import { playLevelSound } from "@/lib/play-level-sound";
 import Link from "next/link";
@@ -35,6 +36,7 @@ interface Participant {
   buyInPaid: boolean;
   rebuyCount: number;
   addonUsed: boolean;
+  bonusChipUsed: boolean;
 }
 
 interface FinancialSummary {
@@ -58,6 +60,7 @@ interface Tournament {
   rebuyAmount: number;
   addonAmount: number;
   allowAddon: boolean;
+  bonusChipAmount: number;
   prizePoolOverride: number | null;
   rankingFeeAmount: number;
   name: string;
@@ -90,9 +93,22 @@ export function MesaAoVivo({
   const totalSeconds = currentLevel ? currentLevel.durationMinutes * 60 : 0;
 
   const autoAdvancedRef = useRef(false);
+  const timerPanelRef = useRef<HTMLDivElement>(null);
+  const [showStickyTimer, setShowStickyTimer] = useState(false);
   const [isPendingFinish, startFinishTransition] = useTransition();
   const [confirmFinish, setConfirmFinish] = useState(false);
   const [, startTransition] = useTransition();
+
+  useEffect(() => {
+    const el = timerPanelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowStickyTimer(!entry.isIntersecting),
+      { threshold: 0.1 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (remainingSeconds === 0 && isRunning && isAdmin && !autoAdvancedRef.current) {
@@ -126,7 +142,20 @@ export function MesaAoVivo({
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl mx-auto">
+    <>
+      {showStickyTimer && (
+        <StickyTimerBar
+          remainingSeconds={remainingSeconds}
+          isRunning={isRunning}
+          isBreak={liveTournament.breakActive || currentLevel.isBreak}
+          currentLevel={currentLevel}
+          isAdmin={isAdmin}
+          tournamentId={tournament.id}
+          onScrollBack={() => timerPanelRef.current?.scrollIntoView({ behavior: "smooth" })}
+        />
+      )}
+
+      <div className="flex flex-col gap-6 max-w-3xl mx-auto">
       {/* Header */}
       <div className="flex items-center gap-3">
         <Link
@@ -136,13 +165,13 @@ export function MesaAoVivo({
           <ArrowLeft className="h-5 w-5" />
         </Link>
         <div>
-          <h1 className="font-semibold">{tournament.name}</h1>
-          <p className="text-xs text-muted-foreground">Mesa ao Vivo</p>
+          <h1 className="text-lg font-semibold">{tournament.name}</h1>
+          <p className="text-sm text-muted-foreground">Mesa ao Vivo</p>
         </div>
       </div>
 
       {/* Timer + Blind Info */}
-      <div className="flex flex-col items-center gap-6 rounded-lg border p-8">
+      <div ref={timerPanelRef} className="flex flex-col items-center gap-6 rounded-lg border p-8">
         <TimerDisplay
           remainingSeconds={remainingSeconds}
           isRunning={isRunning}
@@ -188,8 +217,8 @@ export function MesaAoVivo({
           {!confirmFinish ? (
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium">Encerrar torneio</p>
-                <p className="text-xs text-muted-foreground">Esta acao nao pode ser desfeita</p>
+                <p className="text-base font-medium">Encerrar torneio</p>
+                <p className="text-sm text-muted-foreground">Esta acao nao pode ser desfeita</p>
               </div>
               <button
                 type="button"
@@ -232,5 +261,6 @@ export function MesaAoVivo({
         </div>
       )}
     </div>
+    </>
   );
 }

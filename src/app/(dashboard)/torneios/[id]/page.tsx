@@ -219,6 +219,7 @@ export default async function TorneioPage({ params }: PageProps) {
             }))}
             isAdmin={isAdmin && isActive}
             allowAddon={tournament.allowAddon}
+            bonusChipAmount={tournament.bonusChipAmount}
             buyInAmount={tournament.buyInAmount}
             rebuyAmount={tournament.rebuyAmount}
             addonAmount={tournament.addonAmount}
@@ -321,7 +322,7 @@ export default async function TorneioPage({ params }: PageProps) {
                       .map((p) => (
                         <TableRow key={p.id}>
                           <TableCell className="font-medium">{p.finishPosition}º lugar</TableCell>
-                          <TableCell>{p.nickname ? `${p.name} (${p.nickname})` : p.name}</TableCell>
+                          <TableCell>{p.nickname ?? p.name}</TableCell>
                           <TableCell>{formatCurrency(p.prizeAmount)}</TableCell>
                         </TableRow>
                       ))}
@@ -347,7 +348,7 @@ export default async function TorneioPage({ params }: PageProps) {
                   .map((p) => (
                     <TableRow key={p.id}>
                       <TableCell className="font-medium">{p.finishPosition}º lugar</TableCell>
-                      <TableCell>{p.nickname ? `${p.name} (${p.nickname})` : p.name}</TableCell>
+                      <TableCell>{p.nickname ?? p.name}</TableCell>
                       <TableCell>{formatCurrency(p.prizeAmount)}</TableCell>
                     </TableRow>
                   ))}
