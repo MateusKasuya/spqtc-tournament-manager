@@ -5,13 +5,18 @@ import { Badge } from "@/components/ui/badge";
 import {
   confirmBuyIn,
   addRebuy,
+  addDoubleRebuy,
   addAddon,
+  undoRebuy,
+  undoAddon,
+  addBonusChip,
+  undoBonusChip,
   eliminatePlayer,
   undoElimination,
   removeParticipant,
 } from "@/actions/participants";
 import { formatCurrency } from "@/lib/format";
-import { Trophy, Skull, RotateCcw, Trash2, DollarSign, RefreshCw, Plus } from "lucide-react";
+import { Trophy, Skull, RotateCcw, Trash2, DollarSign, RefreshCw, Plus, Zap } from "lucide-react";
 import { toast } from "sonner";
 
 interface Participant {
@@ -22,6 +27,7 @@ interface Participant {
   buyInPaid: boolean;
   rebuyCount: number;
   addonUsed: boolean;
+  bonusChipUsed: boolean;
   finishPosition: number | null;
   prizeAmount: number;
   status: string;
@@ -31,6 +37,7 @@ interface ParticipantListProps {
   participants: Participant[];
   isAdmin: boolean;
   allowAddon: boolean;
+  bonusChipAmount: number;
   buyInAmount: number;
   rebuyAmount: number;
   addonAmount: number;
@@ -76,9 +83,11 @@ function ActionButton({
 function ParticipantActions({
   participant,
   allowAddon,
+  bonusChipAmount,
 }: {
   participant: Participant;
   allowAddon: boolean;
+  bonusChipAmount: number;
 }) {
   const [isPending, startTransition] = useTransition();
 
@@ -111,6 +120,25 @@ function ParticipantActions({
             <RefreshCw className="h-3.5 w-3.5" />
           </ActionButton>
 
+          <ActionButton
+            onClick={() => run(() => addDoubleRebuy(participant.id))}
+            disabled={isPending}
+            label="2x Rebuy"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+          </ActionButton>
+
+          {participant.rebuyCount > 0 && (
+            <ActionButton
+              onClick={() => run(() => undoRebuy(participant.id))}
+              disabled={isPending}
+              label="-Rebuy"
+              destructive
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </ActionButton>
+          )}
+
           {allowAddon && !participant.addonUsed && (
             <ActionButton
               onClick={() => run(() => addAddon(participant.id))}
@@ -118,6 +146,38 @@ function ParticipantActions({
               label="Add-on"
             >
               <Plus className="h-3.5 w-3.5" />
+            </ActionButton>
+          )}
+
+          {allowAddon && participant.addonUsed && (
+            <ActionButton
+              onClick={() => run(() => undoAddon(participant.id))}
+              disabled={isPending}
+              label="-Add-on"
+              destructive
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </ActionButton>
+          )}
+
+          {bonusChipAmount > 0 && !participant.bonusChipUsed && (
+            <ActionButton
+              onClick={() => run(() => addBonusChip(participant.id))}
+              disabled={isPending}
+              label="Bonus"
+            >
+              <Zap className="h-3.5 w-3.5" />
+            </ActionButton>
+          )}
+
+          {bonusChipAmount > 0 && participant.bonusChipUsed && (
+            <ActionButton
+              onClick={() => run(() => undoBonusChip(participant.id))}
+              disabled={isPending}
+              label="-Bonus"
+              destructive
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
             </ActionButton>
           )}
 
@@ -160,6 +220,7 @@ export function ParticipantList({
   participants,
   isAdmin,
   allowAddon,
+  bonusChipAmount,
   buyInAmount,
   rebuyAmount,
   addonAmount,
@@ -176,7 +237,7 @@ export function ParticipantList({
     <div className="space-y-2">
       {participants.map((p) => {
         const badge = STATUS_BADGE[p.status] ?? STATUS_BADGE.registered;
-        const displayName = p.nickname ? `${p.name} (${p.nickname})` : p.name;
+        const displayName = p.nickname ?? p.name;
         const total =
           (p.buyInPaid ? buyInAmount : 0) +
           p.rebuyCount * rebuyAmount +
@@ -205,12 +266,13 @@ export function ParticipantList({
                   {total > 0 ? formatCurrency(total) : "Nao pago"}
                   {p.rebuyCount > 0 && ` · ${p.rebuyCount}R`}
                   {p.addonUsed && " · A"}
+                  {p.bonusChipUsed && " · B"}
                   {p.prizeAmount > 0 && ` · Premio: ${formatCurrency(p.prizeAmount)}`}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2 shrink-0">
-              {isAdmin && <ParticipantActions participant={p} allowAddon={allowAddon} />}
+              {isAdmin && <ParticipantActions participant={p} allowAddon={allowAddon} bonusChipAmount={bonusChipAmount} />}
               <Badge variant={badge.variant} className="text-xs">
                 {badge.label}
               </Badge>

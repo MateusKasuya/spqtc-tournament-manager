@@ -37,6 +37,7 @@ interface TournamentFormProps {
     initialChips: number;
     rebuyChips: number;
     addonChips: number;
+    bonusChipAmount: number;
     maxRebuys: number;
     allowAddon: boolean;
     rankingFeeAmount: number;
@@ -79,6 +80,9 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
   );
   const [addonChips, setAddonChips] = useState(
     String(initialData?.addonChips ?? 10000)
+  );
+  const [bonusChipAmount, setBonusChipAmount] = useState(
+    String(initialData?.bonusChipAmount ?? 10000)
   );
   const [maxRebuys, setMaxRebuys] = useState(
     String(initialData && initialData.maxRebuys > 0 ? initialData.maxRebuys : 2)
@@ -243,6 +247,20 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
               />
             </div>
           )}
+          <div className="space-y-2">
+            <Label htmlFor="bonusChipAmount">Fichas de bonus time chip</Label>
+            <Input
+              id="bonusChipAmount"
+              name="bonusChipAmount"
+              type="number"
+              min="0"
+              value={bonusChipAmount}
+              onChange={(e) => setBonusChipAmount(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Fichas extras concedidas individualmente. 0 = recurso desativado.
+            </p>
+          </div>
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <Label htmlFor="maxRebuys">Max rebuys</Label>

@@ -78,6 +78,13 @@
       "when": 1775088000000,
       "tag": "0010_break_active",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1744588800000,
+      "tag": "0011_bonus_chip",
+      "breakpoints": true
     }
   ]
 }

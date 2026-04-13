@@ -2,7 +2,7 @@
 
 import { db } from "@/db";
 import { participants, transactions, tournaments } from "@/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/require-admin";
 import { getParticipantById, getParticipantByPlayerAndTournament, getPlayingCount } from "@/db/queries/participants";
@@ -131,6 +131,48 @@ export async function addRebuy(participantId: number) {
   return { success: true };
 }
 
+export async function addDoubleRebuy(participantId: number) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth;
+
+  const participant = await getParticipantById(participantId);
+  if (!participant) return { error: "Participante nao encontrado" };
+  if (!participant.buyInPaid) return { error: "Jogador ainda nao pagou buy-in" };
+
+  const [tournament] = await db
+    .select({ rebuyAmount: tournaments.rebuyAmount, maxRebuys: tournaments.maxRebuys })
+    .from(tournaments)
+    .where(eq(tournaments.id, participant.tournamentId));
+
+  if (tournament.rebuyAmount === 0) return { error: "Torneio nao permite rebuy" };
+  if (tournament.maxRebuys > 0 && participant.rebuyCount + 2 > tournament.maxRebuys) {
+    return { error: `Limite de rebuys atingido (max: ${tournament.maxRebuys})` };
+  }
+
+  await db
+    .update(participants)
+    .set({ rebuyCount: participant.rebuyCount + 2 })
+    .where(eq(participants.id, participantId));
+
+  await db.insert(transactions).values([
+    {
+      tournamentId: participant.tournamentId,
+      playerId: participant.playerId,
+      type: "rebuy",
+      amount: tournament.rebuyAmount,
+    },
+    {
+      tournamentId: participant.tournamentId,
+      playerId: participant.playerId,
+      type: "rebuy",
+      amount: tournament.rebuyAmount,
+    },
+  ]);
+
+  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  return { success: true };
+}
+
 export async function addAddon(participantId: number) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
@@ -157,6 +199,108 @@ export async function addAddon(participantId: number) {
     type: "addon",
     amount: tournament.addonAmount,
   });
+
+  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  return { success: true };
+}
+
+export async function undoRebuy(participantId: number) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth;
+
+  const participant = await getParticipantById(participantId);
+  if (!participant) return { error: "Participante nao encontrado" };
+  if (participant.rebuyCount <= 0) return { error: "Nenhum rebuy para desfazer" };
+
+  const [lastRebuyTx] = await db
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.playerId, participant.playerId),
+        eq(transactions.tournamentId, participant.tournamentId),
+        eq(transactions.type, "rebuy")
+      )
+    )
+    .orderBy(desc(transactions.createdAt))
+    .limit(1);
+
+  if (lastRebuyTx) {
+    await db.delete(transactions).where(eq(transactions.id, lastRebuyTx.id));
+  }
+
+  await db
+    .update(participants)
+    .set({ rebuyCount: participant.rebuyCount - 1 })
+    .where(eq(participants.id, participantId));
+
+  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  return { success: true };
+}
+
+export async function undoAddon(participantId: number) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth;
+
+  const participant = await getParticipantById(participantId);
+  if (!participant) return { error: "Participante nao encontrado" };
+  if (!participant.addonUsed) return { error: "Add-on nao foi utilizado" };
+
+  await db
+    .delete(transactions)
+    .where(
+      and(
+        eq(transactions.playerId, participant.playerId),
+        eq(transactions.tournamentId, participant.tournamentId),
+        eq(transactions.type, "addon")
+      )
+    );
+
+  await db
+    .update(participants)
+    .set({ addonUsed: false })
+    .where(eq(participants.id, participantId));
+
+  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  return { success: true };
+}
+
+export async function addBonusChip(participantId: number) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth;
+
+  const participant = await getParticipantById(participantId);
+  if (!participant) return { error: "Participante nao encontrado" };
+  if (participant.bonusChipUsed) return { error: "Bonus chip ja utilizado" };
+
+  const [tournament] = await db
+    .select({ bonusChipAmount: tournaments.bonusChipAmount })
+    .from(tournaments)
+    .where(eq(tournaments.id, participant.tournamentId));
+
+  if (!tournament || tournament.bonusChipAmount === 0) return { error: "Torneio nao permite bonus chip" };
+
+  await db
+    .update(participants)
+    .set({ bonusChipUsed: true })
+    .where(eq(participants.id, participantId));
+
+  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  return { success: true };
+}
+
+export async function undoBonusChip(participantId: number) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth;
+
+  const participant = await getParticipantById(participantId);
+  if (!participant) return { error: "Participante nao encontrado" };
+  if (!participant.bonusChipUsed) return { error: "Bonus chip nao foi utilizado" };
+
+  await db
+    .update(participants)
+    .set({ bonusChipUsed: false })
+    .where(eq(participants.id, participantId));
 
   revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };

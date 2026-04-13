@@ -16,6 +16,7 @@ export const tournaments = pgTable("tournaments", {
   initialChips: integer("initial_chips").notNull(),
   rebuyChips: integer("rebuy_chips").notNull().default(0),
   addonChips: integer("addon_chips").notNull().default(0),
+  bonusChipAmount: integer("bonus_chip_amount").notNull().default(0),
   maxRebuys: integer("max_rebuys").notNull().default(0),
   allowAddon: boolean("allow_addon").notNull().default(false),
   prizePoolOverride: integer("prize_pool_override"),
