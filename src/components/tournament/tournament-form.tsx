@@ -41,6 +41,8 @@ interface TournamentFormProps {
     maxRebuys: number;
     allowAddon: boolean;
     rankingFeeAmount: number;
+    tournamentType?: string;
+    bountyPercentage?: number;
   };
 }
 
@@ -71,6 +73,12 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
     })()
   );
 
+  const [tournamentType, setTournamentType] = useState<"normal" | "bounty_builder">(
+    (initialData?.tournamentType as "normal" | "bounty_builder") ?? "normal"
+  );
+  const [bountyPercentage, setBountyPercentage] = useState(
+    String(initialData?.bountyPercentage ?? 50)
+  );
   const [name, setName] = useState(initialData?.name ?? "");
   const [initialChips, setInitialChips] = useState(
     String(initialData?.initialChips ?? 10000)
@@ -127,6 +135,10 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
 
     // allowAddon como booleano
     raw.set("allowAddon", allowAddon ? "true" : "false");
+
+    // Tipo e bounty
+    raw.set("tournamentType", tournamentType);
+    raw.set("bountyPercentage", bountyPercentage);
 
     // Temporada selecionada
     if (selectedSeason) {
@@ -202,6 +214,39 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
           <Label>Data e hora</Label>
           <DateTimePicker value={dateTime} onChange={setDateTime} />
         </div>
+
+        <div className="space-y-2">
+          <Label>Modalidade</Label>
+          <Select value={tournamentType} onValueChange={(v) => setTournamentType(v as "normal" | "bounty_builder")}>
+            <SelectTrigger>
+              <SelectValue>
+                {tournamentType === "bounty_builder" ? "Bounty Builder (PKO)" : "Normal"}
+              </SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="normal">Normal</SelectItem>
+              <SelectItem value="bounty_builder">Bounty Builder (PKO)</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {tournamentType === "bounty_builder" && (
+          <div className="space-y-2">
+            <Label htmlFor="bountyPercentage">% Bounty do valor liquido</Label>
+            <Input
+              id="bountyPercentage"
+              name="bountyPercentage"
+              type="number"
+              min="1"
+              max="99"
+              value={bountyPercentage}
+              onChange={(e) => setBountyPercentage(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Percentual do valor liquido (apos taxa de ranking) destinado ao bounty do jogador.
+            </p>
+          </div>
+        )}
       </section>
 
       {/* Fichas */}

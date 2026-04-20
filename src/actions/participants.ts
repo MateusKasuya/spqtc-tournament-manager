@@ -2,10 +2,42 @@
 
 import { db } from "@/db";
 import { participants, transactions, tournaments } from "@/db/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray, gte } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/require-admin";
 import { getParticipantById, getParticipantByPlayerAndTournament, getPlayingCount } from "@/db/queries/participants";
+
+// Distributes a bounty from victim to one or more eliminators.
+// Returns the bounty transaction values to insert, or null if not bounty mode.
+function computeBountyDistribution(
+  victimParticipantId: number,
+  victimBounty: number,
+  eliminatorPlayerIds: number[],
+  tournamentId: number,
+  eliminatorPlayerId?: number // single eliminator shorthand
+): Array<{ tournamentId: number; playerId: number; type: "bounty_earned"; amount: number; bountyChange: number; relatedParticipantId: number }> {
+  const ids = eliminatorPlayerIds.length > 0 ? eliminatorPlayerIds : eliminatorPlayerId ? [eliminatorPlayerId] : [];
+  if (ids.length === 0 || victimBounty <= 0) return [];
+
+  const n = ids.length;
+  const halfPayment = Math.floor(victimBounty / 2);
+  const halfAccrual = victimBounty - halfPayment;
+
+  return ids.map((playerId, i) => {
+    const basePayment = Math.floor(halfPayment / n);
+    const baseAccrual = Math.floor(halfAccrual / n);
+    const extraPayment = i < (halfPayment % n) ? 1 : 0;
+    const extraAccrual = i < (halfAccrual % n) ? 1 : 0;
+    return {
+      tournamentId,
+      playerId,
+      type: "bounty_earned" as const,
+      amount: basePayment + extraPayment,
+      bountyChange: baseAccrual + extraAccrual,
+      relatedParticipantId: victimParticipantId,
+    };
+  });
+}
 
 export async function addParticipant(tournamentId: number, playerId: number) {
   const auth = await requireAdmin();
@@ -77,27 +109,39 @@ export async function confirmBuyIn(participantId: number) {
   if (participant.buyInPaid) return { error: "Buy-in ja confirmado" };
 
   const [tournament] = await db
-    .select({ buyInAmount: tournaments.buyInAmount })
+    .select({
+      buyInAmount: tournaments.buyInAmount,
+      rankingFeeAmount: tournaments.rankingFeeAmount,
+      tournamentType: tournaments.tournamentType,
+      bountyPercentage: tournaments.bountyPercentage,
+    })
     .from(tournaments)
     .where(eq(tournaments.id, participant.tournamentId));
 
-  await db
-    .update(participants)
-    .set({ buyInPaid: true, status: "playing" })
-    .where(eq(participants.id, participantId));
+  const isBounty = tournament.tournamentType === "bounty_builder";
+  const initialBounty = isBounty
+    ? Math.floor(((tournament.buyInAmount - tournament.rankingFeeAmount) * tournament.bountyPercentage) / 100)
+    : 0;
 
-  await db.insert(transactions).values({
-    tournamentId: participant.tournamentId,
-    playerId: participant.playerId,
-    type: "buy_in",
-    amount: tournament.buyInAmount,
+  await db.transaction(async (tx) => {
+    await tx
+      .update(participants)
+      .set({ buyInPaid: true, status: "playing", currentBounty: initialBounty })
+      .where(eq(participants.id, participantId));
+
+    await tx.insert(transactions).values({
+      tournamentId: participant.tournamentId,
+      playerId: participant.playerId,
+      type: "buy_in",
+      amount: tournament.buyInAmount,
+    });
   });
 
   revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };
 }
 
-export async function addRebuy(participantId: number) {
+export async function addRebuy(participantId: number, eliminatedByPlayerIds?: number[]) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
@@ -106,7 +150,12 @@ export async function addRebuy(participantId: number) {
   if (!participant.buyInPaid) return { error: "Jogador ainda nao pagou buy-in" };
 
   const [tournament] = await db
-    .select({ rebuyAmount: tournaments.rebuyAmount, maxRebuys: tournaments.maxRebuys })
+    .select({
+      rebuyAmount: tournaments.rebuyAmount,
+      maxRebuys: tournaments.maxRebuys,
+      tournamentType: tournaments.tournamentType,
+      bountyPercentage: tournaments.bountyPercentage,
+    })
     .from(tournaments)
     .where(eq(tournaments.id, participant.tournamentId));
 
@@ -115,23 +164,74 @@ export async function addRebuy(participantId: number) {
     return { error: `Limite de rebuys atingido (max: ${tournament.maxRebuys})` };
   }
 
-  await db
-    .update(participants)
-    .set({ rebuyCount: participant.rebuyCount + 1 })
-    .where(eq(participants.id, participantId));
+  const isBounty = tournament.tournamentType === "bounty_builder";
+  if (isBounty && (!eliminatedByPlayerIds || eliminatedByPlayerIds.length === 0)) {
+    return { error: "Selecione quem eliminou o jogador" };
+  }
 
-  await db.insert(transactions).values({
-    tournamentId: participant.tournamentId,
-    playerId: participant.playerId,
-    type: "rebuy",
-    amount: tournament.rebuyAmount,
+  const newBounty = isBounty
+    ? Math.floor((tournament.rebuyAmount * tournament.bountyPercentage) / 100)
+    : 0;
+
+  await db.transaction(async (tx) => {
+    if (isBounty && eliminatedByPlayerIds && eliminatedByPlayerIds.length > 0) {
+      const bountyTxs = computeBountyDistribution(
+        participant.id,
+        participant.currentBounty,
+        eliminatedByPlayerIds,
+        participant.tournamentId
+      );
+
+      if (bountyTxs.length > 0) {
+        await tx.insert(transactions).values(bountyTxs);
+
+        const eliminatorParticipants = await tx
+          .select({ id: participants.id, playerId: participants.playerId, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
+          .from(participants)
+          .where(
+            and(
+              eq(participants.tournamentId, participant.tournamentId),
+              inArray(participants.playerId, eliminatedByPlayerIds)
+            )
+          );
+
+        for (const ep of eliminatorParticipants) {
+          const tx_ = bountyTxs.find((b) => b.playerId === ep.playerId);
+          if (tx_) {
+            await tx
+              .update(participants)
+              .set({
+                currentBounty: ep.currentBounty + tx_.bountyChange,
+                bountiesCollected: ep.bountiesCollected + tx_.amount,
+              })
+              .where(eq(participants.id, ep.id));
+          }
+        }
+      }
+    }
+
+    await tx
+      .update(participants)
+      .set({
+        rebuyCount: participant.rebuyCount + 1,
+        currentBounty: isBounty ? newBounty : participant.currentBounty,
+        eliminatedByIds: isBounty ? (eliminatedByPlayerIds ?? []) : participant.eliminatedByIds,
+      })
+      .where(eq(participants.id, participantId));
+
+    await tx.insert(transactions).values({
+      tournamentId: participant.tournamentId,
+      playerId: participant.playerId,
+      type: "rebuy",
+      amount: tournament.rebuyAmount,
+    });
   });
 
   revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };
 }
 
-export async function addDoubleRebuy(participantId: number) {
+export async function addDoubleRebuy(participantId: number, eliminatedByPlayerIds?: number[]) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
@@ -140,7 +240,12 @@ export async function addDoubleRebuy(participantId: number) {
   if (!participant.buyInPaid) return { error: "Jogador ainda nao pagou buy-in" };
 
   const [tournament] = await db
-    .select({ rebuyAmount: tournaments.rebuyAmount, maxRebuys: tournaments.maxRebuys })
+    .select({
+      rebuyAmount: tournaments.rebuyAmount,
+      maxRebuys: tournaments.maxRebuys,
+      tournamentType: tournaments.tournamentType,
+      bountyPercentage: tournaments.bountyPercentage,
+    })
     .from(tournaments)
     .where(eq(tournaments.id, participant.tournamentId));
 
@@ -149,25 +254,76 @@ export async function addDoubleRebuy(participantId: number) {
     return { error: `Limite de rebuys atingido (max: ${tournament.maxRebuys})` };
   }
 
-  await db
-    .update(participants)
-    .set({ rebuyCount: participant.rebuyCount + 2 })
-    .where(eq(participants.id, participantId));
+  const isBounty = tournament.tournamentType === "bounty_builder";
+  if (isBounty && (!eliminatedByPlayerIds || eliminatedByPlayerIds.length === 0)) {
+    return { error: "Selecione quem eliminou o jogador" };
+  }
 
-  await db.insert(transactions).values([
-    {
-      tournamentId: participant.tournamentId,
-      playerId: participant.playerId,
-      type: "rebuy",
-      amount: tournament.rebuyAmount,
-    },
-    {
-      tournamentId: participant.tournamentId,
-      playerId: participant.playerId,
-      type: "rebuy",
-      amount: tournament.rebuyAmount,
-    },
-  ]);
+  const newBounty = isBounty
+    ? Math.floor((tournament.rebuyAmount * tournament.bountyPercentage) / 100)
+    : 0;
+
+  await db.transaction(async (tx) => {
+    if (isBounty && eliminatedByPlayerIds && eliminatedByPlayerIds.length > 0) {
+      const bountyTxs = computeBountyDistribution(
+        participant.id,
+        participant.currentBounty,
+        eliminatedByPlayerIds,
+        participant.tournamentId
+      );
+
+      if (bountyTxs.length > 0) {
+        await tx.insert(transactions).values(bountyTxs);
+
+        const eliminatorParticipants = await tx
+          .select({ id: participants.id, playerId: participants.playerId, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
+          .from(participants)
+          .where(
+            and(
+              eq(participants.tournamentId, participant.tournamentId),
+              inArray(participants.playerId, eliminatedByPlayerIds)
+            )
+          );
+
+        for (const ep of eliminatorParticipants) {
+          const tx_ = bountyTxs.find((b) => b.playerId === ep.playerId);
+          if (tx_) {
+            await tx
+              .update(participants)
+              .set({
+                currentBounty: ep.currentBounty + tx_.bountyChange,
+                bountiesCollected: ep.bountiesCollected + tx_.amount,
+              })
+              .where(eq(participants.id, ep.id));
+          }
+        }
+      }
+    }
+
+    await tx
+      .update(participants)
+      .set({
+        rebuyCount: participant.rebuyCount + 2,
+        currentBounty: isBounty ? newBounty : participant.currentBounty,
+        eliminatedByIds: isBounty ? (eliminatedByPlayerIds ?? []) : participant.eliminatedByIds,
+      })
+      .where(eq(participants.id, participantId));
+
+    await tx.insert(transactions).values([
+      {
+        tournamentId: participant.tournamentId,
+        playerId: participant.playerId,
+        type: "rebuy",
+        amount: tournament.rebuyAmount,
+      },
+      {
+        tournamentId: participant.tournamentId,
+        playerId: participant.playerId,
+        type: "rebuy",
+        amount: tournament.rebuyAmount,
+      },
+    ]);
+  });
 
   revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };
@@ -188,16 +344,18 @@ export async function addAddon(participantId: number) {
 
   if (!tournament.allowAddon) return { error: "Torneio nao permite add-on" };
 
-  await db
-    .update(participants)
-    .set({ addonUsed: true })
-    .where(eq(participants.id, participantId));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(participants)
+      .set({ addonUsed: true })
+      .where(eq(participants.id, participantId));
 
-  await db.insert(transactions).values({
-    tournamentId: participant.tournamentId,
-    playerId: participant.playerId,
-    type: "addon",
-    amount: tournament.addonAmount,
+    await tx.insert(transactions).values({
+      tournamentId: participant.tournamentId,
+      playerId: participant.playerId,
+      type: "addon",
+      amount: tournament.addonAmount,
+    });
   });
 
   revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
@@ -212,8 +370,15 @@ export async function undoRebuy(participantId: number) {
   if (!participant) return { error: "Participante nao encontrado" };
   if (participant.rebuyCount <= 0) return { error: "Nenhum rebuy para desfazer" };
 
+  const [tournament] = await db
+    .select({ tournamentType: tournaments.tournamentType, bountyPercentage: tournaments.bountyPercentage, rebuyAmount: tournaments.rebuyAmount })
+    .from(tournaments)
+    .where(eq(tournaments.id, participant.tournamentId));
+
+  const isBounty = tournament.tournamentType === "bounty_builder";
+
   const [lastRebuyTx] = await db
-    .select({ id: transactions.id })
+    .select({ id: transactions.id, createdAt: transactions.createdAt })
     .from(transactions)
     .where(
       and(
@@ -225,14 +390,98 @@ export async function undoRebuy(participantId: number) {
     .orderBy(desc(transactions.createdAt))
     .limit(1);
 
-  if (lastRebuyTx) {
-    await db.delete(transactions).where(eq(transactions.id, lastRebuyTx.id));
-  }
+  await db.transaction(async (tx) => {
+    if (lastRebuyTx) {
+      await tx.delete(transactions).where(eq(transactions.id, lastRebuyTx.id));
+    }
 
-  await db
-    .update(participants)
-    .set({ rebuyCount: participant.rebuyCount - 1 })
-    .where(eq(participants.id, participantId));
+    // Para duplo rebuy: ambas as transações têm o mesmo timestamp.
+    // Só revertemos o bounty quando não restar outra rebuy no mesmo timestamp
+    // (ou seja, no segundo undo do duplo rebuy, não no primeiro).
+    const siblingRebuy = lastRebuyTx
+      ? await tx
+          .select({ id: transactions.id })
+          .from(transactions)
+          .where(
+            and(
+              eq(transactions.playerId, participant.playerId),
+              eq(transactions.tournamentId, participant.tournamentId),
+              eq(transactions.type, "rebuy"),
+              eq(transactions.createdAt, lastRebuyTx.createdAt)
+            )
+          )
+          .limit(1)
+      : [];
+
+    const isDoubleRebuyFirstUndo = siblingRebuy.length > 0;
+
+    if (isBounty && lastRebuyTx && !isDoubleRebuyFirstUndo) {
+      const bountyTxs = await tx
+        .select({ id: transactions.id, playerId: transactions.playerId, amount: transactions.amount, bountyChange: transactions.bountyChange })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.tournamentId, participant.tournamentId),
+            eq(transactions.type, "bounty_earned"),
+            eq(transactions.relatedParticipantId, participant.id),
+            gte(transactions.createdAt, lastRebuyTx.createdAt)
+          )
+        );
+
+      if (bountyTxs.length > 0) {
+        const eliminatorPlayerIds = bountyTxs.map((b) => b.playerId);
+        const eliminatorParticipants = await tx
+          .select({ id: participants.id, playerId: participants.playerId, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
+          .from(participants)
+          .where(
+            and(
+              eq(participants.tournamentId, participant.tournamentId),
+              inArray(participants.playerId, eliminatorPlayerIds)
+            )
+          );
+
+        for (const ep of eliminatorParticipants) {
+          const btx = bountyTxs.find((b) => b.playerId === ep.playerId);
+          if (btx) {
+            await tx
+              .update(participants)
+              .set({
+                currentBounty: Math.max(0, ep.currentBounty - btx.bountyChange),
+                bountiesCollected: Math.max(0, ep.bountiesCollected - btx.amount),
+              })
+              .where(eq(participants.id, ep.id));
+          }
+        }
+
+        const oldBounty = bountyTxs.reduce((sum, b) => sum + b.amount + b.bountyChange, 0);
+
+        await tx.delete(transactions).where(
+          and(
+            eq(transactions.tournamentId, participant.tournamentId),
+            eq(transactions.type, "bounty_earned"),
+            eq(transactions.relatedParticipantId, participant.id),
+            gte(transactions.createdAt, lastRebuyTx.createdAt)
+          )
+        );
+
+        await tx
+          .update(participants)
+          .set({
+            rebuyCount: participant.rebuyCount - 1,
+            currentBounty: oldBounty,
+            eliminatedByIds: [],
+          })
+          .where(eq(participants.id, participantId));
+
+        return;
+      }
+    }
+
+    await tx
+      .update(participants)
+      .set({ rebuyCount: participant.rebuyCount - 1 })
+      .where(eq(participants.id, participantId));
+  });
 
   revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };
@@ -306,7 +555,7 @@ export async function undoBonusChip(participantId: number) {
   return { success: true };
 }
 
-export async function eliminatePlayer(participantId: number) {
+export async function eliminatePlayer(participantId: number, eliminatedByPlayerIds?: number[]) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
@@ -314,18 +563,79 @@ export async function eliminatePlayer(participantId: number) {
   if (!participant) return { error: "Participante nao encontrado" };
   if (participant.status !== "playing") return { error: "Jogador nao esta em jogo" };
 
+  const [tournament] = await db
+    .select({
+      tournamentType: tournaments.tournamentType,
+      timerRunning: tournaments.timerRunning,
+      timerRemainingSecs: tournaments.timerRemainingSecs,
+      timerStartedAt: tournaments.timerStartedAt,
+    })
+    .from(tournaments)
+    .where(eq(tournaments.id, participant.tournamentId));
+
+  const isBounty = tournament.tournamentType === "bounty_builder";
+  if (isBounty && (!eliminatedByPlayerIds || eliminatedByPlayerIds.length === 0)) {
+    return { error: "Selecione quem eliminou o jogador" };
+  }
+
   const playingCount = await getPlayingCount(participant.tournamentId);
   const finishPosition = playingCount;
 
   await db.transaction(async (tx) => {
     await tx
       .update(participants)
-      .set({ status: "eliminated", finishPosition, eliminatedAt: new Date() })
+      .set({
+        status: "eliminated",
+        finishPosition,
+        eliminatedAt: new Date(),
+        eliminatedByIds: isBounty ? (eliminatedByPlayerIds ?? []) : participant.eliminatedByIds,
+      })
       .where(eq(participants.id, participantId));
+
+    if (isBounty && eliminatedByPlayerIds && eliminatedByPlayerIds.length > 0) {
+      const bountyTxs = computeBountyDistribution(
+        participant.id,
+        participant.currentBounty,
+        eliminatedByPlayerIds,
+        participant.tournamentId
+      );
+
+      if (bountyTxs.length > 0) {
+        await tx.insert(transactions).values(bountyTxs);
+
+        const eliminatorParticipants = await tx
+          .select({ id: participants.id, playerId: participants.playerId, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
+          .from(participants)
+          .where(
+            and(
+              eq(participants.tournamentId, participant.tournamentId),
+              inArray(participants.playerId, eliminatedByPlayerIds)
+            )
+          );
+
+        for (const ep of eliminatorParticipants) {
+          const btx = bountyTxs.find((b) => b.playerId === ep.playerId);
+          if (btx) {
+            await tx
+              .update(participants)
+              .set({
+                currentBounty: ep.currentBounty + btx.bountyChange,
+                bountiesCollected: ep.bountiesCollected + btx.amount,
+              })
+              .where(eq(participants.id, ep.id));
+          }
+        }
+
+        await tx
+          .update(participants)
+          .set({ currentBounty: 0 })
+          .where(eq(participants.id, participantId));
+      }
+    }
 
     if (playingCount - 1 === 1) {
       const [champion] = await tx
-        .select({ id: participants.id })
+        .select({ id: participants.id, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected, playerId: participants.playerId })
         .from(participants)
         .where(and(eq(participants.tournamentId, participant.tournamentId), eq(participants.status, "playing")));
 
@@ -334,6 +644,22 @@ export async function eliminatePlayer(participantId: number) {
           .update(participants)
           .set({ status: "finished", finishPosition: 1 })
           .where(eq(participants.id, champion.id));
+
+        if (isBounty && champion.currentBounty > 0) {
+          await tx.insert(transactions).values({
+            tournamentId: participant.tournamentId,
+            playerId: champion.playerId,
+            type: "bounty_earned",
+            amount: champion.currentBounty,
+            bountyChange: 0,
+            relatedParticipantId: champion.id,
+          });
+
+          await tx
+            .update(participants)
+            .set({ bountiesCollected: champion.bountiesCollected + champion.currentBounty, currentBounty: 0 })
+            .where(eq(participants.id, champion.id));
+        }
       }
 
       const [t] = await tx
@@ -366,22 +692,90 @@ export async function undoElimination(participantId: number) {
     return { error: "Jogador nao esta eliminado" };
   }
 
-  await db
-    .update(participants)
-    .set({ status: "playing", finishPosition: null, eliminatedAt: null })
-    .where(eq(participants.id, participantId));
+  const [tournament] = await db
+    .select({ tournamentType: tournaments.tournamentType })
+    .from(tournaments)
+    .where(eq(tournaments.id, participant.tournamentId));
 
-  if (participant.status === "eliminated") {
-    await db
-      .update(participants)
-      .set({ status: "playing", finishPosition: null })
-      .where(
-        and(
-          eq(participants.tournamentId, participant.tournamentId),
-          eq(participants.status, "finished")
-        )
-      );
-  }
+  const isBounty = tournament.tournamentType === "bounty_builder";
+
+  await db.transaction(async (tx) => {
+    if (isBounty) {
+      const bountyTxs = await tx
+        .select({ id: transactions.id, playerId: transactions.playerId, amount: transactions.amount, bountyChange: transactions.bountyChange })
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.tournamentId, participant.tournamentId),
+            eq(transactions.type, "bounty_earned"),
+            eq(transactions.relatedParticipantId, participant.id)
+          )
+        );
+
+      if (bountyTxs.length > 0) {
+        const eliminatorPlayerIds = bountyTxs.map((b) => b.playerId);
+        const eliminatorParticipants = await tx
+          .select({ id: participants.id, playerId: participants.playerId, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
+          .from(participants)
+          .where(
+            and(
+              eq(participants.tournamentId, participant.tournamentId),
+              inArray(participants.playerId, eliminatorPlayerIds)
+            )
+          );
+
+        for (const ep of eliminatorParticipants) {
+          const btx = bountyTxs.find((b) => b.playerId === ep.playerId);
+          if (btx) {
+            await tx
+              .update(participants)
+              .set({
+                currentBounty: Math.max(0, ep.currentBounty - btx.bountyChange),
+                bountiesCollected: Math.max(0, ep.bountiesCollected - btx.amount),
+              })
+              .where(eq(participants.id, ep.id));
+          }
+        }
+
+        const oldBounty = bountyTxs.reduce((sum, b) => sum + b.amount + b.bountyChange, 0);
+
+        await tx.delete(transactions).where(
+          and(
+            eq(transactions.tournamentId, participant.tournamentId),
+            eq(transactions.type, "bounty_earned"),
+            eq(transactions.relatedParticipantId, participant.id)
+          )
+        );
+
+        await tx
+          .update(participants)
+          .set({ status: "playing", finishPosition: null, eliminatedAt: null, currentBounty: oldBounty, eliminatedByIds: [] })
+          .where(eq(participants.id, participantId));
+      } else {
+        await tx
+          .update(participants)
+          .set({ status: "playing", finishPosition: null, eliminatedAt: null, eliminatedByIds: [] })
+          .where(eq(participants.id, participantId));
+      }
+    } else {
+      await tx
+        .update(participants)
+        .set({ status: "playing", finishPosition: null, eliminatedAt: null })
+        .where(eq(participants.id, participantId));
+    }
+
+    if (participant.status === "eliminated") {
+      await tx
+        .update(participants)
+        .set({ status: "playing", finishPosition: null })
+        .where(
+          and(
+            eq(participants.tournamentId, participant.tournamentId),
+            eq(participants.status, "finished")
+          )
+        );
+    }
+  });
 
   revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };

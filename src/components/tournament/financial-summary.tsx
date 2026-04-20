@@ -7,14 +7,22 @@ interface FinancialSummaryProps {
     rebuy: number;
     addon: number;
     prize: number;
+    bounty_earned?: number;
   };
   prizePoolOverride: number | null;
   rankingFund: number;
+  tournamentType?: string;
+  totalBountyAllocated?: number;
 }
 
-export function FinancialSummary({ summary, prizePoolOverride, rankingFund }: FinancialSummaryProps) {
+export function FinancialSummary({ summary, prizePoolOverride, rankingFund, tournamentType, totalBountyAllocated }: FinancialSummaryProps) {
+  const isBounty = tournamentType === "bounty_builder";
   const rawPot = summary.buy_in + summary.rebuy + summary.addon;
-  const prizePool = prizePoolOverride ?? (rawPot - rankingFund);
+  const rawNet = rawPot - rankingFund;
+  const prizePool = prizePoolOverride ?? (isBounty && totalBountyAllocated != null
+    ? rawNet - totalBountyAllocated
+    : rawNet);
+  const bountiesPaid = summary.bounty_earned ?? 0;
   const balance = prizePool - summary.prize;
 
   return (
@@ -54,6 +62,12 @@ export function FinancialSummary({ summary, prizePoolOverride, rankingFund }: Fi
           <span className="text-muted-foreground">Premios pagos</span>
           <span>{formatCurrency(summary.prize)}</span>
         </div>
+        {isBounty && bountiesPaid > 0 && (
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Bounties pagos</span>
+            <span>{formatCurrency(bountiesPaid)}</span>
+          </div>
+        )}
         <div className="flex justify-between font-semibold border-t pt-1 mt-1">
           <span>Saldo</span>
           <span className={balance < 0 ? "text-destructive" : ""}>{formatCurrency(balance)}</span>

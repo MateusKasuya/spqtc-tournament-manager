@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, boolean, timestamp, numeric, unique } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, boolean, timestamp, numeric, unique, jsonb } from "drizzle-orm/pg-core";
 import { tournaments } from "./tournaments";
 import { players } from "./players";
 
@@ -17,6 +17,9 @@ export const participants = pgTable("participants", {
   finishPosition: integer("finish_position"),
   pointsEarned: numeric("points_earned", { precision: 10, scale: 2 }).notNull().default("0"),
   prizeAmount: integer("prize_amount").notNull().default(0),
+  currentBounty: integer("current_bounty").notNull().default(0),
+  eliminatedByIds: jsonb("eliminated_by_ids").notNull().default([]),
+  bountiesCollected: integer("bounties_collected").notNull().default(0),
   eliminatedAt: timestamp("eliminated_at", { withTimezone: true }),
   status: text("status", {
     enum: ["registered", "playing", "eliminated", "finished"],

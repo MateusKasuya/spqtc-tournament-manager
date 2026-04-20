@@ -29,6 +29,7 @@ interface BlindLevel {
 
 interface Participant {
   id: number;
+  playerId: number;
   name: string;
   nickname: string | null;
   status: string;
@@ -37,6 +38,8 @@ interface Participant {
   rebuyCount: number;
   addonUsed: boolean;
   bonusChipUsed: boolean;
+  currentBounty: number;
+  bountiesCollected: number;
 }
 
 interface FinancialSummary {
@@ -65,6 +68,8 @@ interface Tournament {
   rankingFeeAmount: number;
   name: string;
   breakActive: boolean;
+  tournamentType: string;
+  bountyPercentage: number;
 }
 
 interface MesaAoVivoProps {

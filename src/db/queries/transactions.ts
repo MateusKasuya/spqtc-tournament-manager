@@ -29,9 +29,11 @@ export async function getTournamentFinancialSummary(tournamentId: number) {
     .where(eq(transactions.tournamentId, tournamentId))
     .groupBy(transactions.type);
 
-  const summary = { buy_in: 0, rebuy: 0, addon: 0, prize: 0 };
+  const summary = { buy_in: 0, rebuy: 0, addon: 0, prize: 0, bounty_earned: 0 };
   for (const row of rows) {
-    summary[row.type as keyof typeof summary] = Number(row.total ?? 0);
+    if (row.type in summary) {
+      summary[row.type as keyof typeof summary] = Number(row.total ?? 0);
+    }
   }
   return summary;
 }

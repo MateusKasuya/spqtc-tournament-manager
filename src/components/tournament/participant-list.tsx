@@ -31,6 +31,8 @@ interface Participant {
   finishPosition: number | null;
   prizeAmount: number;
   status: string;
+  currentBounty?: number;
+  bountiesCollected?: number;
 }
 
 interface ParticipantListProps {
@@ -41,6 +43,7 @@ interface ParticipantListProps {
   buyInAmount: number;
   rebuyAmount: number;
   addonAmount: number;
+  isBounty?: boolean;
 }
 
 const STATUS_BADGE: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
@@ -224,6 +227,7 @@ export function ParticipantList({
   buyInAmount,
   rebuyAmount,
   addonAmount,
+  isBounty,
 }: ParticipantListProps) {
   if (participants.length === 0) {
     return (
@@ -267,6 +271,8 @@ export function ParticipantList({
                   {p.rebuyCount > 0 && ` · ${p.rebuyCount}R`}
                   {p.addonUsed && " · A"}
                   {p.bonusChipUsed && " · B"}
+                  {isBounty && p.currentBounty != null && p.currentBounty > 0 && ` · Bounty: ${formatCurrency(p.currentBounty)}`}
+                  {isBounty && p.bountiesCollected != null && p.bountiesCollected > 0 && ` · Fat: ${formatCurrency(p.bountiesCollected)}`}
                   {p.prizeAmount > 0 && ` · Premio: ${formatCurrency(p.prizeAmount)}`}
                 </p>
               </div>

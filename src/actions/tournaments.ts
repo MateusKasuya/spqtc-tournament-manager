@@ -24,6 +24,8 @@ const tournamentSchema = z.object({
   maxRebuys: z.number().min(0).default(0),
   allowAddon: z.boolean().default(false),
   rankingFeeAmount: z.number().min(0).default(0),
+  tournamentType: z.enum(["normal", "bounty_builder"]).default("normal"),
+  bountyPercentage: z.number().min(1).max(99).default(50),
 });
 
 async function requireAdmin() {
@@ -62,6 +64,8 @@ export async function createTournament(formData: FormData) {
     maxRebuys: Number(formData.get("maxRebuys") ?? 0),
     allowAddon: formData.get("allowAddon") === "true",
     rankingFeeAmount: Number(formData.get("rankingFeeAmount") ?? 0),
+    tournamentType: (formData.get("tournamentType") as "normal" | "bounty_builder") ?? "normal",
+    bountyPercentage: Number(formData.get("bountyPercentage") ?? 50),
   });
 
   if (!parsed.success) return { error: parsed.error.issues[0].message };
@@ -113,6 +117,8 @@ export async function updateTournament(id: number, formData: FormData) {
     maxRebuys: Number(formData.get("maxRebuys") ?? 0),
     allowAddon: formData.get("allowAddon") === "true",
     rankingFeeAmount: Number(formData.get("rankingFeeAmount") ?? 0),
+    tournamentType: (formData.get("tournamentType") as "normal" | "bounty_builder") ?? "normal",
+    bountyPercentage: Number(formData.get("bountyPercentage") ?? 50),
   });
 
   if (!parsed.success) return { error: parsed.error.issues[0].message };

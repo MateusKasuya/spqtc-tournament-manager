@@ -1,19 +1,24 @@
 import { formatChips, formatCurrency } from "@/lib/format";
-import { Users, BarChart2, Layers, Trophy } from "lucide-react";
+import { Users, BarChart2, Layers, Trophy, Target } from "lucide-react";
 
 interface Participant {
   status: string;
   buyInPaid: boolean;
   rebuyCount: number;
   addonUsed: boolean;
+  bonusChipUsed: boolean;
+  currentBounty?: number;
 }
 
 interface Tournament {
   initialChips: number;
   rebuyChips: number;
   addonChips: number;
+  bonusChipAmount: number;
   prizePoolOverride: number | null;
   rankingFeeAmount: number;
+  tournamentType?: string;
+  bountyPercentage?: number;
 }
 
 interface FinancialSummary {
@@ -21,6 +26,7 @@ interface FinancialSummary {
   rebuy: number;
   addon: number;
   prize: number;
+  bounty_earned?: number;
 }
 
 interface TournamentStatsProps {
@@ -54,21 +60,34 @@ export function TournamentStats({ participants, tournament, financialSummary }: 
   const paidCount = participants.filter((p) => p.buyInPaid).length;
   const totalRebuys = participants.reduce((sum, p) => sum + p.rebuyCount, 0);
   const totalAddons = participants.filter((p) => p.addonUsed).length;
+  const totalBonusChips = participants.filter((p) => p.bonusChipUsed).length;
 
   const totalChips =
     paidCount * tournament.initialChips +
     totalRebuys * tournament.rebuyChips +
-    totalAddons * tournament.addonChips;
+    totalAddons * tournament.addonChips +
+    totalBonusChips * tournament.bonusChipAmount;
 
   const avgStack = playingCount > 0 ? Math.round(totalChips / playingCount) : 0;
 
   const rankingFund = paidCount * tournament.rankingFeeAmount;
+  const isBounty = tournament.tournamentType === "bounty_builder";
+  const rawNet = financialSummary.buy_in + financialSummary.rebuy + financialSummary.addon - rankingFund;
+  const totalBountyAllocated = isBounty
+    ? participants.reduce((sum, p) => sum + (p.currentBounty ?? 0), 0) + (financialSummary.bounty_earned ?? 0)
+    : 0;
   const prizePool =
     tournament.prizePoolOverride ??
-    (financialSummary.buy_in + financialSummary.rebuy + financialSummary.addon - rankingFund);
+    (isBounty ? rawNet - totalBountyAllocated : rawNet);
+
+  const activeBountyPool = isBounty
+    ? participants.reduce((sum, p) => sum + (p.currentBounty ?? 0), 0)
+    : 0;
+
+  const cols = isBounty ? "sm:grid-cols-5" : "sm:grid-cols-4";
 
   return (
-    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+    <div className={`grid grid-cols-2 gap-2 ${cols}`}>
       <StatCard
         icon={<Users className="h-3.5 w-3.5" />}
         label="Jogadores"
@@ -91,6 +110,14 @@ export function TournamentStats({ participants, tournament, financialSummary }: 
         value={formatCurrency(prizePool)}
         sub={tournament.prizePoolOverride ? "override" : undefined}
       />
+      {isBounty && (
+        <StatCard
+          icon={<Target className="h-3.5 w-3.5" />}
+          label="Bounty pool"
+          value={formatCurrency(activeBountyPool)}
+          sub="em jogo"
+        />
+      )}
     </div>
   );
 }
