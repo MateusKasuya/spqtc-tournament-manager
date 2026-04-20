@@ -44,11 +44,15 @@ export default async function MesaPage({ params }: PageProps) {
         ...tournament,
         timerStartedAt: tournament.timerStartedAt?.toISOString() ?? null,
         breakActive: tournament.breakActive ?? false,
+        tournamentType: tournament.tournamentType ?? "normal",
+        bountyPercentage: tournament.bountyPercentage ?? 50,
       }}
       blindLevels={blindLevels}
       participants={participants.map((p) => ({
         ...p,
         finishPosition: p.finishPosition ?? null,
+        currentBounty: p.currentBounty ?? 0,
+        bountiesCollected: p.bountiesCollected ?? 0,
       }))}
       financialSummary={financialSummary}
       isAdmin={isAdmin}

@@ -4,6 +4,8 @@ import { users } from "./users";
 
 export const tournaments = pgTable("tournaments", {
   id: serial("id").primaryKey(),
+  tournamentType: text("tournament_type", { enum: ["normal", "bounty_builder"] }).notNull().default("normal"),
+  bountyPercentage: integer("bounty_percentage").notNull().default(50),
   seasonId: integer("season_id").references(() => seasons.id),
   name: text("name").notNull(),
   date: timestamp("date", { withTimezone: true }).notNull(),

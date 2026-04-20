@@ -70,7 +70,12 @@ export default async function TorneioPage({ params }: PageProps) {
     ? Math.round(financialSummary.buy_in / tournament.buyInAmount)
     : 0;
   const rankingFund = buyInCount * tournament.rankingFeeAmount;
-  const prizePool = tournament.prizePoolOverride ?? (rawPot - rankingFund);
+  const isBountyTournament = tournament.tournamentType === "bounty_builder";
+  const rawNet = rawPot - rankingFund;
+  const totalBountyAllocated = isBountyTournament
+    ? participantsList.reduce((sum, p) => sum + (p.currentBounty ?? 0) + (p.bountiesCollected ?? 0), 0)
+    : 0;
+  const prizePool = tournament.prizePoolOverride ?? (isBountyTournament ? rawNet - totalBountyAllocated : rawNet);
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -198,6 +203,8 @@ export default async function TorneioPage({ params }: PageProps) {
             summary={financialSummary}
             prizePoolOverride={tournament.prizePoolOverride}
             rankingFund={rankingFund}
+            tournamentType={tournament.tournamentType}
+            totalBountyAllocated={isBountyTournament ? totalBountyAllocated : undefined}
           />
         </TabsContent>
 
@@ -223,6 +230,7 @@ export default async function TorneioPage({ params }: PageProps) {
             buyInAmount={tournament.buyInAmount}
             rebuyAmount={tournament.rebuyAmount}
             addonAmount={tournament.addonAmount}
+            isBounty={isBountyTournament}
           />
         </TabsContent>
 
@@ -303,6 +311,7 @@ export default async function TorneioPage({ params }: PageProps) {
                     nickname: p.nickname,
                     finishPosition: p.finishPosition ?? null,
                   }))}
+                  totalBountiesCollected={isBountyTournament ? financialSummary.bounty_earned : undefined}
                 />
               </div>
 

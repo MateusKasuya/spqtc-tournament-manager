@@ -40,6 +40,7 @@ interface PayoutDialogProps {
   prizePool: number;
   prizePositions: PrizePosition[];
   participants: ParticipantOption[];
+  totalBountiesCollected?: number;
 }
 
 export function PayoutDialog({
@@ -47,6 +48,7 @@ export function PayoutDialog({
   prizePool,
   prizePositions,
   participants,
+  totalBountiesCollected,
 }: PayoutDialogProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -113,9 +115,12 @@ export function PayoutDialog({
           <DialogTitle>Distribuir premios</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
-          <p className="text-xs text-muted-foreground">
-            Prize pool: <span className="font-semibold">{formatCurrency(prizePool)}</span>
-          </p>
+          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+            <span>Prize pool: <span className="font-semibold">{formatCurrency(prizePool)}</span></span>
+            {totalBountiesCollected != null && totalBountiesCollected > 0 && (
+              <span>Bounties coletados: <span className="font-semibold">{formatCurrency(totalBountiesCollected)}</span></span>
+            )}
+          </div>
           <div className="space-y-3">
             {entries.length === 0 && (
               <p className="text-sm text-muted-foreground text-center py-2">
