@@ -5,7 +5,7 @@ interface Participant {
   status: string;
   buyInPaid: boolean;
   rebuyCount: number;
-  addonUsed: boolean;
+  addonCount: number;
   bonusChipUsed: boolean;
   currentBounty?: number;
 }
@@ -59,7 +59,7 @@ export function TournamentStats({ participants, tournament, financialSummary }: 
   const playingCount = participants.filter((p) => p.status === "playing").length;
   const paidCount = participants.filter((p) => p.buyInPaid).length;
   const totalRebuys = participants.reduce((sum, p) => sum + p.rebuyCount, 0);
-  const totalAddons = participants.filter((p) => p.addonUsed).length;
+  const totalAddons = participants.reduce((sum, p) => sum + p.addonCount, 0);
   const totalBonusChips = participants.filter((p) => p.bonusChipUsed).length;
 
   const totalChips =

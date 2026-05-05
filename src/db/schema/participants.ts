@@ -12,7 +12,7 @@ export const participants = pgTable("participants", {
     .notNull(),
   buyInPaid: boolean("buy_in_paid").notNull().default(false),
   rebuyCount: integer("rebuy_count").notNull().default(0),
-  addonUsed: boolean("addon_used").notNull().default(false),
+  addonCount: integer("addon_count").notNull().default(0),
   bonusChipUsed: boolean("bonus_chip_used").notNull().default(false),
   finishPosition: integer("finish_position"),
   pointsEarned: numeric("points_earned", { precision: 10, scale: 2 }).notNull().default("0"),

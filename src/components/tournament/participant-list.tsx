@@ -26,7 +26,7 @@ interface Participant {
   nickname: string | null;
   buyInPaid: boolean;
   rebuyCount: number;
-  addonUsed: boolean;
+  addonCount: number;
   bonusChipUsed: boolean;
   finishPosition: number | null;
   prizeAmount: number;
@@ -142,7 +142,7 @@ function ParticipantActions({
             </ActionButton>
           )}
 
-          {allowAddon && !participant.addonUsed && (
+          {allowAddon && (
             <ActionButton
               onClick={() => run(() => addAddon(participant.id))}
               disabled={isPending}
@@ -152,7 +152,7 @@ function ParticipantActions({
             </ActionButton>
           )}
 
-          {allowAddon && participant.addonUsed && (
+          {allowAddon && participant.addonCount > 0 && (
             <ActionButton
               onClick={() => run(() => undoAddon(participant.id))}
               disabled={isPending}
@@ -245,12 +245,12 @@ export function ParticipantList({
         const total =
           (p.buyInPaid ? buyInAmount : 0) +
           p.rebuyCount * rebuyAmount +
-          (p.addonUsed ? addonAmount : 0);
+          p.addonCount * addonAmount;
 
         return (
           <div
             key={p.id}
-            className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5"
+            className="flex flex-col gap-2 rounded-lg border px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
           >
             <div className="flex items-center gap-3 min-w-0">
               {p.finishPosition === 1 && (
@@ -264,12 +264,12 @@ export function ParticipantList({
               {!p.finishPosition && (
                 <span className="w-5 shrink-0" />
               )}
-              <div className="min-w-0">
+              <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">{displayName}</p>
                 <p className="text-xs text-muted-foreground">
                   {total > 0 ? formatCurrency(total) : "Nao pago"}
                   {p.rebuyCount > 0 && ` · ${p.rebuyCount}R`}
-                  {p.addonUsed && " · A"}
+                  {p.addonCount > 0 && ` · ${p.addonCount === 1 ? "A" : `${p.addonCount}A`}`}
                   {p.bonusChipUsed && " · B"}
                   {isBounty && p.currentBounty != null && p.currentBounty > 0 && ` · Bounty: ${formatCurrency(p.currentBounty)}`}
                   {isBounty && p.bountiesCollected != null && p.bountiesCollected > 0 && ` · Fat: ${formatCurrency(p.bountiesCollected)}`}
@@ -277,7 +277,7 @@ export function ParticipantList({
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex items-center gap-2 flex-wrap justify-end sm:shrink-0 sm:flex-nowrap">
               {isAdmin && <ParticipantActions participant={p} allowAddon={allowAddon} bonusChipAmount={bonusChipAmount} />}
               <Badge variant={badge.variant} className="text-xs">
                 {badge.label}

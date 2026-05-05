@@ -244,7 +244,7 @@ async function main() {
           playerId,
           buyInPaid: true,
           rebuyCount: p.rebuys,
-          addonUsed: p.addonCount > 0,
+          addonCount: p.addonCount,
           finishPosition: p.position,
           pointsEarned: String(points),
           prizeAmount: p.prize,

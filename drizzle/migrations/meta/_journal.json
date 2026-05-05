@@ -92,6 +92,13 @@
       "when": 1745193600000,
       "tag": "0012_bounty_builder",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1746403200000,
+      "tag": "0013_addon_count",
+      "breakpoints": true
     }
   ]
 }
