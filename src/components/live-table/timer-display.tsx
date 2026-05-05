@@ -1,8 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
 import { formatTime } from "@/lib/format";
-import { playLevelSound } from "@/lib/play-level-sound";
 
 interface TimerDisplayProps {
   remainingSeconds: number;
@@ -12,18 +10,6 @@ interface TimerDisplayProps {
 }
 
 export function TimerDisplay({ remainingSeconds, isRunning, isBreak, totalSeconds }: TimerDisplayProps) {
-  const hasAlertedRef = useRef(false);
-
-  useEffect(() => {
-    if (remainingSeconds === 0 && isRunning && !hasAlertedRef.current) {
-      hasAlertedRef.current = true;
-      playLevelSound();
-    }
-    if (remainingSeconds > 0) {
-      hasAlertedRef.current = false;
-    }
-  }, [remainingSeconds, isRunning]);
-
   const isWarning = !isBreak && remainingSeconds > 0 && remainingSeconds <= 60;
   const isEmpty = remainingSeconds === 0 && isRunning;
 

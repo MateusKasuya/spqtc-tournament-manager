@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type TournamentTimerFields = {
@@ -18,10 +18,17 @@ export function useTournamentRealtime<T extends TournamentTimerFields>(
   initialData: T
 ) {
   const [tournament, setTournament] = useState<T>(initialData);
+  const mountedRef = useRef(false);
 
-  // Sincroniza quando o servidor re-renderiza (ex: após router.refresh())
+  // Sincroniza quando o servidor re-renderiza (ex: após router.refresh()),
+  // mas só após o mount inicial para não sobrescrever estado mais recente do realtime.
   useEffect(() => {
-    setTournament(initialData);
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+    // Após mount: só sincroniza se o torneio mudou de id (troca de página)
+    setTournament((prev) => (prev.id === initialData.id ? prev : initialData));
   }, [initialData]);
 
   useEffect(() => {

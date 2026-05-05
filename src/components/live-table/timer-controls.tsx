@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Play, Pause, SkipBack, SkipForward, Coffee } from "lucide-react";
 import { startTimer, pauseTimer, advanceBlindLevel, goBackBlindLevel, startBreak, endBreak } from "@/actions/tournaments";
-import { playLevelSound } from "@/lib/play-level-sound";
+import { playLevelSound, unlockAudio } from "@/lib/play-level-sound";
 import { toast } from "sonner";
 
 interface TimerControlsProps {
@@ -97,7 +97,7 @@ export function TimerControls({
 
         <button
           type="button"
-          onClick={() => run(() => isRunning ? pauseTimer(tournamentId) : startTimer(tournamentId))}
+          onClick={() => { unlockAudio(); run(() => isRunning ? pauseTimer(tournamentId) : startTimer(tournamentId)); }}
           disabled={isPending}
           className="inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground p-4 transition-colors hover:bg-primary/90 disabled:opacity-40 disabled:pointer-events-none"
           title={isRunning ? "Pausar" : "Iniciar"}

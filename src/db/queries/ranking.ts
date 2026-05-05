@@ -91,7 +91,7 @@ export async function getPlayerSeasonHistory(playerId: number, seasonId: number)
       pointsEarned: participants.pointsEarned,
       prizeAmount: participants.prizeAmount,
       rebuyCount: participants.rebuyCount,
-      addonUsed: participants.addonUsed,
+      addonCount: participants.addonCount,
     })
     .from(participants)
     .innerJoin(tournaments, eq(participants.tournamentId, tournaments.id))

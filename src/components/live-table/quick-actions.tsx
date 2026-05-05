@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { eliminatePlayer, addRebuy, addDoubleRebuy, addAddon, undoElimination, undoRebuy, undoAddon, confirmBuyIn, addBonusChip, undoBonusChip } from "@/actions/participants";
-import { Skull, RefreshCw, Plus, RotateCcw, CheckCircle, Zap } from "lucide-react";
+import { Skull, RefreshCw, Plus, RotateCcw, CheckCircle, Zap, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/format";
 import { toast } from "sonner";
@@ -24,7 +24,7 @@ interface Participant {
   finishPosition: number | null;
   buyInPaid: boolean;
   rebuyCount: number;
-  addonUsed: boolean;
+  addonCount: number;
   bonusChipUsed: boolean;
   currentBounty?: number;
   bountiesCollected?: number;
@@ -46,6 +46,20 @@ interface QuickActionsProps {
 
 function displayName(p: { name: string; nickname: string | null }) {
   return p.nickname ?? p.name;
+}
+
+function buildSummary(p: Participant, totalPaid: number, isBounty: boolean): string {
+  const parts: string[] = [formatCurrency(totalPaid)];
+  if (p.rebuyCount > 0) parts.push(`${p.rebuyCount}R`);
+  if (p.addonCount > 0) parts.push(p.addonCount === 1 ? "A" : `${p.addonCount}A`);
+  if (p.bonusChipUsed) parts.push("B");
+  if (isBounty && p.currentBounty != null && p.currentBounty > 0) {
+    parts.push(`Bounty: ${formatCurrency(p.currentBounty)}`);
+  }
+  if (isBounty && p.bountiesCollected != null && p.bountiesCollected > 0) {
+    parts.push(`Fat: ${formatCurrency(p.bountiesCollected)}`);
+  }
+  return parts.join(" · ");
 }
 
 // Dialog for selecting eliminators in bounty mode
@@ -142,49 +156,292 @@ export function QuickActions({ participants, tournament }: QuickActionsProps) {
   const isBounty = tournament.tournamentType === "bounty_builder";
 
   return (
-    <div className="rounded-lg border">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-max text-base">
-          <thead>
-            <tr className="border-b bg-muted/40">
-              <th className="py-2.5 pr-3 pl-4 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">Status</th>
-              <th className="py-2.5 pr-3 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">Jogador</th>
-              {isBounty && (
-                <th className="py-2.5 pr-3 text-right text-sm font-medium text-muted-foreground whitespace-nowrap">Bounty</th>
-              )}
-              {isBounty && (
-                <th className="py-2.5 pr-3 text-right text-sm font-medium text-muted-foreground whitespace-nowrap">Faturado</th>
-              )}
-              {showRebuy && (
-                <th className="py-2.5 pr-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Rebuys</th>
-              )}
-              {showAddon && (
-                <th className="py-2.5 pr-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Add-on</th>
-              )}
-              {showBonus && (
-                <th className="py-2.5 pr-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Bonus</th>
-              )}
-              <th className="py-2.5 pr-3 text-right text-sm font-medium text-muted-foreground whitespace-nowrap">Total</th>
-              <th className="py-2.5 pr-4 text-right text-sm font-medium text-muted-foreground whitespace-nowrap">Ações</th>
-            </tr>
-          </thead>
-          <tbody className="px-4">
-            {active.map((p) => (
-              <ParticipantRowFiltered
-                key={p.id}
-                participant={p}
-                tournament={tournament}
-                showRebuy={showRebuy}
-                showAddon={showAddon}
-                showBonus={showBonus}
-                isBounty={isBounty}
-                allParticipants={active}
-              />
-            ))}
-          </tbody>
-        </table>
+    <>
+      {/* Card view (mobile and tablet portrait) */}
+      <div className="space-y-2 lg:hidden">
+        {active.map((p) => (
+          <ParticipantMobileCard
+            key={p.id}
+            participant={p}
+            tournament={tournament}
+            allParticipants={active}
+            showBonus={showBonus}
+            isBounty={isBounty}
+          />
+        ))}
       </div>
-    </div>
+
+      {/* Table view (desktop and tablet landscape) */}
+      <div className="hidden rounded-lg border lg:block">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-max text-base">
+            <thead>
+              <tr className="border-b bg-muted/40">
+                <th className="py-2.5 pr-3 pl-4 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">Status</th>
+                <th className="py-2.5 pr-3 text-left text-sm font-medium text-muted-foreground whitespace-nowrap">Jogador</th>
+                {isBounty && (
+                  <th className="py-2.5 pr-3 text-right text-sm font-medium text-muted-foreground whitespace-nowrap">Bounty</th>
+                )}
+                {isBounty && (
+                  <th className="py-2.5 pr-3 text-right text-sm font-medium text-muted-foreground whitespace-nowrap">Faturado</th>
+                )}
+                {showRebuy && (
+                  <th className="py-2.5 pr-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Rebuys</th>
+                )}
+                {showAddon && (
+                  <th className="py-2.5 pr-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Add-on</th>
+                )}
+                {showBonus && (
+                  <th className="py-2.5 pr-3 text-center text-sm font-medium text-muted-foreground whitespace-nowrap">Bonus</th>
+                )}
+                <th className="py-2.5 pr-3 text-right text-sm font-medium text-muted-foreground whitespace-nowrap">Total</th>
+                <th className="py-2.5 pr-4 text-right text-sm font-medium text-muted-foreground whitespace-nowrap">Ações</th>
+              </tr>
+            </thead>
+            <tbody className="px-4">
+              {active.map((p) => (
+                <ParticipantRowFiltered
+                  key={p.id}
+                  participant={p}
+                  tournament={tournament}
+                  showRebuy={showRebuy}
+                  showAddon={showAddon}
+                  showBonus={showBonus}
+                  isBounty={isBounty}
+                  allParticipants={active}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function ParticipantMobileCard({
+  participant,
+  tournament,
+  allParticipants,
+  showBonus,
+  isBounty,
+}: {
+  participant: Participant;
+  tournament: Tournament;
+  allParticipants: Participant[];
+  showBonus: boolean;
+  isBounty: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [dialogAction, setDialogAction] = useState<"rebuy" | "doubleRebuy" | "eliminate" | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const router = useRouter();
+
+  function run(action: () => Promise<{ error?: string } | { success: boolean } | undefined>) {
+    startTransition(async () => {
+      const result = await action();
+      if (result && "error" in result) {
+        toast.error(result.error);
+      } else {
+        router.refresh();
+        setOpen(false);
+      }
+    });
+  }
+
+  function handleBountyAction(action: "rebuy" | "doubleRebuy" | "eliminate", eliminatorIds: number[]) {
+    setDialogAction(null);
+    if (action === "rebuy") {
+      run(() => addRebuy(participant.id, eliminatorIds));
+    } else if (action === "doubleRebuy") {
+      run(() => addDoubleRebuy(participant.id, eliminatorIds));
+    } else {
+      run(() => eliminatePlayer(participant.id, eliminatorIds));
+    }
+  }
+
+  const isRegistered = participant.status === "registered";
+  const isPlaying = participant.status === "playing";
+  const isEliminated = participant.status === "eliminated";
+  const isFinished = participant.status === "finished";
+
+  const totalPaid =
+    (participant.buyInPaid ? tournament.buyInAmount : 0) +
+    participant.rebuyCount * tournament.rebuyAmount +
+    participant.addonCount * tournament.addonAmount;
+
+  const summary = buildSummary(participant, totalPaid, isBounty);
+
+  const statusBadge = isFinished ? (
+    <span className="inline-flex items-center text-sm font-medium">🏆 1º</span>
+  ) : isEliminated && participant.finishPosition ? (
+    <span className="inline-flex items-center text-sm font-medium text-muted-foreground">{participant.finishPosition}º</span>
+  ) : isRegistered ? (
+    <Badge variant="outline" className="text-xs text-muted-foreground">Aguardando</Badge>
+  ) : (
+    <Badge variant="default" className="text-xs">Jogando</Badge>
+  );
+
+  const hasActions = isRegistered || isPlaying || isEliminated || isFinished;
+
+  return (
+    <>
+      {isBounty && dialogAction && (
+        <EliminatorDialog
+          open={true}
+          onClose={() => setDialogAction(null)}
+          onConfirm={(ids) => handleBountyAction(dialogAction, ids)}
+          allParticipants={allParticipants}
+          victimId={participant.id}
+          actionLabel={dialogAction === "rebuy" ? "Rebuy" : dialogAction === "doubleRebuy" ? "2x Rebuy" : "Eliminar"}
+          isPending={isPending}
+        />
+      )}
+
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className={`flex w-full items-center gap-3 rounded-lg border px-3 py-3 text-left transition-colors hover:bg-accent/50 active:bg-accent ${isEliminated ? "opacity-60" : ""}`}
+      >
+        <div className="min-w-[5rem] shrink-0">{statusBadge}</div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium">{displayName(participant)}</p>
+          <p className="mt-0.5 truncate text-xs text-muted-foreground">{summary}</p>
+        </div>
+        <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground/50" />
+      </button>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between gap-3">
+              <span className="truncate">{displayName(participant)}</span>
+              <span className="shrink-0">{statusBadge}</span>
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">{summary}</p>
+            <div className="grid grid-cols-2 gap-2">
+              {isRegistered && (
+                <button
+                  type="button"
+                  onClick={() => run(() => confirmBuyIn(participant.id))}
+                  disabled={isPending}
+                  className="col-span-2 inline-flex items-center justify-center gap-2 rounded-md border border-green-600/40 px-3 py-3 text-green-600 transition-colors hover:bg-green-600 hover:text-white disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <CheckCircle className="h-5 w-5" />
+                  <span className="text-sm font-medium">Confirmar Buy-in</span>
+                </button>
+              )}
+              {isPlaying && (
+                <>
+                  {tournament.rebuyAmount > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => isBounty ? setDialogAction("rebuy") : run(() => addRebuy(participant.id))}
+                        disabled={isPending}
+                        className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-3 transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
+                      >
+                        <RefreshCw className="h-5 w-5" />
+                        <span className="text-sm font-medium">Rebuy</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => isBounty ? setDialogAction("doubleRebuy") : run(() => addDoubleRebuy(participant.id))}
+                        disabled={isPending}
+                        className="inline-flex items-center justify-center gap-2 rounded-md border border-blue-500/40 px-3 py-3 text-blue-600 transition-colors hover:bg-blue-600 hover:text-white disabled:pointer-events-none disabled:opacity-40 dark:text-blue-400"
+                      >
+                        <RefreshCw className="h-5 w-5" />
+                        <span className="text-sm font-medium">2x Rebuy</span>
+                      </button>
+                    </>
+                  )}
+                  {tournament.allowAddon && (
+                    <button
+                      type="button"
+                      onClick={() => run(() => addAddon(participant.id))}
+                      disabled={isPending}
+                      className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-3 transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      <Plus className="h-5 w-5" />
+                      <span className="text-sm font-medium">Add-on</span>
+                    </button>
+                  )}
+                  {showBonus && !participant.bonusChipUsed && (
+                    <button
+                      type="button"
+                      onClick={() => run(() => addBonusChip(participant.id))}
+                      disabled={isPending}
+                      className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-3 transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      <Zap className="h-5 w-5" />
+                      <span className="text-sm font-medium">Bonus</span>
+                    </button>
+                  )}
+                  {participant.rebuyCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => run(() => undoRebuy(participant.id))}
+                      disabled={isPending}
+                      className="inline-flex items-center justify-center gap-2 rounded-md border border-destructive/30 px-3 py-3 text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      <RotateCcw className="h-5 w-5" />
+                      <span className="text-sm font-medium">-Rebuy</span>
+                    </button>
+                  )}
+                  {tournament.allowAddon && participant.addonCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => run(() => undoAddon(participant.id))}
+                      disabled={isPending}
+                      className="inline-flex items-center justify-center gap-2 rounded-md border border-destructive/30 px-3 py-3 text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      <RotateCcw className="h-5 w-5" />
+                      <span className="text-sm font-medium">-Add-on</span>
+                    </button>
+                  )}
+                  {showBonus && participant.bonusChipUsed && (
+                    <button
+                      type="button"
+                      onClick={() => run(() => undoBonusChip(participant.id))}
+                      disabled={isPending}
+                      className="inline-flex items-center justify-center gap-2 rounded-md border border-destructive/30 px-3 py-3 text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      <RotateCcw className="h-5 w-5" />
+                      <span className="text-sm font-medium">-Bonus</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => isBounty ? setDialogAction("eliminate") : run(() => eliminatePlayer(participant.id))}
+                    disabled={isPending}
+                    className="col-span-2 inline-flex items-center justify-center gap-2 rounded-md border border-destructive/30 px-3 py-3 text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:pointer-events-none disabled:opacity-40"
+                  >
+                    <Skull className="h-5 w-5" />
+                    <span className="text-sm font-medium">Eliminar</span>
+                  </button>
+                </>
+              )}
+              {(isEliminated || isFinished) && (
+                <button
+                  type="button"
+                  onClick={() => run(() => undoElimination(participant.id))}
+                  disabled={isPending}
+                  className="col-span-2 inline-flex items-center justify-center gap-2 rounded-md border px-3 py-3 transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
+                >
+                  <RotateCcw className="h-5 w-5" />
+                  <span className="text-sm font-medium">Desfazer eliminação</span>
+                </button>
+              )}
+            </div>
+            {!hasActions && (
+              <p className="text-center text-sm text-muted-foreground">Nenhuma ação disponível</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -239,7 +496,7 @@ function ParticipantRowFiltered({
   const totalPaid =
     (participant.buyInPaid ? tournament.buyInAmount : 0) +
     participant.rebuyCount * tournament.rebuyAmount +
-    (participant.addonUsed ? tournament.addonAmount : 0);
+    participant.addonCount * tournament.addonAmount;
 
   return (
     <>
@@ -307,8 +564,8 @@ function ParticipantRowFiltered({
         {showAddon && (
           <td className="py-2.5 pr-3 text-base text-center text-muted-foreground">
             <div className="flex items-center justify-center gap-1">
-              <span>{participant.addonUsed ? "Sim" : "—"}</span>
-              {participant.addonUsed && (
+              <span>{participant.addonCount > 0 ? participant.addonCount : "—"}</span>
+              {participant.addonCount > 0 && (
                 <button
                   type="button"
                   onClick={() => run(() => undoAddon(participant.id))}
@@ -386,7 +643,7 @@ function ParticipantRowFiltered({
                     </button>
                   </>
                 )}
-                {tournament.allowAddon && !participant.addonUsed && (
+                {tournament.allowAddon && (
                   <button
                     type="button"
                     onClick={() => run(() => addAddon(participant.id))}

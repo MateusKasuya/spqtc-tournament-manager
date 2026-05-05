@@ -335,7 +335,7 @@ export async function addAddon(participantId: number) {
 
   const participant = await getParticipantById(participantId);
   if (!participant) return { error: "Participante nao encontrado" };
-  if (participant.addonUsed) return { error: "Add-on ja utilizado" };
+  if (!participant.buyInPaid) return { error: "Jogador ainda nao pagou buy-in" };
 
   const [tournament] = await db
     .select({ allowAddon: tournaments.allowAddon, addonAmount: tournaments.addonAmount })
@@ -347,7 +347,7 @@ export async function addAddon(participantId: number) {
   await db.transaction(async (tx) => {
     await tx
       .update(participants)
-      .set({ addonUsed: true })
+      .set({ addonCount: participant.addonCount + 1 })
       .where(eq(participants.id, participantId));
 
     await tx.insert(transactions).values({
@@ -493,22 +493,31 @@ export async function undoAddon(participantId: number) {
 
   const participant = await getParticipantById(participantId);
   if (!participant) return { error: "Participante nao encontrado" };
-  if (!participant.addonUsed) return { error: "Add-on nao foi utilizado" };
+  if (participant.addonCount <= 0) return { error: "Nenhum add-on para desfazer" };
 
-  await db
-    .delete(transactions)
+  const [lastAddonTx] = await db
+    .select({ id: transactions.id })
+    .from(transactions)
     .where(
       and(
         eq(transactions.playerId, participant.playerId),
         eq(transactions.tournamentId, participant.tournamentId),
         eq(transactions.type, "addon")
       )
-    );
+    )
+    .orderBy(desc(transactions.createdAt))
+    .limit(1);
 
-  await db
-    .update(participants)
-    .set({ addonUsed: false })
-    .where(eq(participants.id, participantId));
+  await db.transaction(async (tx) => {
+    if (lastAddonTx) {
+      await tx.delete(transactions).where(eq(transactions.id, lastAddonTx.id));
+    }
+
+    await tx
+      .update(participants)
+      .set({ addonCount: participant.addonCount - 1 })
+      .where(eq(participants.id, participantId));
+  });
 
   revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };

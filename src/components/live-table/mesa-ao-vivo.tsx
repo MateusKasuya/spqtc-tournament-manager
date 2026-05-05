@@ -36,7 +36,7 @@ interface Participant {
   finishPosition: number | null;
   buyInPaid: boolean;
   rebuyCount: number;
-  addonUsed: boolean;
+  addonCount: number;
   bonusChipUsed: boolean;
   currentBounty: number;
   bountiesCollected: number;
