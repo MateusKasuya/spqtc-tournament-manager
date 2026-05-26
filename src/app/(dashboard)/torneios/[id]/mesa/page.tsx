@@ -5,6 +5,8 @@ import { getParticipants } from "@/db/queries/participants";
 import { getTournamentFinancialSummary } from "@/db/queries/transactions";
 import { MesaAoVivo } from "@/components/live-table/mesa-ao-vivo";
 
+export const dynamic = "force-dynamic";
+
 interface PageProps {
   params: Promise<{ id: string }>;
 }
