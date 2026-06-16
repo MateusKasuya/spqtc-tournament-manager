@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { Badge } from "@/components/ui/badge";
 import {
   confirmBuyIn,
+  undoBuyIn,
   addRebuy,
   addDoubleRebuy,
   addAddon,
@@ -101,6 +102,13 @@ function ParticipantActions({
     });
   }
 
+  const canUndoBuyIn =
+    participant.status === "playing" &&
+    participant.rebuyCount === 0 &&
+    participant.addonCount === 0 &&
+    !participant.bonusChipUsed &&
+    (participant.bountiesCollected ?? 0) === 0;
+
   return (
     <div className="flex items-center gap-1">
       {participant.status === "registered" && !participant.buyInPaid && (
@@ -115,6 +123,17 @@ function ParticipantActions({
 
       {participant.status === "playing" && (
         <>
+          {canUndoBuyIn && (
+            <ActionButton
+              onClick={() => run(() => undoBuyIn(participant.id))}
+              disabled={isPending}
+              label="-Buy-in"
+              destructive
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+            </ActionButton>
+          )}
+
           <ActionButton
             onClick={() => run(() => addRebuy(participant.id))}
             disabled={isPending}

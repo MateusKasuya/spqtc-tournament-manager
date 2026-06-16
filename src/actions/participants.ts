@@ -141,6 +141,44 @@ export async function confirmBuyIn(participantId: number) {
   return { success: true };
 }
 
+export async function undoBuyIn(participantId: number) {
+  const auth = await requireAdmin();
+  if ("error" in auth) return auth;
+
+  const participant = await getParticipantById(participantId);
+  if (!participant) return { error: "Participante nao encontrado" };
+  if (!participant.buyInPaid) return { error: "Buy-in nao confirmado" };
+  if (participant.status !== "playing") {
+    return { error: "Desfaca a eliminacao antes de remover o buy-in" };
+  }
+  if (
+    participant.rebuyCount > 0 ||
+    participant.addonCount > 0 ||
+    participant.bonusChipUsed ||
+    participant.bountiesCollected > 0
+  ) {
+    return { error: "Desfaca rebuys, add-ons, bonus e bounties antes de remover o buy-in" };
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.delete(transactions).where(
+      and(
+        eq(transactions.playerId, participant.playerId),
+        eq(transactions.tournamentId, participant.tournamentId),
+        eq(transactions.type, "buy_in")
+      )
+    );
+
+    await tx
+      .update(participants)
+      .set({ buyInPaid: false, status: "registered", currentBounty: 0 })
+      .where(eq(participants.id, participantId));
+  });
+
+  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  return { success: true };
+}
+
 export async function addRebuy(participantId: number, eliminatedByPlayerIds?: number[]) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
