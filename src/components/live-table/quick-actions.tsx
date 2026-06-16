@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { eliminatePlayer, addRebuy, addDoubleRebuy, addAddon, undoElimination, undoRebuy, undoAddon, confirmBuyIn, addBonusChip, undoBonusChip } from "@/actions/participants";
+import { eliminatePlayer, addRebuy, addDoubleRebuy, addAddon, undoElimination, undoRebuy, undoAddon, undoBuyIn, confirmBuyIn, addBonusChip, undoBonusChip } from "@/actions/participants";
 import { Skull, RefreshCw, Plus, RotateCcw, CheckCircle, Zap, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/format";
@@ -272,6 +272,13 @@ function ParticipantMobileCard({
 
   const summary = buildSummary(participant, totalPaid, isBounty);
 
+  const canUndoBuyIn =
+    isPlaying &&
+    participant.rebuyCount === 0 &&
+    participant.addonCount === 0 &&
+    !participant.bonusChipUsed &&
+    (participant.bountiesCollected ?? 0) === 0;
+
   const statusBadge = isFinished ? (
     <span className="inline-flex items-center text-sm font-medium">🏆 1º</span>
   ) : isEliminated && participant.finishPosition ? (
@@ -412,6 +419,17 @@ function ParticipantMobileCard({
                       <span className="text-sm font-medium">-Bonus</span>
                     </button>
                   )}
+                  {canUndoBuyIn && (
+                    <button
+                      type="button"
+                      onClick={() => run(() => undoBuyIn(participant.id))}
+                      disabled={isPending}
+                      className="inline-flex items-center justify-center gap-2 rounded-md border border-destructive/30 px-3 py-3 text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:pointer-events-none disabled:opacity-40"
+                    >
+                      <RotateCcw className="h-5 w-5" />
+                      <span className="text-sm font-medium">-Buy-in</span>
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => isBounty ? setDialogAction("eliminate") : run(() => eliminatePlayer(participant.id))}
@@ -497,6 +515,13 @@ function ParticipantRowFiltered({
     (participant.buyInPaid ? tournament.buyInAmount : 0) +
     participant.rebuyCount * tournament.rebuyAmount +
     participant.addonCount * tournament.addonAmount;
+
+  const canUndoBuyIn =
+    isPlaying &&
+    participant.rebuyCount === 0 &&
+    participant.addonCount === 0 &&
+    !participant.bonusChipUsed &&
+    (participant.bountiesCollected ?? 0) === 0;
 
   return (
     <>
@@ -665,6 +690,18 @@ function ParticipantRowFiltered({
                   >
                     <Zap className="h-4 w-4" />
                     <span className="text-xs leading-none font-medium">Bonus</span>
+                  </button>
+                )}
+                {canUndoBuyIn && (
+                  <button
+                    type="button"
+                    onClick={() => run(() => undoBuyIn(participant.id))}
+                    disabled={isPending}
+                    title="Desfazer buy-in"
+                    className="inline-flex flex-col items-center gap-0.5 rounded-md border border-destructive/30 px-2.5 py-1.5 text-destructive transition-colors hover:bg-destructive hover:text-destructive-foreground disabled:opacity-40 disabled:pointer-events-none"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    <span className="text-xs leading-none font-medium">-Buy-in</span>
                   </button>
                 )}
                 <button
