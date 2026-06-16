@@ -5,6 +5,7 @@ import { useTransition } from "react";
 import { useTournamentRealtime } from "@/hooks/use-tournament-realtime";
 import { useParticipantsRealtime } from "@/hooks/use-participants-realtime";
 import { useCountdown } from "@/hooks/use-countdown";
+import { useWakeLock } from "@/hooks/use-wake-lock";
 import { TimerDisplay } from "./timer-display";
 import { TimerControls } from "./timer-controls";
 import { BlindInfo } from "./blind-info";
@@ -90,6 +91,7 @@ export function MesaAoVivo({
   const liveTournament = useTournamentRealtime(tournament.id, tournament);
   useParticipantsRealtime(tournament.id);
   const { remainingSeconds, isRunning } = useCountdown(liveTournament);
+  useWakeLock(isRunning);
 
   const currentIndex = blindLevels.findIndex((b) => b.level === liveTournament.currentBlindLevel);
   const currentLevel = blindLevels[currentIndex] ?? blindLevels[0];
