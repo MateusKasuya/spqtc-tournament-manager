@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useTransition } from "react";
 import { useTournamentRealtime } from "@/hooks/use-tournament-realtime";
-import { useParticipantsRealtime } from "@/hooks/use-participants-realtime";
+import { useMesaData } from "@/hooks/use-mesa-data";
 import { useCountdown } from "@/hooks/use-countdown";
 import { useWakeLock } from "@/hooks/use-wake-lock";
 import { TimerDisplay } from "./timer-display";
@@ -13,6 +13,7 @@ import { TournamentStats } from "./tournament-stats";
 import { QuickActions } from "./quick-actions";
 import { StickyTimerBar } from "./sticky-timer-bar";
 import { advanceBlindLevel, updateTournamentStatus, endBreak } from "@/actions/tournaments";
+import { getMesaLiveData } from "@/actions/mesa";
 import { playLevelSound } from "@/lib/play-level-sound";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -89,7 +90,16 @@ export function MesaAoVivo({
   isAdmin,
 }: MesaAoVivoProps) {
   const liveTournament = useTournamentRealtime(tournament.id, tournament);
-  useParticipantsRealtime(tournament.id);
+  const {
+    participants: liveParticipants,
+    financialSummary: liveFinancial,
+    refetch: refetchMesa,
+  } = useMesaData<Participant, FinancialSummary>(
+    tournament.id,
+    participants,
+    financialSummary,
+    () => getMesaLiveData(tournament.id)
+  );
   const { remainingSeconds, isRunning } = useCountdown(liveTournament);
   useWakeLock(isRunning);
 
@@ -205,16 +215,17 @@ export function MesaAoVivo({
 
       {/* Stats */}
       <TournamentStats
-        participants={participants}
+        participants={liveParticipants}
         tournament={liveTournament}
-        financialSummary={financialSummary}
+        financialSummary={liveFinancial}
       />
 
       {/* Quick Actions (admin only) */}
       {isAdmin && (
         <QuickActions
-          participants={participants}
+          participants={liveParticipants}
           tournament={liveTournament}
+          onMutated={refetchMesa}
         />
       )}
 

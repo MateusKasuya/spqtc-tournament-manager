@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { eliminatePlayer, addRebuy, addDoubleRebuy, addAddon, undoElimination, undoRebuy, undoAddon, undoBuyIn, confirmBuyIn, addBonusChip, undoBonusChip } from "@/actions/participants";
 import { Skull, RefreshCw, Plus, RotateCcw, CheckCircle, Zap, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +41,7 @@ interface Tournament {
 interface QuickActionsProps {
   participants: Participant[];
   tournament: Tournament;
+  onMutated: () => Promise<void>;
 }
 
 function displayName(p: { name: string; nickname: string | null }) {
@@ -143,7 +143,7 @@ function EliminatorDialog({
   );
 }
 
-export function QuickActions({ participants, tournament }: QuickActionsProps) {
+export function QuickActions({ participants, tournament, onMutated }: QuickActionsProps) {
   const active = participants.filter(
     (p) => p.status === "registered" || p.status === "playing" || p.status === "eliminated" || p.status === "finished"
   );
@@ -167,6 +167,7 @@ export function QuickActions({ participants, tournament }: QuickActionsProps) {
             allParticipants={active}
             showBonus={showBonus}
             isBounty={isBounty}
+            onMutated={onMutated}
           />
         ))}
       </div>
@@ -209,6 +210,7 @@ export function QuickActions({ participants, tournament }: QuickActionsProps) {
                   showBonus={showBonus}
                   isBounty={isBounty}
                   allParticipants={active}
+                  onMutated={onMutated}
                 />
               ))}
             </tbody>
@@ -225,17 +227,18 @@ function ParticipantMobileCard({
   allParticipants,
   showBonus,
   isBounty,
+  onMutated,
 }: {
   participant: Participant;
   tournament: Tournament;
   allParticipants: Participant[];
   showBonus: boolean;
   isBounty: boolean;
+  onMutated: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [dialogAction, setDialogAction] = useState<"rebuy" | "doubleRebuy" | "eliminate" | null>(null);
   const [isPending, startTransition] = useTransition();
-  const router = useRouter();
 
   function run(action: () => Promise<{ error?: string } | { success: boolean } | undefined>) {
     startTransition(async () => {
@@ -243,7 +246,7 @@ function ParticipantMobileCard({
       if (result && "error" in result) {
         toast.error(result.error);
       } else {
-        router.refresh();
+        await onMutated();
         setOpen(false);
       }
     });
@@ -471,6 +474,7 @@ function ParticipantRowFiltered({
   showBonus,
   isBounty,
   allParticipants,
+  onMutated,
 }: {
   participant: Participant;
   tournament: Tournament;
@@ -479,9 +483,9 @@ function ParticipantRowFiltered({
   showBonus: boolean;
   isBounty: boolean;
   allParticipants: Participant[];
+  onMutated: () => Promise<void>;
 }) {
   const [isPending, startTransition] = useTransition();
-  const router = useRouter();
   const [dialogAction, setDialogAction] = useState<"rebuy" | "doubleRebuy" | "eliminate" | null>(null);
 
   function run(action: () => Promise<{ error?: string } | { success: boolean } | undefined>) {
@@ -490,7 +494,7 @@ function ParticipantRowFiltered({
       if (result && "error" in result) {
         toast.error(result.error);
       } else {
-        router.refresh();
+        await onMutated();
       }
     });
   }
