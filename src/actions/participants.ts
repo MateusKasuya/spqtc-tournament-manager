@@ -752,8 +752,8 @@ export async function undoElimination(participantId: number) {
 
       if (champion) {
         if (isBounty) {
-          const selfTxs = await tx
-            .select({ amount: transactions.amount, bountyChange: transactions.bountyChange })
+          const [latestSelf] = await tx
+            .select({ createdAt: transactions.createdAt })
             .from(transactions)
             .where(
               and(
@@ -761,14 +761,32 @@ export async function undoElimination(participantId: number) {
                 eq(transactions.type, "bounty_earned"),
                 eq(transactions.relatedParticipantId, champion.id)
               )
-            );
+            )
+            .orderBy(desc(transactions.createdAt))
+            .limit(1);
+          // Escopa ao timestamp da coroacao (bounty proprio mais recente),
+          // sem varrer bounties de rebuys anteriores do campeao.
+          const selfTxs = latestSelf
+            ? await tx
+                .select({ amount: transactions.amount, bountyChange: transactions.bountyChange })
+                .from(transactions)
+                .where(
+                  and(
+                    eq(transactions.tournamentId, participant.tournamentId),
+                    eq(transactions.type, "bounty_earned"),
+                    eq(transactions.relatedParticipantId, champion.id),
+                    eq(transactions.createdAt, latestSelf.createdAt)
+                  )
+                )
+            : [];
           const restored = selfTxs.reduce((sum, b) => sum + b.amount + b.bountyChange, 0);
-          if (selfTxs.length > 0) {
+          if (latestSelf) {
             await tx.delete(transactions).where(
               and(
                 eq(transactions.tournamentId, participant.tournamentId),
                 eq(transactions.type, "bounty_earned"),
-                eq(transactions.relatedParticipantId, champion.id)
+                eq(transactions.relatedParticipantId, champion.id),
+                eq(transactions.createdAt, latestSelf.createdAt)
               )
             );
           }
@@ -791,8 +809,11 @@ export async function undoElimination(participantId: number) {
     }
 
     if (isBounty) {
-      const bountyTxs = await tx
-        .select({ id: transactions.id, playerId: transactions.playerId, amount: transactions.amount, bountyChange: transactions.bountyChange })
+      // A eliminacao e o evento mais recente da vitima; seus bounty_earned
+      // compartilham o mesmo timestamp. Escopar a reversao a esse timestamp
+      // evita varrer bounties de rebuys anteriores da mesma vitima.
+      const [latestElim] = await tx
+        .select({ createdAt: transactions.createdAt })
         .from(transactions)
         .where(
           and(
@@ -800,9 +821,25 @@ export async function undoElimination(participantId: number) {
             eq(transactions.type, "bounty_earned"),
             eq(transactions.relatedParticipantId, participant.id)
           )
-        );
+        )
+        .orderBy(desc(transactions.createdAt))
+        .limit(1);
 
-      if (bountyTxs.length > 0) {
+      const bountyTxs = latestElim
+        ? await tx
+            .select({ id: transactions.id, playerId: transactions.playerId, amount: transactions.amount, bountyChange: transactions.bountyChange })
+            .from(transactions)
+            .where(
+              and(
+                eq(transactions.tournamentId, participant.tournamentId),
+                eq(transactions.type, "bounty_earned"),
+                eq(transactions.relatedParticipantId, participant.id),
+                eq(transactions.createdAt, latestElim.createdAt)
+              )
+            )
+        : [];
+
+      if (latestElim && bountyTxs.length > 0) {
         const eliminatorPlayerIds = bountyTxs.map((b) => b.playerId);
         const eliminatorParticipants = await tx
           .select({ id: participants.id, playerId: participants.playerId, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
@@ -833,7 +870,8 @@ export async function undoElimination(participantId: number) {
           and(
             eq(transactions.tournamentId, participant.tournamentId),
             eq(transactions.type, "bounty_earned"),
-            eq(transactions.relatedParticipantId, participant.id)
+            eq(transactions.relatedParticipantId, participant.id),
+            eq(transactions.createdAt, latestElim.createdAt)
           )
         );
 
