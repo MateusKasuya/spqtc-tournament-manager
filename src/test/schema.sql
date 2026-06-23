@@ -99,6 +99,7 @@ CREATE TABLE "tournaments" (
 	"timer_started_at" timestamp with time zone,
 	"break_active" boolean DEFAULT false NOT NULL,
 	"level_remaining_secs" integer,
+	"break_total_secs" integer,
 	"created_by" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL

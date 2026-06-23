@@ -29,6 +29,7 @@ export const tournaments = pgTable("tournaments", {
   timerStartedAt: timestamp("timer_started_at", { withTimezone: true }),
   breakActive: boolean("break_active").notNull().default(false),
   levelRemainingSecs: integer("level_remaining_secs"),
+  breakTotalSecs: integer("break_total_secs"),
   createdBy: uuid("created_by").references(() => users.id).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),

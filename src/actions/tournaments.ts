@@ -504,6 +504,7 @@ export async function startBreak(tournamentId: number, durationMinutes: number) 
     .set({
       breakActive: true,
       levelRemainingSecs: levelRemaining,
+      breakTotalSecs: durationMinutes * 60,
       timerRemainingSecs: durationMinutes * 60,
       timerRunning: true,
       timerStartedAt: new Date(),
@@ -531,6 +532,7 @@ export async function endBreak(tournamentId: number) {
     .set({
       breakActive: false,
       levelRemainingSecs: null,
+      breakTotalSecs: null,
       timerRemainingSecs: tournament.levelRemainingSecs ?? 0,
       timerRunning: false,
       timerStartedAt: null,

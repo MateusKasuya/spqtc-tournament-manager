@@ -15,6 +15,13 @@
       "when": 1782254661498,
       "tag": "0001_familiar_pyro",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1782257068880,
+      "tag": "0002_woozy_harrier",
+      "breakpoints": true
     }
   ]
 }
