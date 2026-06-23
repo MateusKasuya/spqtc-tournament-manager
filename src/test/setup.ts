@@ -51,9 +51,24 @@ export async function seedPlayer(name = "P") {
   return p.id;
 }
 
-export async function seedParticipant(tournamentId: number, playerId: number) {
-  const [p] = await testDb.insert(participants).values({ tournamentId, playerId }).returning();
+export async function seedParticipant(
+  tournamentId: number,
+  playerId: number,
+  overrides: Partial<typeof participants.$inferInsert> = {}
+) {
+  const [p] = await testDb.insert(participants)
+    .values({ tournamentId, playerId, ...overrides }).returning();
   return p.id;
+}
+
+// N jogadores distintos, todos status "playing" — retorna os participantIds em ordem
+export async function seedPlayingParticipants(tournamentId: number, count: number) {
+  const ids: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const playerId = await seedPlayer(`P${i}`);
+    ids.push(await seedParticipant(tournamentId, playerId, { status: "playing", buyInPaid: true }));
+  }
+  return ids;
 }
 
 export function makeLevels(n: number) {
