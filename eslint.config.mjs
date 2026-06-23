@@ -11,6 +11,12 @@ const compat = new FlatCompat({
 
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
+  {
+    // Arquivos de teste não fazem parte do build de produção; o `next build`
+    // roda ESLint e falharia em padrões comuns de teste (ex.: any em casts de
+    // resultado de query). Continuam cobertos por tsc (typecheck) e vitest.
+    ignores: ["**/*.test.ts", "**/*.test.tsx", "src/test/**"],
+  },
 ];
 
 export default eslintConfig;
