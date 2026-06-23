@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, boolean, timestamp, uuid } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, boolean, timestamp, uuid, index } from "drizzle-orm/pg-core";
 import { seasons } from "./seasons";
 import { users } from "./users";
 
@@ -32,4 +32,6 @@ export const tournaments = pgTable("tournaments", {
   createdBy: uuid("created_by").references(() => users.id).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("tournaments_season_status_idx").on(table.seasonId, table.status),
+]);

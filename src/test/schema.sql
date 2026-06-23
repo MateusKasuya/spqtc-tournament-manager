@@ -123,6 +123,7 @@ CREATE TABLE "users" (
 	"role" text DEFAULT 'player' NOT NULL,
 	"avatar_url" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "users_email_unique" UNIQUE("email"),
 	CONSTRAINT "users_nickname_unique" UNIQUE("nickname")
 );
 
@@ -138,3 +139,5 @@ ALTER TABLE "tournaments" ADD CONSTRAINT "tournaments_created_by_users_id_fk" FO
 ALTER TABLE "transactions" ADD CONSTRAINT "transactions_tournament_id_tournaments_id_fk" FOREIGN KEY ("tournament_id") REFERENCES "public"."tournaments"("id") ON DELETE cascade ON UPDATE no action;
 ALTER TABLE "transactions" ADD CONSTRAINT "transactions_player_id_players_id_fk" FOREIGN KEY ("player_id") REFERENCES "public"."players"("id") ON DELETE no action ON UPDATE no action;
 ALTER TABLE "transactions" ADD CONSTRAINT "transactions_related_participant_id_participants_id_fk" FOREIGN KEY ("related_participant_id") REFERENCES "public"."participants"("id") ON DELETE set null ON UPDATE no action;
+CREATE INDEX "tournaments_season_status_idx" ON "tournaments" USING btree ("season_id","status");
+CREATE INDEX "transactions_tournament_id_idx" ON "transactions" USING btree ("tournament_id");
