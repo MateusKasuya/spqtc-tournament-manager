@@ -21,7 +21,7 @@ export function TimerDisplay({ remainingSeconds, isRunning, isBreak, totalSecond
     ? "text-red-400 animate-pulse"
     : "text-foreground";
 
-  const progress = totalSeconds > 0 ? remainingSeconds / totalSeconds : 0;
+  const progress = totalSeconds > 0 ? Math.min(1, Math.max(0, remainingSeconds / totalSeconds)) : 0;
   const r = 88;
   const circumference = 2 * Math.PI * r;
   const strokeDashoffset = circumference * (1 - progress);

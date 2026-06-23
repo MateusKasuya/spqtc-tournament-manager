@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { eliminatePlayer, addRebuy, addDoubleRebuy, addAddon, undoElimination, undoRebuy, undoAddon, undoBuyIn, confirmBuyIn, addBonusChip, undoBonusChip } from "@/actions/participants";
+import { useQuickActionRunner } from "@/hooks/use-quick-action-runner";
 import { Skull, RefreshCw, Plus, RotateCcw, CheckCircle, Zap, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/format";
-import { toast } from "sonner";
 import {
   Dialog,
   DialogContent,
@@ -237,31 +237,7 @@ function ParticipantMobileCard({
   onMutated: () => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [dialogAction, setDialogAction] = useState<"rebuy" | "doubleRebuy" | "eliminate" | null>(null);
-  const [isPending, startTransition] = useTransition();
-
-  function run(action: () => Promise<{ error?: string } | { success: boolean } | undefined>) {
-    startTransition(async () => {
-      const result = await action();
-      if (result && "error" in result) {
-        toast.error(result.error);
-      } else {
-        await onMutated();
-        setOpen(false);
-      }
-    });
-  }
-
-  function handleBountyAction(action: "rebuy" | "doubleRebuy" | "eliminate", eliminatorIds: number[]) {
-    setDialogAction(null);
-    if (action === "rebuy") {
-      run(() => addRebuy(participant.id, eliminatorIds));
-    } else if (action === "doubleRebuy") {
-      run(() => addDoubleRebuy(participant.id, eliminatorIds));
-    } else {
-      run(() => eliminatePlayer(participant.id, eliminatorIds));
-    }
-  }
+  const { run, isPending, dialogAction, setDialogAction, handleBountyAction } = useQuickActionRunner(participant.id, onMutated, () => setOpen(false));
 
   const isRegistered = participant.status === "registered";
   const isPlaying = participant.status === "playing";
@@ -485,30 +461,7 @@ function ParticipantRowFiltered({
   allParticipants: Participant[];
   onMutated: () => Promise<void>;
 }) {
-  const [isPending, startTransition] = useTransition();
-  const [dialogAction, setDialogAction] = useState<"rebuy" | "doubleRebuy" | "eliminate" | null>(null);
-
-  function run(action: () => Promise<{ error?: string } | { success: boolean } | undefined>) {
-    startTransition(async () => {
-      const result = await action();
-      if (result && "error" in result) {
-        toast.error(result.error);
-      } else {
-        await onMutated();
-      }
-    });
-  }
-
-  function handleBountyAction(action: "rebuy" | "doubleRebuy" | "eliminate", eliminatorIds: number[]) {
-    setDialogAction(null);
-    if (action === "rebuy") {
-      run(() => addRebuy(participant.id, eliminatorIds));
-    } else if (action === "doubleRebuy") {
-      run(() => addDoubleRebuy(participant.id, eliminatorIds));
-    } else {
-      run(() => eliminatePlayer(participant.id, eliminatorIds));
-    }
-  }
+  const { run, isPending, dialogAction, setDialogAction, handleBountyAction } = useQuickActionRunner(participant.id, onMutated);
 
   const isRegistered = participant.status === "registered";
   const isPlaying = participant.status === "playing";

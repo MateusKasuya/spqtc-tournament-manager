@@ -14,6 +14,8 @@ export function ToggleSeasonButton({ seasonId }: ToggleSeasonButtonProps) {
   const [isPending, startTransition] = useTransition();
 
   function handleClick() {
+    if (!confirm("Tornar esta a temporada ativa? A temporada atual sera desativada.")) return;
+
     startTransition(async () => {
       const result = await toggleSeasonActive(seasonId);
       if ("error" in result) {

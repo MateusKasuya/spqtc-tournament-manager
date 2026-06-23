@@ -44,13 +44,12 @@ export function MobileHeader({ user }: MobileHeaderProps) {
             </DropdownMenuLabel>
           </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>
-            <form action={logout} className="w-full">
-              <button type="submit" className="flex items-center gap-2 w-full text-sm">
-                <LogOut className="h-4 w-4" />
-                Sair
-              </button>
-            </form>
+          <DropdownMenuItem
+            onClick={() => logout()}
+            className="flex items-center gap-2 text-sm"
+          >
+            <LogOut className="h-4 w-4" />
+            Sair
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

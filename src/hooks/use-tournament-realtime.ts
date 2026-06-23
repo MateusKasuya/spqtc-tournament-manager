@@ -11,6 +11,7 @@ type TournamentTimerFields = {
   timerStartedAt: Date | string | null;
   status: string;
   breakActive: boolean;
+  breakTotalSecs: number | null;
 };
 
 type TournamentRow = {
@@ -20,6 +21,7 @@ type TournamentRow = {
   timer_started_at: string | null;
   status: string;
   break_active: boolean;
+  break_total_secs: number | null;
 };
 
 function mapRow<T extends TournamentTimerFields>(prev: T, row: Partial<TournamentRow>): T {
@@ -33,11 +35,13 @@ function mapRow<T extends TournamentTimerFields>(prev: T, row: Partial<Tournamen
       row.timer_started_at !== undefined ? row.timer_started_at : prev.timerStartedAt,
     status: row.status ?? prev.status,
     breakActive: row.break_active !== undefined ? row.break_active : prev.breakActive,
+    breakTotalSecs:
+      row.break_total_secs !== undefined ? row.break_total_secs : prev.breakTotalSecs,
   };
 }
 
 const TIMER_COLUMNS =
-  "id, current_blind_level, timer_running, timer_remaining_secs, timer_started_at, status, break_active";
+  "id, current_blind_level, timer_running, timer_remaining_secs, timer_started_at, status, break_active, break_total_secs";
 
 export function useTournamentRealtime<T extends TournamentTimerFields>(
   tournamentId: number,
@@ -77,6 +81,7 @@ export function useTournamentRealtime<T extends TournamentTimerFields>(
           filter: `id=eq.${tournamentId}`,
         },
         (payload) => {
+          if (cancelled) return;
           const raw = payload.new as Partial<TournamentRow>;
           setTournament((prev) => mapRow(prev, raw));
         }
