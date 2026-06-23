@@ -50,7 +50,7 @@ export async function signup(formData: FormData) {
   const { data, error } = await supabase.auth.signUp(parsed.data);
 
   if (error) {
-    return { error: error.message };
+    return { error: "Não foi possível criar a conta" };
   }
 
   // Se há sessão, o usuário já está logado (confirmação de email desativada)

@@ -25,7 +25,13 @@ export async function addParticipant(tournamentId: number, playerId: number) {
   const existing = await getParticipantByPlayerAndTournament(playerId, tournamentId);
   if (existing) return { error: "Jogador ja inscrito neste torneio" };
 
-  await db.insert(participants).values({ tournamentId, playerId });
+  const inserted = await db
+    .insert(participants)
+    .values({ tournamentId, playerId })
+    .onConflictDoNothing()
+    .returning({ id: participants.id });
+
+  if (inserted.length === 0) return { error: "Jogador ja inscrito neste torneio" };
 
   revalidatePath(`/torneios/${tournamentId}`, "layout");
   return { success: true };
@@ -47,7 +53,16 @@ export async function addParticipants(tournamentId: number, playerIds: number[])
     return { error: "Nao e possivel adicionar jogadores a este torneio" };
   }
 
-  await db.insert(participants).values(playerIds.map((playerId) => ({ tournamentId, playerId })));
+  const existing = await db
+    .select({ playerId: participants.playerId })
+    .from(participants)
+    .where(and(eq(participants.tournamentId, tournamentId), inArray(participants.playerId, playerIds)));
+  const existingIds = new Set(existing.map((e) => e.playerId));
+  const newPlayerIds = playerIds.filter((id) => !existingIds.has(id));
+
+  if (newPlayerIds.length === 0) return { error: "Jogadores ja inscritos neste torneio" };
+
+  await db.insert(participants).values(newPlayerIds.map((playerId) => ({ tournamentId, playerId })));
 
   revalidatePath(`/torneios/${tournamentId}`, "layout");
   return { success: true };
@@ -847,31 +862,38 @@ export async function distributePayouts(
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  await db
-    .delete(transactions)
-    .where(and(eq(transactions.tournamentId, tournamentId), eq(transactions.type, "prize")));
-
-  const transactionValues = payouts
-    .filter((p) => p.amount > 0)
-    .map((p) => ({
-      tournamentId,
-      playerId: p.playerId,
-      type: "prize" as const,
-      amount: p.amount,
-    }));
-
-  if (transactionValues.length > 0) {
-    await db.insert(transactions).values(transactionValues);
+  const ids = payouts.map((p) => p.playerId);
+  if (new Set(ids).size !== ids.length) {
+    return { error: "Mesmo jogador em mais de uma posicao" };
   }
 
-  await Promise.all(
-    payouts.map((p) =>
-      db
-        .update(participants)
-        .set({ prizeAmount: p.amount, finishPosition: p.position })
-        .where(and(eq(participants.tournamentId, tournamentId), eq(participants.playerId, p.playerId)))
-    )
-  );
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(transactions)
+      .where(and(eq(transactions.tournamentId, tournamentId), eq(transactions.type, "prize")));
+
+    const transactionValues = payouts
+      .filter((p) => p.amount > 0)
+      .map((p) => ({
+        tournamentId,
+        playerId: p.playerId,
+        type: "prize" as const,
+        amount: p.amount,
+      }));
+
+    if (transactionValues.length > 0) {
+      await tx.insert(transactions).values(transactionValues);
+    }
+
+    await Promise.all(
+      payouts.map((p) =>
+        tx
+          .update(participants)
+          .set({ prizeAmount: p.amount, finishPosition: p.position })
+          .where(and(eq(participants.tournamentId, tournamentId), eq(participants.playerId, p.playerId)))
+      )
+    );
+  });
 
   revalidatePath(`/torneios/${tournamentId}`, "layout");
   return { success: true };

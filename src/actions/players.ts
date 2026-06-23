@@ -6,6 +6,10 @@ import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/require-admin";
 
+function isUniqueViolation(e: unknown): boolean {
+  return typeof e === "object" && e !== null && "code" in e && (e as { code?: unknown }).code === "23505";
+}
+
 export async function createPlayer(formData: FormData) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
@@ -15,7 +19,12 @@ export async function createPlayer(formData: FormData) {
 
   if (!name || name.length < 2) return { error: "Nome deve ter pelo menos 2 caracteres" };
 
-  await db.insert(players).values({ name, nickname });
+  try {
+    await db.insert(players).values({ name, nickname });
+  } catch (e) {
+    if (isUniqueViolation(e)) return { error: "Apelido ja esta em uso" };
+    throw e;
+  }
 
   revalidatePath("/jogadores");
   return { success: true };
@@ -30,7 +39,12 @@ export async function updatePlayer(id: number, formData: FormData) {
 
   if (!name || name.length < 2) return { error: "Nome deve ter pelo menos 2 caracteres" };
 
-  await db.update(players).set({ name, nickname }).where(eq(players.id, id));
+  try {
+    await db.update(players).set({ name, nickname }).where(eq(players.id, id));
+  } catch (e) {
+    if (isUniqueViolation(e)) return { error: "Apelido ja esta em uso" };
+    throw e;
+  }
 
   revalidatePath("/jogadores");
   return { success: true };
@@ -50,7 +64,12 @@ export async function deletePlayer(id: number) {
     return { error: "Jogador possui torneios vinculados e nao pode ser removido" };
   }
 
-  await db.delete(players).where(eq(players.id, id));
+  try {
+    await db.delete(players).where(eq(players.id, id));
+  } catch (e) {
+    console.error("deletePlayer failed", e);
+    return { error: "Jogador possui torneios vinculados e nao pode ser removido" };
+  }
 
   revalidatePath("/jogadores");
   return { success: true };

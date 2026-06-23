@@ -33,14 +33,22 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
 
-  if (publicRoutes.some((route) => pathname.startsWith(route))) {
+  if (
+    publicRoutes.some(
+      (route) => pathname === route || pathname.startsWith(`${route}/`)
+    )
+  ) {
     return supabaseResponse;
   }
 
   if (!user) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    const redirectResponse = NextResponse.redirect(url);
+    supabaseResponse.cookies
+      .getAll()
+      .forEach((cookie) => redirectResponse.cookies.set(cookie));
+    return redirectResponse;
   }
 
   return supabaseResponse;

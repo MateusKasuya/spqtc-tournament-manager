@@ -16,12 +16,11 @@ export default async function DashboardPage() {
   const profile = await getProfile();
   if (!profile) redirect("/login");
 
-  const [activeSeason, allTournaments] = await Promise.all([
-    getActiveSeason(),
+  const activeSeason = await getActiveSeason();
+  const [allTournaments, topRanking] = await Promise.all([
     getTournaments(),
+    activeSeason ? getSeasonRanking(activeSeason.id) : Promise.resolve([]),
   ]);
-
-  const topRanking = activeSeason ? await getSeasonRanking(activeSeason.id) : [];
 
   const isAdmin = profile?.role === "admin";
 

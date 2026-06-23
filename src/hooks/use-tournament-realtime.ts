@@ -77,6 +77,7 @@ export function useTournamentRealtime<T extends TournamentTimerFields>(
           filter: `id=eq.${tournamentId}`,
         },
         (payload) => {
+          if (cancelled) return;
           const raw = payload.new as Partial<TournamentRow>;
           setTournament((prev) => mapRow(prev, raw));
         }

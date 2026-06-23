@@ -12,6 +12,8 @@ import { getPointsForPosition } from "../src/lib/points-table";
 const client = postgres(process.env.DATABASE_URL!, { prepare: false });
 const db = drizzle(client, { schema });
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 // ---------------------------------------------------------------------------
 // Dados
 // ---------------------------------------------------------------------------
@@ -128,8 +130,8 @@ const ETAPAS: Etapa[] = [
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function findOrCreatePlayer(nickname: string): Promise<number> {
-  const existing = await db
+async function findOrCreatePlayer(tx: Tx, nickname: string): Promise<number> {
+  const existing = await tx
     .select({ id: schema.players.id })
     .from(schema.players)
     .where(eq(schema.players.nickname, nickname))
@@ -137,7 +139,7 @@ async function findOrCreatePlayer(nickname: string): Promise<number> {
 
   if (existing.length > 0) return existing[0].id;
 
-  const [created] = await db
+  const [created] = await tx
     .insert(schema.players)
     .values({ name: nickname, nickname })
     .returning({ id: schema.players.id });
@@ -178,126 +180,128 @@ async function main() {
   const adminId = adminUser[0].id;
   console.log(`Admin encontrado: ${adminId}`);
 
-  // 3. Criar temporada
-  await db.update(schema.seasons).set({ isActive: false });
-  const [season] = await db
-    .insert(schema.seasons)
-    .values({
-      name: "Temporada 2026",
-      startDate: "2026-01-01",
-      isActive: true,
-    })
-    .returning({ id: schema.seasons.id });
-  console.log(`Temporada criada: id=${season.id}`);
-
-  // 4. Criar todos os jogadores (upsert por nickname)
-  const playerMap = new Map<string, number>();
-  for (const nickname of PLAYER_NICKNAMES) {
-    const id = await findOrCreatePlayer(nickname);
-    playerMap.set(nickname, id);
-  }
-  console.log(`${playerMap.size} jogadores prontos`);
-
-  // 5. Criar etapas
-  for (let i = 0; i < ETAPAS.length; i++) {
-    const etapa = ETAPAS[i];
-    console.log(`\nCriando ${etapa.name}...`);
-
-    const [tournament] = await db
-      .insert(schema.tournaments)
+  await db.transaction(async (tx) => {
+    // 3. Criar temporada
+    await tx.update(schema.seasons).set({ isActive: false });
+    const [season] = await tx
+      .insert(schema.seasons)
       .values({
-        seasonId: season.id,
-        name: etapa.name,
-        date: etapa.date,
-        status: "finished",
-        buyInAmount: 5000,
-        rebuyAmount: 3000,
-        addonAmount: 3000,
-        initialChips: 10000,
-        rebuyChips: 10000,
-        addonChips: 10000,
-        maxRebuys: 0,
-        allowAddon: true,
-        rankingFeeAmount: 2000,
-        prizePoolOverride: etapa.prizePoolOverride,
-        createdBy: adminId,
+        name: "Temporada 2026",
+        startDate: "2026-01-01",
+        isActive: true,
       })
-      .returning({ id: schema.tournaments.id });
+      .returning({ id: schema.seasons.id });
+    console.log(`Temporada criada: id=${season.id}`);
 
-    console.log(`  Tournament id=${tournament.id}`);
-
-    for (const p of etapa.participants) {
-      const playerId = playerMap.get(p.nickname);
-      if (!playerId) {
-        console.warn(`  AVISO: jogador ${p.nickname} nao encontrado, pulando`);
-        continue;
-      }
-
-      const points = getPointsForPosition(p.position);
-      const status = p.position === 1 ? "finished" : "eliminated";
-
-      // Inserir participante
-      const [participant] = await db
-        .insert(schema.participants)
-        .values({
-          tournamentId: tournament.id,
-          playerId,
-          buyInPaid: true,
-          rebuyCount: p.rebuys,
-          addonCount: p.addonCount,
-          finishPosition: p.position,
-          pointsEarned: String(points),
-          prizeAmount: p.prize,
-          status,
-          eliminatedAt: p.position === 1 ? null : etapa.date,
-        })
-        .returning({ id: schema.participants.id });
-
-      // Transacao buy-in
-      await db.insert(schema.transactions).values({
-        tournamentId: tournament.id,
-        playerId,
-        type: "buy_in",
-        amount: 5000,
-      });
-
-      // Transacoes rebuy (1 por rebuy para precisao)
-      for (let r = 0; r < p.rebuys; r++) {
-        await db.insert(schema.transactions).values({
-          tournamentId: tournament.id,
-          playerId,
-          type: "rebuy",
-          amount: 3000,
-        });
-      }
-
-      // Transacoes addon (1 por addon comprado)
-      for (let a = 0; a < p.addonCount; a++) {
-        await db.insert(schema.transactions).values({
-          tournamentId: tournament.id,
-          playerId,
-          type: "addon",
-          amount: 3000,
-        });
-      }
-
-      // Transacao premio
-      if (p.prize > 0) {
-        await db.insert(schema.transactions).values({
-          tournamentId: tournament.id,
-          playerId,
-          type: "prize",
-          amount: p.prize,
-        });
-      }
-
-      const gastos = 5000 + p.rebuys * 3000 + p.addonCount * 3000;
-      const saldo = p.prize - gastos;
-      console.log(
-        `  ${p.nickname.padEnd(12)} pos=${p.position} pts=${points} gastos=R$${gastos / 100} premio=R$${p.prize / 100} saldo=${saldo >= 0 ? "+" : ""}R$${saldo / 100}`
-      );
+    // 4. Criar todos os jogadores (upsert por nickname)
+    const playerMap = new Map<string, number>();
+    for (const nickname of PLAYER_NICKNAMES) {
+      const id = await findOrCreatePlayer(tx, nickname);
+      playerMap.set(nickname, id);
     }
-  }
+    console.log(`${playerMap.size} jogadores prontos`);
+
+    // 5. Criar etapas
+    for (let i = 0; i < ETAPAS.length; i++) {
+      const etapa = ETAPAS[i];
+      console.log(`\nCriando ${etapa.name}...`);
+
+      const [tournament] = await tx
+        .insert(schema.tournaments)
+        .values({
+          seasonId: season.id,
+          name: etapa.name,
+          date: etapa.date,
+          status: "finished",
+          buyInAmount: 5000,
+          rebuyAmount: 3000,
+          addonAmount: 3000,
+          initialChips: 10000,
+          rebuyChips: 10000,
+          addonChips: 10000,
+          maxRebuys: 0,
+          allowAddon: true,
+          rankingFeeAmount: 2000,
+          prizePoolOverride: etapa.prizePoolOverride,
+          createdBy: adminId,
+        })
+        .returning({ id: schema.tournaments.id });
+
+      console.log(`  Tournament id=${tournament.id}`);
+
+      for (const p of etapa.participants) {
+        const playerId = playerMap.get(p.nickname);
+        if (!playerId) {
+          console.warn(`  AVISO: jogador ${p.nickname} nao encontrado, pulando`);
+          continue;
+        }
+
+        const points = getPointsForPosition(p.position);
+        const status = p.position === 1 ? "finished" : "eliminated";
+
+        // Inserir participante
+        const [participant] = await tx
+          .insert(schema.participants)
+          .values({
+            tournamentId: tournament.id,
+            playerId,
+            buyInPaid: true,
+            rebuyCount: p.rebuys,
+            addonCount: p.addonCount,
+            finishPosition: p.position,
+            pointsEarned: String(points),
+            prizeAmount: p.prize,
+            status,
+            eliminatedAt: p.position === 1 ? null : etapa.date,
+          })
+          .returning({ id: schema.participants.id });
+
+        // Transacao buy-in
+        await tx.insert(schema.transactions).values({
+          tournamentId: tournament.id,
+          playerId,
+          type: "buy_in",
+          amount: 5000,
+        });
+
+        // Transacoes rebuy (1 por rebuy para precisao)
+        for (let r = 0; r < p.rebuys; r++) {
+          await tx.insert(schema.transactions).values({
+            tournamentId: tournament.id,
+            playerId,
+            type: "rebuy",
+            amount: 3000,
+          });
+        }
+
+        // Transacoes addon (1 por addon comprado)
+        for (let a = 0; a < p.addonCount; a++) {
+          await tx.insert(schema.transactions).values({
+            tournamentId: tournament.id,
+            playerId,
+            type: "addon",
+            amount: 3000,
+          });
+        }
+
+        // Transacao premio
+        if (p.prize > 0) {
+          await tx.insert(schema.transactions).values({
+            tournamentId: tournament.id,
+            playerId,
+            type: "prize",
+            amount: p.prize,
+          });
+        }
+
+        const gastos = 5000 + p.rebuys * 3000 + p.addonCount * 3000;
+        const saldo = p.prize - gastos;
+        console.log(
+          `  ${p.nickname.padEnd(12)} pos=${p.position} pts=${points} gastos=R$${gastos / 100} premio=R$${p.prize / 100} saldo=${saldo >= 0 ? "+" : ""}R$${saldo / 100}`
+        );
+      }
+    }
+  });
 
   console.log("\n✓ Seed concluido com sucesso!");
   await client.end();

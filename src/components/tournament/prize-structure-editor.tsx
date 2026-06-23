@@ -66,6 +66,7 @@ export function PrizeStructureEditor({
   const [templateName, setTemplateName] = useState("");
 
   const total = positions.reduce((sum, p) => sum + p.percentage, 0);
+  const isValidTotal = Math.abs(total - 100) < 0.01;
   const selectedTemplateObj = templates.find((t) => String(t.id) === selectedTemplate);
 
   function updatePosition(index: number, percentage: number) {
@@ -266,7 +267,7 @@ export function PrizeStructureEditor({
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSave} disabled={isPending}>
+            <Button onClick={handleSave} disabled={isPending || !isValidTotal}>
               {isPending ? "Salvando..." : "Salvar"}
             </Button>
           </div>
