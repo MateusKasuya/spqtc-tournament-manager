@@ -1,6 +1,6 @@
 import { vi, beforeAll, afterEach } from "vitest";
 import { migrateTestDb, resetTestDb, testDb } from "@/test/db";
-import { users, tournaments, players, participants } from "@/db/schema";
+import { users, tournaments, players, participants, seasons } from "@/db/schema";
 
 vi.mock("@/db", async () => ({ db: (await import("@/test/db")).testDb }));
 
@@ -25,7 +25,11 @@ vi.mock("@/lib/supabase/server", () => ({
     })),
   })),
 }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
+vi.mock("next/cache", () => ({
+  revalidatePath: vi.fn(),
+  revalidateTag: vi.fn(),
+  unstable_cache: (fn: (...args: unknown[]) => unknown) => fn,
+}));
 vi.mock("next/navigation", () => ({ redirect: vi.fn() }));
 
 beforeAll(async () => { await migrateTestDb(); });
@@ -49,6 +53,11 @@ export async function seedTournament(overrides: Partial<typeof tournaments.$infe
 export async function seedPlayer(name = "P") {
   const [p] = await testDb.insert(players).values({ name }).returning();
   return p.id;
+}
+
+export async function seedSeason(name = "S") {
+  const [s] = await testDb.insert(seasons).values({ name, startDate: "2026-01-01" }).returning();
+  return s.id;
 }
 
 export async function seedParticipant(
