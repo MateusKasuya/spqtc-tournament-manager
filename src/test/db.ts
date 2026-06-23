@@ -1,14 +1,25 @@
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
-import { migrate } from "drizzle-orm/pglite/migrator";
 import { sql } from "drizzle-orm";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import * as schema from "@/db/schema";
 
 export const pg = new PGlite();
 export const testDb = drizzle(pg, { schema });
 
+// Schema de teste gerado do schema TS (fonte única de verdade) com
+// `pnpm test:schema` (drizzle-kit export). As migrations incrementais do
+// projeto NÃO replicam limpo no pglite (a 0008 cria FK uuid->integer), por
+// isso aplicamos o DDL consolidado direto. Regenere com `pnpm test:schema`
+// sempre que o schema TS mudar.
+const schemaSql = readFileSync(
+  fileURLToPath(new URL("./schema.sql", import.meta.url)),
+  "utf8"
+);
+
 export async function migrateTestDb() {
-  await migrate(testDb, { migrationsFolder: "./src/test/migrations" });
+  await pg.exec(schemaSql);
 }
 
 export async function resetTestDb() {
