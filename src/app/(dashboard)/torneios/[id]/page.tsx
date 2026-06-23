@@ -3,7 +3,7 @@ import { getProfile } from "@/lib/get-profile";
 import { getTournamentById, getBlindStructure, getPrizeStructure } from "@/db/queries/tournaments";
 import { getBlindTemplates } from "@/db/queries/blind-templates";
 import { getPrizeTemplates } from "@/db/queries/prize-templates";
-import { getSeasonById } from "@/db/queries/seasons";
+import { getSeasons } from "@/db/queries/seasons";
 import { getParticipants } from "@/db/queries/participants";
 import { getTournamentFinancialSummary } from "@/db/queries/transactions";
 import { getAllPlayers } from "@/db/queries/players";
@@ -37,7 +37,7 @@ export default async function TorneioPage({ params }: PageProps) {
   const tournamentId = Number(id);
   if (isNaN(tournamentId)) notFound();
 
-  const [profile, tournament, blindLevels, prizePositions, blindTemplates, prizeTemplatesList, participantsList, financialSummary, allPlayers] = await Promise.all([
+  const [profile, tournament, blindLevels, prizePositions, blindTemplates, prizeTemplatesList, participantsList, financialSummary, allPlayers, seasonsList] = await Promise.all([
     getProfile(),
     getTournamentById(tournamentId),
     getBlindStructure(tournamentId),
@@ -47,12 +47,13 @@ export default async function TorneioPage({ params }: PageProps) {
     getParticipants(tournamentId),
     getTournamentFinancialSummary(tournamentId),
     getAllPlayers(),
+    getSeasons(),
   ]);
 
   if (!profile) redirect("/login");
   if (!tournament) notFound();
 
-  const season = tournament.seasonId ? await getSeasonById(tournament.seasonId) : null;
+  const season = tournament.seasonId ? seasonsList.find((s) => s.id === tournament.seasonId) ?? null : null;
   const isAdmin = profile?.role === "admin";
   const canEdit = isAdmin && !["finished", "cancelled"].includes(tournament.status);
   const isActive = ["pending", "running"].includes(tournament.status);

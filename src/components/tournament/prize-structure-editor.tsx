@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { Input } from "@/components/ui/input";
@@ -65,8 +65,25 @@ export function PrizeStructureEditor({
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [templateName, setTemplateName] = useState("");
 
-  const total = positions.reduce((sum, p) => sum + p.percentage, 0);
-  const isValidTotal = Math.abs(total - 100) < 0.01;
+  const prevOpen = useRef(open);
+  useEffect(() => {
+    if (open && !prevOpen.current) {
+      setPositions(
+        initialPositions.length > 0
+          ? initialPositions
+          : getDefaultPrizeStructure()
+      );
+      setSelectedTemplate("");
+    }
+    prevOpen.current = open;
+  }, [open, initialPositions]);
+
+  const hasIncompletePositions = positions.some((p) => Number.isNaN(p.percentage));
+  const total = positions.reduce(
+    (sum, p) => sum + (Number.isNaN(p.percentage) ? 0 : p.percentage),
+    0
+  );
+  const isValidTotal = !hasIncompletePositions && Math.abs(total - 100) < 0.01;
   const selectedTemplateObj = templates.find((t) => String(t.id) === selectedTemplate);
 
   function updatePosition(index: number, percentage: number) {
@@ -210,8 +227,13 @@ export function PrizeStructureEditor({
                   min="0"
                   max="100"
                   step="0.01"
-                  value={pos.percentage}
-                  onChange={(e) => updatePosition(index, Number(e.target.value))}
+                  value={Number.isNaN(pos.percentage) ? "" : pos.percentage}
+                  onChange={(e) =>
+                    updatePosition(
+                      index,
+                      e.target.value === "" ? NaN : Number(e.target.value)
+                    )
+                  }
                   className="h-8 text-sm"
                 />
                 <span className="text-sm text-muted-foreground">%</span>
@@ -245,7 +267,7 @@ export function PrizeStructureEditor({
                 autoFocus
                 className="flex-1"
               />
-              <Button size="sm" onClick={handleSaveTemplate} disabled={!templateName.trim() || isPending}>
+              <Button size="sm" onClick={handleSaveTemplate} disabled={!templateName.trim() || isPending || hasIncompletePositions}>
                 Salvar
               </Button>
               <Button size="sm" variant="outline" onClick={() => { setSavingTemplate(false); setTemplateName(""); }}>
