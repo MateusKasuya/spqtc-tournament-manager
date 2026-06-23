@@ -1,6 +1,6 @@
 import { vi, beforeAll, afterEach } from "vitest";
 import { migrateTestDb, resetTestDb, testDb } from "@/test/db";
-import { users, tournaments } from "@/db/schema";
+import { users, tournaments, players, participants } from "@/db/schema";
 
 vi.mock("@/db", async () => ({ db: (await import("@/test/db")).testDb }));
 
@@ -37,13 +37,23 @@ export async function seedUser() {
   }).onConflictDoNothing();
 }
 
-export async function seedTournament() {
+export async function seedTournament(overrides: Partial<typeof tournaments.$inferInsert> = {}) {
   await seedUser();
   const [t] = await testDb.insert(tournaments).values({
     name: "T", date: new Date(), buyInAmount: 100, initialChips: 10000,
-    createdBy: TEST_USER_ID,
+    createdBy: TEST_USER_ID, ...overrides,
   }).returning();
   return t.id;
+}
+
+export async function seedPlayer(name = "P") {
+  const [p] = await testDb.insert(players).values({ name }).returning();
+  return p.id;
+}
+
+export async function seedParticipant(tournamentId: number, playerId: number) {
+  const [p] = await testDb.insert(participants).values({ tournamentId, playerId }).returning();
+  return p.id;
 }
 
 export function makeLevels(n: number) {
