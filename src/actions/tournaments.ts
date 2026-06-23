@@ -212,14 +212,39 @@ export async function updateBlindStructure(
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  await db
-    .delete(blindStructures)
-    .where(eq(blindStructures.tournamentId, tournamentId));
+  try {
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(blindStructures)
+        .where(eq(blindStructures.tournamentId, tournamentId));
 
-  if (levels.length > 0) {
-    await db.insert(blindStructures).values(
-      levels.map((l) => ({ tournamentId, ...l }))
-    );
+      if (levels.length > 0) {
+        // Only map the data columns explicitly. The editor's level objects may
+        // carry stale `id`/`tournamentId` from when they were loaded (the rows
+        // come straight from the DB), and spreading those into the insert would
+        // force explicit values into the `serial` primary key — which collides
+        // with existing rows and never advances the sequence. Let the DB assign
+        // fresh ids.
+        await tx.insert(blindStructures).values(
+          levels.map((l) => ({
+            tournamentId,
+            level: l.level,
+            smallBlind: l.smallBlind,
+            bigBlind: l.bigBlind,
+            ante: l.ante,
+            durationMinutes: l.durationMinutes,
+            isBreak: l.isBreak,
+            isAddonLevel: l.isAddonLevel,
+            isBigAnte: l.isBigAnte,
+          }))
+        );
+      }
+    });
+  } catch (e) {
+    console.error("updateBlindStructure failed", e);
+    return {
+      error: e instanceof Error ? `Erro ao salvar blinds: ${e.message}` : "Erro ao salvar blinds",
+    };
   }
 
   revalidatePath(`/torneios/${tournamentId}`);
