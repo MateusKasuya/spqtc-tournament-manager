@@ -188,15 +188,26 @@ export async function updateTournamentStatus(
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
+  const [current] = await db
+    .select({ status: tournaments.status })
+    .from(tournaments)
+    .where(eq(tournaments.id, id));
+
+  if (!current) return { error: "Torneio nao encontrado" };
+  // Idempotent re-finish stays a silent no-op (test 7 relies on this).
+  if (status === "finished" && current.status === "finished") return { success: true };
+
+  const ALLOWED_TRANSITIONS: Record<string, readonly string[]> = {
+    pending: ["running", "finished", "cancelled"],
+    running: ["finished", "cancelled", "pending"],
+    finished: [],
+    cancelled: [],
+  };
+  if (!ALLOWED_TRANSITIONS[current.status]?.includes(status)) {
+    return { error: "Transicao de status invalida" };
+  }
+
   await db.transaction(async (tx) => {
-    const [current] = await tx
-      .select({ status: tournaments.status })
-      .from(tournaments)
-      .where(eq(tournaments.id, id));
-
-    if (!current) return;
-    if (status === "finished" && current.status === "finished") return;
-
     await tx
       .update(tournaments)
       .set({ status, updatedAt: new Date() })
@@ -418,7 +429,12 @@ export async function advanceBlindLevel(tournamentId: number) {
       timerStartedAt: tournament.timerRunning ? new Date() : null,
       updatedAt: new Date(),
     })
-    .where(eq(tournaments.id, tournamentId));
+    .where(
+      and(
+        eq(tournaments.id, tournamentId),
+        eq(tournaments.currentBlindLevel, tournament.currentBlindLevel)
+      )
+    );
 
   revalidatePath(`/torneios/${tournamentId}`);
   return { success: true };

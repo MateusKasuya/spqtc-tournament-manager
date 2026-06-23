@@ -4,12 +4,9 @@ export function computeBountyDistribution(
   victimParticipantId: number,
   victimBounty: number,
   eliminatorPlayerIds: number[],
-  tournamentId: number,
-  eliminatorPlayerId?: number // single eliminator shorthand
+  tournamentId: number
 ): Array<{ tournamentId: number; playerId: number; type: "bounty_earned"; amount: number; bountyChange: number; relatedParticipantId: number }> {
-  const ids = Array.from(
-    new Set(eliminatorPlayerIds.length > 0 ? eliminatorPlayerIds : eliminatorPlayerId ? [eliminatorPlayerId] : [])
-  );
+  const ids = Array.from(new Set(eliminatorPlayerIds));
   if (ids.length === 0 || victimBounty <= 0) return [];
 
   const n = ids.length;

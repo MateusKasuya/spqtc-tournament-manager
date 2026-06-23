@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/require-admin";
 import { getParticipantById, getParticipantByPlayerAndTournament, getPlayingCount } from "@/db/queries/participants";
 import { computeBountyDistribution } from "@/lib/bounty";
+import { z } from "zod";
 
 export async function addParticipant(tournamentId: number, playerId: number) {
   const auth = await requireAdmin();
@@ -855,6 +856,12 @@ export async function undoElimination(participantId: number) {
   return { success: true };
 }
 
+const payoutSchema = z.object({
+  playerId: z.number().int().positive(),
+  amount: z.number().int().min(0),
+  position: z.number().int().min(1),
+});
+
 export async function distributePayouts(
   tournamentId: number,
   payouts: { playerId: number; amount: number; position: number }[]
@@ -862,17 +869,30 @@ export async function distributePayouts(
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const ids = payouts.map((p) => p.playerId);
+  const parsed = z.array(payoutSchema).safeParse(payouts);
+  if (!parsed.success) return { error: "Premios invalidos" };
+  const items = parsed.data;
+
+  const ids = items.map((p) => p.playerId);
   if (new Set(ids).size !== ids.length) {
     return { error: "Mesmo jogador em mais de uma posicao" };
   }
+
+  const existing = ids.length
+    ? await db
+        .select({ playerId: participants.playerId })
+        .from(participants)
+        .where(and(eq(participants.tournamentId, tournamentId), inArray(participants.playerId, ids)))
+    : [];
+  const valid = new Set(existing.map((r) => r.playerId));
+  const allowed = items.filter((p) => valid.has(p.playerId));
 
   await db.transaction(async (tx) => {
     await tx
       .delete(transactions)
       .where(and(eq(transactions.tournamentId, tournamentId), eq(transactions.type, "prize")));
 
-    const transactionValues = payouts
+    const transactionValues = allowed
       .filter((p) => p.amount > 0)
       .map((p) => ({
         tournamentId,
@@ -886,7 +906,7 @@ export async function distributePayouts(
     }
 
     await Promise.all(
-      payouts.map((p) =>
+      allowed.map((p) =>
         tx
           .update(participants)
           .set({ prizeAmount: p.amount, finishPosition: p.position })
