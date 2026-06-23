@@ -28,6 +28,46 @@ const tournamentSchema = z.object({
   bountyPercentage: z.number().min(1).max(99).default(50),
 });
 
+const blindLevelsSchema = z
+  .array(
+    z.object({
+      level: z.number().int().min(0),
+      smallBlind: z.number().min(0),
+      bigBlind: z.number().min(0),
+      ante: z.number().min(0),
+      durationMinutes: z.number().min(0),
+      isBreak: z.boolean(),
+      isAddonLevel: z.boolean(),
+      isBigAnte: z.boolean(),
+    })
+  )
+  .superRefine((levels, ctx) => {
+    const seen = new Set<number>();
+    for (const l of levels) {
+      if (seen.has(l.level)) {
+        ctx.addIssue({ code: "custom", message: `Nivel ${l.level} duplicado` });
+      }
+      seen.add(l.level);
+    }
+  });
+
+const prizePositionsSchema = z
+  .array(
+    z.object({
+      position: z.number().int().min(1),
+      percentage: z.number().min(0).max(100),
+    })
+  )
+  .superRefine((items, ctx) => {
+    const seen = new Set<number>();
+    for (const item of items) {
+      if (seen.has(item.position)) {
+        ctx.addIssue({ code: "custom", message: `Posicao ${item.position} duplicada` });
+      }
+      seen.add(item.position);
+    }
+  });
+
 async function requireAdmin() {
   const supabase = await createClient();
   const {
@@ -70,29 +110,33 @@ export async function createTournament(formData: FormData) {
 
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
-  const [tournament] = await db
-    .insert(tournaments)
-    .values({
-      ...parsed.data,
-      date: new Date(parsed.data.date),
-      createdBy: auth.user.id,
-    })
-    .returning({ id: tournaments.id });
+  const tournament = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(tournaments)
+      .values({
+        ...parsed.data,
+        date: new Date(parsed.data.date),
+        createdBy: auth.user.id,
+      })
+      .returning({ id: tournaments.id });
 
-  await db.insert(blindStructures).values(
-    DEFAULT_BLIND_STRUCTURE.map((level) => ({
-      tournamentId: tournament.id,
-      ...level,
-    }))
-  );
+    await tx.insert(blindStructures).values(
+      DEFAULT_BLIND_STRUCTURE.map((level) => ({
+        tournamentId: created.id,
+        ...level,
+      }))
+    );
 
-  await db.insert(prizeStructures).values(
-    DEFAULT_PRIZE_STRUCTURE.map((p) => ({
-      tournamentId: tournament.id,
-      position: p.position,
-      percentage: String(p.percentage),
-    }))
-  );
+    await tx.insert(prizeStructures).values(
+      DEFAULT_PRIZE_STRUCTURE.map((p) => ({
+        tournamentId: created.id,
+        position: p.position,
+        percentage: String(p.percentage),
+      }))
+    );
+
+    return created;
+  });
 
   revalidatePath("/torneios");
   redirect(`/torneios/${tournament.id}`);
@@ -144,15 +188,26 @@ export async function updateTournamentStatus(
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
+  const [current] = await db
+    .select({ status: tournaments.status })
+    .from(tournaments)
+    .where(eq(tournaments.id, id));
+
+  if (!current) return { error: "Torneio nao encontrado" };
+  // Idempotent re-finish stays a silent no-op (test 7 relies on this).
+  if (status === "finished" && current.status === "finished") return { success: true };
+
+  const ALLOWED_TRANSITIONS: Record<string, readonly string[]> = {
+    pending: ["running", "finished", "cancelled"],
+    running: ["finished", "cancelled", "pending"],
+    finished: [],
+    cancelled: [],
+  };
+  if (!ALLOWED_TRANSITIONS[current.status]?.includes(status)) {
+    return { error: "Transicao de status invalida" };
+  }
+
   await db.transaction(async (tx) => {
-    const [current] = await tx
-      .select({ status: tournaments.status })
-      .from(tournaments)
-      .where(eq(tournaments.id, id));
-
-    if (!current) return;
-    if (status === "finished" && current.status === "finished") return;
-
     await tx
       .update(tournaments)
       .set({ status, updatedAt: new Date() })
@@ -211,6 +266,9 @@ export async function updateBlindStructure(
 ) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
+
+  const parsed = blindLevelsSchema.safeParse(levels);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   try {
     await db.transaction(async (tx) => {
@@ -371,7 +429,12 @@ export async function advanceBlindLevel(tournamentId: number) {
       timerStartedAt: tournament.timerRunning ? new Date() : null,
       updatedAt: new Date(),
     })
-    .where(eq(tournaments.id, tournamentId));
+    .where(
+      and(
+        eq(tournaments.id, tournamentId),
+        eq(tournaments.currentBlindLevel, tournament.currentBlindLevel)
+      )
+    );
 
   revalidatePath(`/torneios/${tournamentId}`);
   return { success: true };
@@ -441,6 +504,7 @@ export async function startBreak(tournamentId: number, durationMinutes: number) 
     .set({
       breakActive: true,
       levelRemainingSecs: levelRemaining,
+      breakTotalSecs: durationMinutes * 60,
       timerRemainingSecs: durationMinutes * 60,
       timerRunning: true,
       timerStartedAt: new Date(),
@@ -468,6 +532,7 @@ export async function endBreak(tournamentId: number) {
     .set({
       breakActive: false,
       levelRemainingSecs: null,
+      breakTotalSecs: null,
       timerRemainingSecs: tournament.levelRemainingSecs ?? 0,
       timerRunning: false,
       timerStartedAt: null,
@@ -485,6 +550,9 @@ export async function updatePrizeStructure(
 ) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
+
+  const parsed = prizePositionsSchema.safeParse(positions);
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
 
   const total = positions.reduce((sum, p) => sum + p.percentage, 0);
   if (Math.abs(total - 100) > 0.01) {

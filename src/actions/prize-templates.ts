@@ -1,29 +1,32 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { requireAdmin } from "@/lib/require-admin";
 import { db } from "@/db";
 import { prizeTemplates } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 import type { PrizeTemplateLevels } from "@/db/schema";
-
-async function requireAdmin() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: "Nao autenticado" };
-  const { data: profile } = await supabase.from("users").select("role").eq("id", user.id).single();
-  if (profile?.role !== "admin") return { error: "Apenas admins podem fazer isso" };
-  return { user };
-}
 
 export async function savePrizeTemplate(name: string, levels: PrizeTemplateLevels) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
   if (!name.trim()) return { error: "Nome obrigatorio" };
 
+  const levelsSchema = z
+    .array(
+      z.object({
+        position: z.number().int().positive(),
+        percentage: z.number().min(0).max(100),
+      })
+    )
+    .min(1);
+  const parsedLevels = levelsSchema.safeParse(levels);
+  if (!parsedLevels.success) return { error: "Estrutura de premios invalida" };
+
   const [created] = await db.insert(prizeTemplates).values({
     name: name.trim(),
-    levels,
+    levels: parsedLevels.data,
     createdBy: auth.user.id,
   }).returning({ id: prizeTemplates.id, name: prizeTemplates.name, levels: prizeTemplates.levels });
 

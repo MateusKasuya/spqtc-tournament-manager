@@ -70,6 +70,7 @@ interface Tournament {
   rankingFeeAmount: number;
   name: string;
   breakActive: boolean;
+  breakTotalSecs: number | null;
   tournamentType: string;
   bountyPercentage: number;
 }
@@ -107,7 +108,13 @@ export function MesaAoVivo({
   const currentLevel = blindLevels[currentIndex] ?? blindLevels[0];
   const nextLevel = blindLevels[currentIndex + 1] ?? null;
 
-  const totalSeconds = currentLevel ? currentLevel.durationMinutes * 60 : 0;
+  const levelTotalSeconds = currentLevel ? currentLevel.durationMinutes * 60 : 0;
+  // Durante um intervalo dinamico (startBreak), o denominador do anel e a
+  // duracao total do intervalo persistida, nao a do nivel de blind.
+  const totalSeconds =
+    liveTournament.breakActive && liveTournament.breakTotalSecs
+      ? liveTournament.breakTotalSecs
+      : levelTotalSeconds;
 
   const autoAdvancedRef = useRef(false);
   const timerPanelRef = useRef<HTMLDivElement>(null);

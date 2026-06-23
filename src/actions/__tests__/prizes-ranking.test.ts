@@ -112,6 +112,9 @@ describe("premios / pontos / ranking", () => {
     expect(Number((await getParticipantById(part))?.pointsEarned)).toBe(12);
 
     await testDb.update(participants).set({ pointsEarned: "999" }).where(eq(participants.id, part));
+    // Re-finalizar quando o torneio já está "finished" cai no early-return guard
+    // (tournaments.ts), ou seja é um no-op: os pontos não são recalculados, então 999 persiste.
+    // (Não exercita o recálculo de pontos em si — apenas confirma o curto-circuito.)
     await updateTournamentStatus(t, "finished");
     expect(Number((await getParticipantById(part))?.pointsEarned)).toBe(999);
   });

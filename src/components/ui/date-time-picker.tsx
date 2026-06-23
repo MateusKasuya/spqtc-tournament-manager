@@ -47,13 +47,13 @@ export function DateTimePicker({ value, onChange }: DateTimePickerProps) {
   }
 
   function handleHourChange(hour: string) {
-    const base = value ?? new Date();
-    onChange(applyTime(base, hour, selectedMinute));
+    if (!value) return;
+    onChange(applyTime(value, hour, selectedMinute));
   }
 
   function handleMinuteChange(minute: string) {
-    const base = value ?? new Date();
-    onChange(applyTime(base, selectedHour, minute));
+    if (!value) return;
+    onChange(applyTime(value, selectedHour, minute));
   }
 
   return (

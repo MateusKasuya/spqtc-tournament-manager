@@ -1,4 +1,4 @@
-import { pgTable, serial, integer, text, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, serial, integer, text, timestamp, index } from "drizzle-orm/pg-core";
 import { tournaments } from "./tournaments";
 import { players } from "./players";
 import { participants } from "./participants";
@@ -18,4 +18,6 @@ export const transactions = pgTable("transactions", {
   bountyChange: integer("bounty_change").notNull().default(0),
   relatedParticipantId: integer("related_participant_id").references(() => participants.id, { onDelete: "set null" }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
-});
+}, (table) => [
+  index("transactions_tournament_id_idx").on(table.tournamentId),
+]);

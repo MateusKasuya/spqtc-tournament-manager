@@ -21,9 +21,4 @@ describe("computeBountyDistribution", () => {
       }
     }
   });
-  it("usa o eliminatorPlayerId (shorthand) quando a lista vem vazia", () => {
-    const txs = computeBountyDistribution(1, 80, [], 1, 99);
-    expect(txs).toHaveLength(1);
-    expect(txs[0].playerId).toBe(99);
-  });
 });

@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { participants, players, tournaments } from "@/db/schema";
-import { eq, and, sum, count, desc, sql, isNotNull } from "drizzle-orm";
+import { eq, and, sum, count, desc, asc, sql, isNotNull } from "drizzle-orm";
 import { unstable_cache } from "next/cache";
 
 export const getSeasonRanking = unstable_cache(
@@ -26,7 +26,12 @@ export const getSeasonRanking = unstable_cache(
         )
       )
       .groupBy(participants.playerId, players.name, players.nickname)
-      .orderBy(desc(sql`total_points`));
+      .orderBy(
+        desc(sql`total_points`),
+        desc(sql`wins`),
+        asc(sql`best_position`),
+        asc(players.name)
+      );
   },
   ["season-ranking"],
   { revalidate: 60, tags: ["ranking"] }

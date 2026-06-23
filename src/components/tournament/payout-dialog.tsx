@@ -94,6 +94,12 @@ export function PayoutDialog({
           position: e.position,
         }));
 
+      const ids = payouts.map((p) => p.playerId);
+      if (new Set(ids).size !== ids.length) {
+        toast.error("Mesmo jogador em mais de uma posicao");
+        return;
+      }
+
       const result = await distributePayouts(tournamentId, payouts);
       if (result && "error" in result) {
         toast.error(result.error);

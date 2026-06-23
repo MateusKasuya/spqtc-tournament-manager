@@ -18,7 +18,7 @@ export const participants = pgTable("participants", {
   pointsEarned: numeric("points_earned", { precision: 10, scale: 2 }).notNull().default("0"),
   prizeAmount: integer("prize_amount").notNull().default(0),
   currentBounty: integer("current_bounty").notNull().default(0),
-  eliminatedByIds: jsonb("eliminated_by_ids").notNull().default([]),
+  eliminatedByIds: jsonb("eliminated_by_ids").$type<number[]>().notNull().default([]),
   bountiesCollected: integer("bounties_collected").notNull().default(0),
   eliminatedAt: timestamp("eliminated_at", { withTimezone: true }),
   status: text("status", {
