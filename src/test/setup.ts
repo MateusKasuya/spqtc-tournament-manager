@@ -1,6 +1,6 @@
 import { vi, beforeAll, afterEach } from "vitest";
 import { migrateTestDb, resetTestDb, testDb } from "@/test/db";
-import { users, tournaments } from "@/db/schema";
+import { users, tournaments, players, participants } from "@/db/schema";
 
 vi.mock("@/db", async () => ({ db: (await import("@/test/db")).testDb }));
 
@@ -37,13 +37,38 @@ export async function seedUser() {
   }).onConflictDoNothing();
 }
 
-export async function seedTournament() {
+export async function seedTournament(overrides: Partial<typeof tournaments.$inferInsert> = {}) {
   await seedUser();
   const [t] = await testDb.insert(tournaments).values({
     name: "T", date: new Date(), buyInAmount: 100, initialChips: 10000,
-    createdBy: TEST_USER_ID,
+    createdBy: TEST_USER_ID, ...overrides,
   }).returning();
   return t.id;
+}
+
+export async function seedPlayer(name = "P") {
+  const [p] = await testDb.insert(players).values({ name }).returning();
+  return p.id;
+}
+
+export async function seedParticipant(
+  tournamentId: number,
+  playerId: number,
+  overrides: Partial<typeof participants.$inferInsert> = {}
+) {
+  const [p] = await testDb.insert(participants)
+    .values({ tournamentId, playerId, ...overrides }).returning();
+  return p.id;
+}
+
+// N jogadores distintos, todos status "playing" — retorna os participantIds em ordem
+export async function seedPlayingParticipants(tournamentId: number, count: number) {
+  const ids: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const playerId = await seedPlayer(`P${i}`);
+    ids.push(await seedParticipant(tournamentId, playerId, { status: "playing", buyInPaid: true }));
+  }
+  return ids;
 }
 
 export function makeLevels(n: number) {
