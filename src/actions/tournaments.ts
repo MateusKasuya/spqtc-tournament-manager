@@ -491,18 +491,27 @@ export async function updatePrizeStructure(
     return { error: `Percentuais devem somar 100% (atual: ${total}%)` };
   }
 
-  await db
-    .delete(prizeStructures)
-    .where(eq(prizeStructures.tournamentId, tournamentId));
+  try {
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(prizeStructures)
+        .where(eq(prizeStructures.tournamentId, tournamentId));
 
-  if (positions.length > 0) {
-    await db.insert(prizeStructures).values(
-      positions.map((p) => ({
-        tournamentId,
-        position: p.position,
-        percentage: String(p.percentage),
-      }))
-    );
+      if (positions.length > 0) {
+        await tx.insert(prizeStructures).values(
+          positions.map((p) => ({
+            tournamentId,
+            position: p.position,
+            percentage: String(p.percentage),
+          }))
+        );
+      }
+    });
+  } catch (e) {
+    console.error("updatePrizeStructure failed", e);
+    return {
+      error: e instanceof Error ? `Erro ao salvar premios: ${e.message}` : "Erro ao salvar premios",
+    };
   }
 
   revalidatePath(`/torneios/${tournamentId}`);
