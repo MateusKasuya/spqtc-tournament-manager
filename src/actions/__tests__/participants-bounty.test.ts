@@ -147,4 +147,26 @@ describe("bounty", () => {
     expect(p1?.bountiesCollected).toBe(0);
     expect((await getTournamentFinancialSummary(t)).bounty_earned).toBe(0);
   });
+
+  it("10. [regressao] undoRebuy bloqueado apos eliminacao (nao varre bounty posterior)", async () => {
+    const t = await seedTournament({ ...BOUNTY_CONFIG, rebuyAmount: 60 });
+    const { players, parts } = await setupBounty(t, 3);
+
+    await addRebuy(parts[0], [players[1]]); // P0 rebuy: P1 coleta 20; P0 bounty novo 30, playing
+    await eliminatePlayer(parts[0], [players[2]]); // P0 eliminado por P2: P2 coleta 15
+
+    // undoRebuy num jogador ja eliminado deve ser bloqueado (guard de status)
+    const res = await undoRebuy(parts[0]);
+    expect(res).toHaveProperty("error");
+
+    // a eliminacao posterior (P2) NAO foi varrida pelo antigo gte
+    const p0 = await getParticipantById(parts[0]);
+    expect(p0?.status).toBe("eliminated");
+    expect(p0?.rebuyCount).toBe(1);
+    const p2 = await getParticipantById(parts[2]);
+    expect(p2?.bountiesCollected).toBe(15);
+    expect(p2?.currentBounty).toBe(55);
+    // ledger intacto: 20 (rebuy) + 15 (eliminacao) = 35
+    expect((await getTournamentFinancialSummary(t)).bounty_earned).toBe(35);
+  });
 });

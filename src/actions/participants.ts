@@ -2,7 +2,7 @@
 
 import { db } from "@/db";
 import { participants, transactions, tournaments } from "@/db/schema";
-import { eq, and, desc, inArray, gte } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/require-admin";
 import { getParticipantById, getParticipantByPlayerAndTournament, getPlayingCount } from "@/db/queries/participants";
@@ -392,6 +392,9 @@ export async function undoRebuy(participantId: number) {
   const participant = await getParticipantById(participantId);
   if (!participant) return { error: "Participante nao encontrado" };
   if (participant.rebuyCount <= 0) return { error: "Nenhum rebuy para desfazer" };
+  if (participant.status !== "playing") {
+    return { error: "Desfaca a eliminacao antes de desfazer o rebuy" };
+  }
 
   const [tournament] = await db
     .select({ tournamentType: tournaments.tournamentType, bountyPercentage: tournaments.bountyPercentage, rebuyAmount: tournaments.rebuyAmount })
@@ -447,7 +450,7 @@ export async function undoRebuy(participantId: number) {
             eq(transactions.tournamentId, participant.tournamentId),
             eq(transactions.type, "bounty_earned"),
             eq(transactions.relatedParticipantId, participant.id),
-            gte(transactions.createdAt, lastRebuyTx.createdAt)
+            eq(transactions.createdAt, lastRebuyTx.createdAt)
           )
         );
 
@@ -483,7 +486,7 @@ export async function undoRebuy(participantId: number) {
             eq(transactions.tournamentId, participant.tournamentId),
             eq(transactions.type, "bounty_earned"),
             eq(transactions.relatedParticipantId, participant.id),
-            gte(transactions.createdAt, lastRebuyTx.createdAt)
+            eq(transactions.createdAt, lastRebuyTx.createdAt)
           )
         );
 
