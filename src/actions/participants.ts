@@ -716,6 +716,61 @@ export async function undoElimination(participantId: number) {
   const isBounty = tournament.tournamentType === "bounty_builder";
 
   await db.transaction(async (tx) => {
+    // Se esta foi a eliminação final, ela coroou um campeão automaticamente.
+    // Descoroar ANTES de reverter a vítima e restaurar o bounty próprio que o
+    // campeão coletou ao ser coroado — senão essa transação fica órfã e o
+    // currentBounty/bountiesCollected dele ficam errados.
+    if (participant.status === "eliminated") {
+      const [champion] = await tx
+        .select({ id: participants.id, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
+        .from(participants)
+        .where(
+          and(
+            eq(participants.tournamentId, participant.tournamentId),
+            eq(participants.status, "finished")
+          )
+        );
+
+      if (champion) {
+        if (isBounty) {
+          const selfTxs = await tx
+            .select({ amount: transactions.amount, bountyChange: transactions.bountyChange })
+            .from(transactions)
+            .where(
+              and(
+                eq(transactions.tournamentId, participant.tournamentId),
+                eq(transactions.type, "bounty_earned"),
+                eq(transactions.relatedParticipantId, champion.id)
+              )
+            );
+          const restored = selfTxs.reduce((sum, b) => sum + b.amount + b.bountyChange, 0);
+          if (selfTxs.length > 0) {
+            await tx.delete(transactions).where(
+              and(
+                eq(transactions.tournamentId, participant.tournamentId),
+                eq(transactions.type, "bounty_earned"),
+                eq(transactions.relatedParticipantId, champion.id)
+              )
+            );
+          }
+          await tx
+            .update(participants)
+            .set({
+              status: "playing",
+              finishPosition: null,
+              currentBounty: champion.currentBounty + restored,
+              bountiesCollected: Math.max(0, champion.bountiesCollected - restored),
+            })
+            .where(eq(participants.id, champion.id));
+        } else {
+          await tx
+            .update(participants)
+            .set({ status: "playing", finishPosition: null })
+            .where(eq(participants.id, champion.id));
+        }
+      }
+    }
+
     if (isBounty) {
       const bountyTxs = await tx
         .select({ id: transactions.id, playerId: transactions.playerId, amount: transactions.amount, bountyChange: transactions.bountyChange })
@@ -778,18 +833,6 @@ export async function undoElimination(participantId: number) {
         .update(participants)
         .set({ status: "playing", finishPosition: null, eliminatedAt: null })
         .where(eq(participants.id, participantId));
-    }
-
-    if (participant.status === "eliminated") {
-      await tx
-        .update(participants)
-        .set({ status: "playing", finishPosition: null })
-        .where(
-          and(
-            eq(participants.tournamentId, participant.tournamentId),
-            eq(participants.status, "finished")
-          )
-        );
     }
   });
 
