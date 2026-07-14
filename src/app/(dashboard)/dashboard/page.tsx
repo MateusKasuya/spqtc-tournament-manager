@@ -6,7 +6,7 @@ import { getSeasonRanking } from "@/db/queries/ranking";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { StatusBadge } from "@/components/tournament/status-badge";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatPoints } from "@/lib/format";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarDays, Plus, Trophy } from "lucide-react";
@@ -148,7 +148,7 @@ export default async function DashboardPage() {
                     {entry.playerNickname ?? entry.playerName}
                   </span>
                 </div>
-                <span className="text-sm font-semibold">{Number(entry.totalPoints ?? 0)} pts</span>
+                <span className="text-sm font-semibold">{formatPoints(entry.totalPoints)} pts</span>
               </Link>
             ))}
           </CardContent>
