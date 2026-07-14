@@ -12,3 +12,11 @@ const DEFAULT_POINTS = 1;
 export function getPointsForPosition(position: number): number {
   return POINTS_TABLE[position] ?? DEFAULT_POINTS;
 }
+
+// Bônus de ranking por eliminação em torneios bounty: cada knockout coletado
+// (uma transação bounty_earned) rende este valor ao eliminador.
+export const ELIMINATION_BONUS_POINTS = 0.25;
+
+export function computeParticipantPoints(position: number, knockouts: number): number {
+  return getPointsForPosition(position) + knockouts * ELIMINATION_BONUS_POINTS;
+}

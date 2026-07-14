@@ -9,6 +9,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trophy, Medal, Award } from "lucide-react";
 import Link from "next/link";
+import { formatPoints } from "@/lib/format";
 
 interface RankingEntry {
   playerId: number;
@@ -110,13 +111,13 @@ export function RankingTable({ ranking, pointsByTournament, seasonTournaments }:
                       </Link>
                     </TableCell>
                     <TableCell className="text-center font-bold">
-                      {Number(entry.totalPoints ?? 0)}
+                      {formatPoints(entry.totalPoints)}
                     </TableCell>
                     {seasonTournaments.map((t) => {
                       const pts = playerPoints?.get(t.id);
                       return (
                         <TableCell key={t.id} className="text-center text-sm">
-                          {pts !== undefined ? pts : (
+                          {pts !== undefined ? formatPoints(pts) : (
                             <span className="text-muted-foreground">-</span>
                           )}
                         </TableCell>

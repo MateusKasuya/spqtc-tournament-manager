@@ -2,9 +2,9 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
-import { tournaments, blindStructures, prizeStructures, participants } from "@/db/schema";
-import { eq, and, isNotNull, gt, asc } from "drizzle-orm";
-import { getPointsForPosition } from "@/lib/points-table";
+import { tournaments, blindStructures, prizeStructures, participants, transactions } from "@/db/schema";
+import { eq, and, isNotNull, gt, asc, count, ne } from "drizzle-orm";
+import { computeParticipantPoints } from "@/lib/points-table";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -189,7 +189,7 @@ export async function updateTournamentStatus(
   if ("error" in auth) return auth;
 
   const [current] = await db
-    .select({ status: tournaments.status })
+    .select({ status: tournaments.status, tournamentType: tournaments.tournamentType })
     .from(tournaments)
     .where(eq(tournaments.id, id));
 
@@ -214,17 +214,44 @@ export async function updateTournamentStatus(
       .where(eq(tournaments.id, id));
 
     if (status === "finished") {
+      const isBounty = current.tournamentType === "bounty_builder";
+
+      // Knockouts por eliminador, a partir do ledger de bounty.
+      // Exclui a auto-coleta do campeão: bounty_earned onde o eliminador é o
+      // próprio dono da participação relacionada (playerId == related.playerId).
+      const koByPlayer = new Map<number, number>();
+      if (isBounty) {
+        const koRows = await tx
+          .select({ playerId: transactions.playerId, ko: count(transactions.id) })
+          .from(transactions)
+          .innerJoin(participants, eq(transactions.relatedParticipantId, participants.id))
+          .where(
+            and(
+              eq(transactions.tournamentId, id),
+              eq(transactions.type, "bounty_earned"),
+              ne(transactions.playerId, participants.playerId)
+            )
+          )
+          .groupBy(transactions.playerId);
+        for (const r of koRows) koByPlayer.set(r.playerId, Number(r.ko));
+      }
+
       const finishedParticipants = await tx
-        .select({ id: participants.id, finishPosition: participants.finishPosition })
+        .select({
+          id: participants.id,
+          playerId: participants.playerId,
+          finishPosition: participants.finishPosition,
+        })
         .from(participants)
         .where(and(eq(participants.tournamentId, id), isNotNull(participants.finishPosition)));
 
       for (const p of finishedParticipants) {
         if (p.finishPosition) {
-          const points = getPointsForPosition(p.finishPosition);
+          const knockouts = koByPlayer.get(p.playerId) ?? 0;
+          const points = computeParticipantPoints(p.finishPosition, knockouts);
           await tx
             .update(participants)
-            .set({ pointsEarned: String(points) })
+            .set({ pointsEarned: points.toFixed(2) })
             .where(eq(participants.id, p.id));
         }
       }

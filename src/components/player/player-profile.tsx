@@ -7,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatPoints } from "@/lib/format";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ArrowLeft } from "lucide-react";
@@ -87,7 +87,7 @@ export function PlayerProfile({ player, stats, seasonHistory, seasonName }: Play
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Pontos totais" value={String(Number(stats?.totalPoints ?? 0))} />
+        <StatCard label="Pontos totais" value={formatPoints(stats?.totalPoints)} />
         <StatCard label="Torneios" value={String(stats?.tournamentsPlayed ?? 0)} />
         <StatCard label="Vitorias" value={String(stats?.wins ?? 0)} />
         <StatCard
@@ -156,7 +156,7 @@ export function PlayerProfile({ player, stats, seasonHistory, seasonName }: Play
                             {entry.finishPosition ? `${entry.finishPosition}°` : "-"}
                           </TableCell>
                           <TableCell className="text-center text-sm">
-                            {Number(entry.pointsEarned)}
+                            {formatPoints(entry.pointsEarned)}
                           </TableCell>
                           <TableCell className="text-right text-sm">
                             {formatCurrency(gastos)}
