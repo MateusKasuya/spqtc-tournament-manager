@@ -2,12 +2,22 @@
 
 import { db } from "@/db";
 import { participants, transactions, tournaments } from "@/db/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/require-admin";
 import { getParticipantById, getParticipantByPlayerAndTournament, getPlayingCount } from "@/db/queries/participants";
 import { computeBountyDistribution } from "@/lib/bounty";
 import { z } from "zod";
+
+// transactions.created_at is timestamptz (microsecond precision), but JS Date only
+// has millisecond precision — reading it into a Date and comparing back via eq()
+// silently drops the sub-millisecond digits, so the equality almost never matches
+// in real Postgres (pglite's coarser clock hides this in tests). Casting to text
+// keeps the exact stored value and the comparison never leaves SQL.
+const CREATED_AT_TEXT = sql<string>`${transactions.createdAt}::text`;
+function sameCreatedAt(createdAtText: string) {
+  return eq(transactions.createdAt, sql`${createdAtText}::timestamptz`);
+}
 
 export async function addParticipant(tournamentId: number, playerId: number) {
   const auth = await requireAdmin();
@@ -404,7 +414,7 @@ export async function undoRebuy(participantId: number) {
   const isBounty = tournament.tournamentType === "bounty_builder";
 
   const [lastRebuyTx] = await db
-    .select({ id: transactions.id, createdAt: transactions.createdAt })
+    .select({ id: transactions.id, createdAt: CREATED_AT_TEXT })
     .from(transactions)
     .where(
       and(
@@ -433,7 +443,7 @@ export async function undoRebuy(participantId: number) {
               eq(transactions.playerId, participant.playerId),
               eq(transactions.tournamentId, participant.tournamentId),
               eq(transactions.type, "rebuy"),
-              eq(transactions.createdAt, lastRebuyTx.createdAt)
+              sameCreatedAt(lastRebuyTx.createdAt)
             )
           )
           .limit(1)
@@ -450,7 +460,7 @@ export async function undoRebuy(participantId: number) {
             eq(transactions.tournamentId, participant.tournamentId),
             eq(transactions.type, "bounty_earned"),
             eq(transactions.relatedParticipantId, participant.id),
-            eq(transactions.createdAt, lastRebuyTx.createdAt)
+            sameCreatedAt(lastRebuyTx.createdAt)
           )
         );
 
@@ -486,7 +496,7 @@ export async function undoRebuy(participantId: number) {
             eq(transactions.tournamentId, participant.tournamentId),
             eq(transactions.type, "bounty_earned"),
             eq(transactions.relatedParticipantId, participant.id),
-            eq(transactions.createdAt, lastRebuyTx.createdAt)
+            sameCreatedAt(lastRebuyTx.createdAt)
           )
         );
 
@@ -753,7 +763,7 @@ export async function undoElimination(participantId: number) {
       if (champion) {
         if (isBounty) {
           const [latestSelf] = await tx
-            .select({ createdAt: transactions.createdAt })
+            .select({ createdAt: CREATED_AT_TEXT })
             .from(transactions)
             .where(
               and(
@@ -775,7 +785,7 @@ export async function undoElimination(participantId: number) {
                     eq(transactions.tournamentId, participant.tournamentId),
                     eq(transactions.type, "bounty_earned"),
                     eq(transactions.relatedParticipantId, champion.id),
-                    eq(transactions.createdAt, latestSelf.createdAt)
+                    sameCreatedAt(latestSelf.createdAt)
                   )
                 )
             : [];
@@ -786,7 +796,7 @@ export async function undoElimination(participantId: number) {
                 eq(transactions.tournamentId, participant.tournamentId),
                 eq(transactions.type, "bounty_earned"),
                 eq(transactions.relatedParticipantId, champion.id),
-                eq(transactions.createdAt, latestSelf.createdAt)
+                sameCreatedAt(latestSelf.createdAt)
               )
             );
           }
@@ -813,7 +823,7 @@ export async function undoElimination(participantId: number) {
       // compartilham o mesmo timestamp. Escopar a reversao a esse timestamp
       // evita varrer bounties de rebuys anteriores da mesma vitima.
       const [latestElim] = await tx
-        .select({ createdAt: transactions.createdAt })
+        .select({ createdAt: CREATED_AT_TEXT })
         .from(transactions)
         .where(
           and(
@@ -834,7 +844,7 @@ export async function undoElimination(participantId: number) {
                 eq(transactions.tournamentId, participant.tournamentId),
                 eq(transactions.type, "bounty_earned"),
                 eq(transactions.relatedParticipantId, participant.id),
-                eq(transactions.createdAt, latestElim.createdAt)
+                sameCreatedAt(latestElim.createdAt)
               )
             )
         : [];
@@ -871,7 +881,7 @@ export async function undoElimination(participantId: number) {
             eq(transactions.tournamentId, participant.tournamentId),
             eq(transactions.type, "bounty_earned"),
             eq(transactions.relatedParticipantId, participant.id),
-            eq(transactions.createdAt, latestElim.createdAt)
+            sameCreatedAt(latestElim.createdAt)
           )
         );
 

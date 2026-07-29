@@ -85,6 +85,11 @@ async function requireAdmin() {
   return { user };
 }
 
+function toIsoOrNull(value: Date | string | null): string | null {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
 export async function createTournament(formData: FormData) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
@@ -299,6 +304,36 @@ export async function updateBlindStructure(
 
   try {
     await db.transaction(async (tx) => {
+      const [tournament] = await tx
+        .select({ currentBlindLevel: tournaments.currentBlindLevel })
+        .from(tournaments)
+        .where(eq(tournaments.id, tournamentId));
+
+      // O editor renumera TODOS os niveis sequencialmente a cada
+      // reorder/remove/add/troca de template, entao o currentBlindLevel
+      // salvo no torneio pode passar a apontar pra um nivel diferente do
+      // que ele realmente estava jogando assim que a pagina for recarregada
+      // (o valor persistido nao muda, so o conteudo por tras do numero).
+      const [oldCurrent] = tournament
+        ? await tx
+            .select({
+              smallBlind: blindStructures.smallBlind,
+              bigBlind: blindStructures.bigBlind,
+              ante: blindStructures.ante,
+              durationMinutes: blindStructures.durationMinutes,
+              isBreak: blindStructures.isBreak,
+              isAddonLevel: blindStructures.isAddonLevel,
+              isBigAnte: blindStructures.isBigAnte,
+            })
+            .from(blindStructures)
+            .where(
+              and(
+                eq(blindStructures.tournamentId, tournamentId),
+                eq(blindStructures.level, tournament.currentBlindLevel)
+              )
+            )
+        : [];
+
       await tx
         .delete(blindStructures)
         .where(eq(blindStructures.tournamentId, tournamentId));
@@ -323,6 +358,53 @@ export async function updateBlindStructure(
             isBigAnte: l.isBigAnte,
           }))
         );
+      }
+
+      if (tournament && oldCurrent) {
+        // Reancora pelo conteudo do nivel antigo (achando pra onde ele foi
+        // renumerado). Se nao achar — o proprio nivel atual foi editado ou
+        // removido — preserva o mesmo numero quando ele ainda existir, ou
+        // usa o mais proximo valido como ultimo recurso.
+        const matched = levels.find(
+          (l) =>
+            l.smallBlind === oldCurrent.smallBlind &&
+            l.bigBlind === oldCurrent.bigBlind &&
+            l.ante === oldCurrent.ante &&
+            l.durationMinutes === oldCurrent.durationMinutes &&
+            l.isBreak === oldCurrent.isBreak &&
+            l.isAddonLevel === oldCurrent.isAddonLevel &&
+            l.isBigAnte === oldCurrent.isBigAnte
+        );
+
+        if (matched) {
+          if (matched.level !== tournament.currentBlindLevel) {
+            await tx
+              .update(tournaments)
+              .set({ currentBlindLevel: matched.level, updatedAt: new Date() })
+              .where(eq(tournaments.id, tournamentId));
+          }
+        } else {
+          const stillExists = levels.some((l) => l.level === tournament.currentBlindLevel);
+          const newLevel = stillExists
+            ? tournament.currentBlindLevel
+            : Math.max(1, Math.min(tournament.currentBlindLevel, levels.length));
+          const newLevelRow = levels.find((l) => l.level === newLevel);
+
+          await tx
+            .update(tournaments)
+            .set({
+              currentBlindLevel: newLevel,
+              // O nivel mudou de identidade (valores alterados ou removido):
+              // nao ha como saber quanto tempo ja tinha passado nele, entao
+              // pausa e reseta pra duracao cheia em vez de continuar contando
+              // um tempo que nao corresponde a esse nivel.
+              timerRunning: false,
+              timerStartedAt: null,
+              timerRemainingSecs: newLevelRow ? newLevelRow.durationMinutes * 60 : null,
+              updatedAt: new Date(),
+            })
+            .where(eq(tournaments.id, tournamentId));
+        }
       }
     });
   } catch (e) {
@@ -420,7 +502,7 @@ export async function pauseTimer(tournamentId: number) {
   return { success: true };
 }
 
-export async function advanceBlindLevel(tournamentId: number) {
+export async function advanceBlindLevel(tournamentId: number, expectedTimerStartedAt?: string | null) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
@@ -428,11 +510,25 @@ export async function advanceBlindLevel(tournamentId: number) {
     .select({
       currentBlindLevel: tournaments.currentBlindLevel,
       timerRunning: tournaments.timerRunning,
+      timerStartedAt: tournaments.timerStartedAt,
     })
     .from(tournaments)
     .where(eq(tournaments.id, tournamentId));
 
   if (!tournament) return { error: "Torneio nao encontrado" };
+
+  // Guarda de idempotencia usada pelo auto-advance do cliente: quando o
+  // countdown chega a zero em mais de uma aba/dispositivo admin ao mesmo
+  // tempo, cada chamada le o estado corrente (ja avancado pela outra) e
+  // avancaria de novo, pulando um nivel inteiro. So aplica quando o chamador
+  // passa o timerStartedAt que observou — o clique manual de "proximo nivel"
+  // nao passa nada e continua incondicional.
+  if (
+    expectedTimerStartedAt !== undefined &&
+    toIsoOrNull(tournament.timerStartedAt) !== expectedTimerStartedAt
+  ) {
+    return { success: true };
+  }
 
   const [nextLevel] = await db
     .select()
@@ -548,11 +644,15 @@ export async function endBreak(tournamentId: number) {
   if ("error" in auth) return auth;
 
   const [tournament] = await db
-    .select({ levelRemainingSecs: tournaments.levelRemainingSecs })
+    .select({ levelRemainingSecs: tournaments.levelRemainingSecs, breakActive: tournaments.breakActive })
     .from(tournaments)
     .where(eq(tournaments.id, tournamentId));
 
   if (!tournament) return { error: "Torneio nao encontrado" };
+  // Idempotente: se duas abas admin disparam o auto-advance no mesmo instante
+  // (countdown do intervalo chegando a zero em ambas), a segunda chamada acha
+  // o intervalo ja encerrado e nao deve zerar timerRemainingSecs de novo.
+  if (!tournament.breakActive) return { success: true };
 
   await db
     .update(tournaments)

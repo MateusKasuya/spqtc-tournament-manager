@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { sql } from "drizzle-orm";
 import {
   confirmBuyIn,
   eliminatePlayer,
@@ -9,6 +10,7 @@ import {
 import { getParticipantById } from "@/db/queries/participants";
 import { getTournamentFinancialSummary } from "@/db/queries/transactions";
 import { seedTournament, seedPlayer, seedParticipant } from "@/test/setup";
+import { testDb } from "@/test/db";
 
 const BOUNTY_CONFIG = {
   tournamentType: "bounty_builder" as const,
@@ -191,5 +193,38 @@ describe("bounty", () => {
     expect(p2?.bountiesCollected).toBe(0);
     // ledger: so o bounty do rebuy (20) permanece
     expect((await getTournamentFinancialSummary(t)).bounty_earned).toBe(20);
+  });
+
+  it("12. [regressao] undoElimination reverte bounty mesmo com created_at de microssegundos nao-redondo", async () => {
+    // Reproduz o bug real de producao: Postgres real quase nunca gera now()
+    // com microssegundos == 0, mas o codigo antigo comparava timestamps via
+    // JS Date (que so tem precisao de milissegundo), entao a busca pela
+    // bounty_earned da eliminacao nunca batia e o undo virava um no-op de
+    // bounty (so restaurava o status, sem devolver o dinheiro).
+    const t = await seedTournament(BOUNTY_CONFIG);
+    const { players, parts } = await setupBounty(t, 3);
+
+    await testDb.execute(sql`
+      UPDATE participants
+      SET status = 'eliminated', finish_position = 2, eliminated_at = now(),
+          eliminated_by_ids = ${JSON.stringify([players[1]])}::jsonb, current_bounty = 0
+      WHERE id = ${parts[0]}
+    `);
+    await testDb.execute(sql`
+      INSERT INTO transactions (tournament_id, player_id, type, amount, bounty_change, related_participant_id, created_at)
+      VALUES (${t}, ${players[1]}, 'bounty_earned', 20, 20, ${parts[0]}, '2026-01-01 00:00:00.123457+00')
+    `);
+    await testDb.execute(sql`
+      UPDATE participants SET current_bounty = 60, bounties_collected = 20 WHERE id = ${parts[1]}
+    `);
+
+    await undoElimination(parts[0]);
+
+    const p0 = await getParticipantById(parts[0]);
+    expect(p0?.status).toBe("playing");
+    expect(p0?.currentBounty).toBe(40);
+    const p1 = await getParticipantById(parts[1]);
+    expect(p1?.currentBounty).toBe(40);
+    expect(p1?.bountiesCollected).toBe(0);
   });
 });
