@@ -137,6 +137,13 @@ export function MesaAoVivo({
   useEffect(() => {
     if (remainingSeconds === 0 && isRunning && isAdmin && !autoAdvancedRef.current) {
       autoAdvancedRef.current = true;
+      // Passa o timerStartedAt observado como trava de idempotencia: se outra
+      // aba/dispositivo admin ja processou este mesmo fim de nivel, o servidor
+      // reconhece que o estado mudou e ignora esta chamada em vez de avancar
+      // (ou encerrar o intervalo) de novo — evita pular um nivel de blind.
+      const expectedTimerStartedAt = liveTournament.timerStartedAt
+        ? new Date(liveTournament.timerStartedAt).toISOString()
+        : null;
       if (liveTournament.breakActive) {
         playLevelSound();
         startTransition(async () => {
@@ -145,14 +152,14 @@ export function MesaAoVivo({
       } else {
         playLevelSound();
         startTransition(async () => {
-          await advanceBlindLevel(tournament.id);
+          await advanceBlindLevel(tournament.id, expectedTimerStartedAt);
         });
       }
     }
     if (remainingSeconds > 0) {
       autoAdvancedRef.current = false;
     }
-  }, [remainingSeconds, isRunning, isAdmin, tournament.id, liveTournament.breakActive]);
+  }, [remainingSeconds, isRunning, isAdmin, tournament.id, liveTournament.breakActive, liveTournament.timerStartedAt]);
 
   if (!currentLevel) {
     return (
