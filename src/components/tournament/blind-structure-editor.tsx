@@ -131,12 +131,17 @@ export function BlindStructureEditor({
 
   function handleSave() {
     startTransition(async () => {
-      const result = await updateBlindStructure(tournamentId, levels);
-      if (result && "error" in result) {
-        toast.error(result.error);
-      } else {
-        toast.success("Estrutura de blinds atualizada!");
-        setOpen(false);
+      try {
+        const result = await updateBlindStructure(tournamentId, levels);
+        if (result && "error" in result) {
+          toast.error(result.error);
+        } else {
+          toast.success("Estrutura de blinds atualizada!");
+          setOpen(false);
+        }
+      } catch (e) {
+        console.error("handleSave blinds failed", e);
+        toast.error(e instanceof Error ? e.message : "Erro inesperado ao salvar blinds");
       }
     });
   }
