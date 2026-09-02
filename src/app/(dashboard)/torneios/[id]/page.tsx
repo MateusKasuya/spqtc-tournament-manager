@@ -23,6 +23,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { buttonVariants } from "@/components/ui/button-variants";
 import { formatCurrency, formatChips } from "@/lib/format";
+import { calculateRoundedPrizeAmounts } from "@/lib/prize";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ArrowLeft, Pencil, Monitor } from "lucide-react";
@@ -77,6 +78,10 @@ export default async function TorneioPage({ params }: PageProps) {
     ? participantsList.reduce((sum, p) => sum + (p.currentBounty ?? 0) + (p.bountiesCollected ?? 0), 0)
     : 0;
   const prizePool = tournament.prizePoolOverride ?? (isBountyTournament ? rawNet - totalBountyAllocated : rawNet);
+  const roundedPrizeAmounts = calculateRoundedPrizeAmounts(
+    prizePool,
+    prizeData.map((p) => p.percentage)
+  );
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -280,12 +285,12 @@ export default async function TorneioPage({ params }: PageProps) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {prizeData.map((p) => (
+                  {prizeData.map((p, index) => (
                     <TableRow key={p.position}>
                       <TableCell className="font-medium">{p.position}º lugar</TableCell>
                       <TableCell>{p.percentage}%</TableCell>
                       <TableCell className="text-muted-foreground">
-                        {formatCurrency(Math.round(prizePool * p.percentage / 100))}
+                        {formatCurrency(roundedPrizeAmounts[index])}
                       </TableCell>
                     </TableRow>
                   ))}

@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { distributePayouts } from "@/actions/participants";
 import { formatCurrency } from "@/lib/format";
+import { calculateRoundedPrizeAmounts } from "@/lib/prize";
 import { Trophy, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -57,17 +58,20 @@ export function PayoutDialog({
     .filter((p) => p.finishPosition !== null)
     .sort((a, b) => (a.finishPosition ?? 99) - (b.finishPosition ?? 99));
 
-  const [entries, setEntries] = useState<PayoutEntry[]>(() =>
-    prizePositions.map((p) => {
+  const [entries, setEntries] = useState<PayoutEntry[]>(() => {
+    const calculatedAmounts = calculateRoundedPrizeAmounts(
+      prizePool,
+      prizePositions.map((p) => p.percentage)
+    );
+    return prizePositions.map((p, index) => {
       const player = ranked.find((r) => r.finishPosition === p.position);
-      const calculated = Math.round((prizePool * p.percentage) / 100);
       return {
         position: p.position,
         playerId: player ? String(player.playerId) : "",
-        amount: (calculated / 100).toFixed(2),
+        amount: (calculatedAmounts[index] / 100).toFixed(2),
       };
-    })
-  );
+    });
+  });
 
   function updateEntry(index: number, field: "playerId" | "amount", value: string) {
     setEntries((prev) => prev.map((e, i) => (i === index ? { ...e, [field]: value } : e)));
