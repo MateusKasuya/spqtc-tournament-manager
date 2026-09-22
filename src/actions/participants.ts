@@ -8,6 +8,7 @@ import { requireAdmin } from "@/lib/require-admin";
 import { getParticipantById, getParticipantByPlayerAndTournament } from "@/db/queries/participants";
 import { checkKnockout, checkUndo, initialBounty, KnockoutLedgerError, type KnockoutEvent, type UndoRequest } from "@/lib/knockout-ledger";
 import { applyKnockout, undoKnockout, loadKnockoutSnapshot } from "@/db/ledger/knockout-ledger";
+import { pauseTimer } from "@/lib/tournament-clock";
 import { z } from "zod";
 
 export async function addParticipant(tournamentId: number, playerId: number) {
@@ -341,21 +342,36 @@ export async function undoBonusChip(participantId: number) {
 }
 
 // Pausa o timer quando a eliminação final coroa o campeão; fica na action
-// porque o relógio do torneio não pertence ao Ledger de Knockout.
+// porque o relógio do torneio não pertence ao Ledger de Knockout. Mesma
+// transição Pausar do núcleo do Relógio, aplicada dentro da tx do ledger —
+// já protegida pelo lock do torneio, sem update condicional aqui.
 async function pauseTimerAtEnd(tx: Tx, tournamentId: number) {
   const [t] = await tx
-    .select({ timerRunning: tournaments.timerRunning, timerRemainingSecs: tournaments.timerRemainingSecs, timerStartedAt: tournaments.timerStartedAt })
+    .select({
+      currentBlindLevel: tournaments.currentBlindLevel,
+      timerRunning: tournaments.timerRunning,
+      timerRemainingSecs: tournaments.timerRemainingSecs,
+      timerStartedAt: tournaments.timerStartedAt,
+      breakActive: tournaments.breakActive,
+      levelRemainingSecs: tournaments.levelRemainingSecs,
+      breakTotalSecs: tournaments.breakTotalSecs,
+    })
     .from(tournaments)
     .where(eq(tournaments.id, tournamentId));
 
-  if (t?.timerRunning && t.timerStartedAt) {
-    const elapsed = Math.floor((Date.now() - new Date(t.timerStartedAt).getTime()) / 1000);
-    const remaining = Math.max(0, (t.timerRemainingSecs ?? 0) - elapsed);
-    await tx
-      .update(tournaments)
-      .set({ timerRunning: false, timerStartedAt: null, timerRemainingSecs: remaining, updatedAt: new Date() })
-      .where(eq(tournaments.id, tournamentId));
-  }
+  if (!t) return;
+  const result = pauseTimer(t, new Date());
+  if (!result.ok) return;
+
+  await tx
+    .update(tournaments)
+    .set({
+      timerRunning: result.state.timerRunning,
+      timerStartedAt: result.state.timerStartedAt,
+      timerRemainingSecs: result.state.timerRemainingSecs,
+      updatedAt: new Date(),
+    })
+    .where(eq(tournaments.id, tournamentId));
 }
 
 export async function eliminatePlayer(participantId: number, eliminatedByPlayerIds?: number[]) {
