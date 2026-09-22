@@ -294,3 +294,70 @@ describe("Ledger de Knockout: rebuy", () => {
     expect(checkKnockout(s, { kind: "rebuy", victimId: 2, eliminatorPlayerIds: [102], count: 1 })).toEqual({ error: "Jogador nao esta em jogo" });
   });
 });
+
+describe("Ledger de Knockout: Desfazer rebuy", () => {
+  it("round-trip rebuy → Desfazer devolve o snapshot original (simples e duplo, N Eliminadores)", () => {
+    for (const count of [1, 2] as const) {
+      for (const b of [0, 7, 100]) {
+        for (const n of [1, 2, 3]) {
+          const s = makeSnapshot([b, 40, 40, 40]);
+          const eliminators = Array.from({ length: n }, (_, i) => 101 + i);
+          let cur = applyPlan(s, planKnockout(s, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: eliminators, count }));
+          for (let i = 0; i < count; i++) cur = applyPlan(cur, planUndo(cur, { kind: "rebuy", victimId: 1 }));
+          expect(cur.participants).toEqual(s.participants);
+          expect(cur.rows).toEqual([]);
+        }
+      }
+    }
+  });
+
+  it("rebuy duplo desfeito em dois toques: o primeiro tira uma recompra sem tocar no Bounty, o segundo reverte o Knockout", () => {
+    const s = makeSnapshot([40, 40, 40]);
+    const s1 = applyPlan(s, planKnockout(s, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: [101], count: 2 }));
+    const first = planUndo(s1, { kind: "rebuy", victimId: 1 });
+    expect(first.deleteIds).toHaveLength(1);
+    expect(first.patches).toEqual([{ participantId: 1, set: { rebuyCount: 1 } }]);
+    const s2 = applyPlan(s1, first);
+    expect(s2.participants[0]).toMatchObject({ rebuyCount: 1, currentBounty: 30, eliminatedByIds: [101] });
+    expect(s2.participants[1]).toMatchObject({ currentBounty: 60, bountiesCollected: 20 });
+    const s3 = applyPlan(s2, planUndo(s2, { kind: "rebuy", victimId: 1 }));
+    expect(s3.participants).toEqual(s.participants);
+    expect(s3.rows).toEqual([]);
+  });
+
+  it("Desfazer rebuy legado sem linhas de bounty tira o Bounty do rebuy da Vítima", () => {
+    const s = makeSnapshot([30, 40]);
+    s.participants[0].rebuyCount = 1;
+    s.rows = [{ id: 1, playerId: 100, type: "rebuy", amount: 60, bountyChange: 0, relatedParticipantId: null, createdAt: "2026-01-01 00:00:00+00" }];
+    const undone = applyPlan(s, planUndo(s, { kind: "rebuy", victimId: 1 }));
+    expect(undone.participants[0]).toMatchObject({ rebuyCount: 0, currentBounty: 0 });
+    expect(undone.rows).toEqual([]);
+  });
+
+  it("Desfazer rebuy preserva o que a Vítima acumulou depois como Eliminadora", () => {
+    const s = makeSnapshot([40, 40, 40]);
+    const s1 = applyPlan(s, planKnockout(s, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: [101], count: 1 }), "2026-09-22 12:00:01+00");
+    const s2 = applyPlan(s1, planKnockout(s1, { kind: "elimination", victimId: 3, eliminatorPlayerIds: [100] }), "2026-09-22 12:00:02+00");
+    expect(s2.participants[0].currentBounty).toBe(50); // 30 + 20
+    const undone = applyPlan(s2, planUndo(s2, { kind: "rebuy", victimId: 1 }));
+    expect(undone.participants[0]).toMatchObject({ rebuyCount: 0, currentBounty: 60, bountiesCollected: 20 }); // 40 + 20 acumulado
+    expect(undone.participants[1]).toMatchObject({ currentBounty: 40, bountiesCollected: 0 });
+  });
+
+  it("recusa Desfazer rebuy quando o Eliminador já foi Vítima depois", () => {
+    const s = makeSnapshot([40, 40, 40]);
+    const s1 = applyPlan(s, planKnockout(s, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: [101], count: 1 }), "2026-09-22 12:00:01+00");
+    const s2 = applyPlan(s1, planKnockout(s1, { kind: "elimination", victimId: 2, eliminatorPlayerIds: [102] }), "2026-09-22 12:00:02+00");
+    expect(() => planUndo(s2, { kind: "rebuy", victimId: 1 })).toThrow(LedgerUndoBlockedError);
+  });
+
+  it("precondições do Desfazer rebuy", () => {
+    const s = makeSnapshot([40, 40]);
+    expect(checkUndo(s, { kind: "rebuy", victimId: 1 })).toEqual({ error: "Nenhum rebuy para desfazer" });
+    s.participants[0].rebuyCount = 1;
+    s.participants[0].status = "eliminated";
+    expect(checkUndo(s, { kind: "rebuy", victimId: 1 })).toEqual({ error: "Desfaca a eliminacao antes de desfazer o rebuy" });
+    s.participants[0].status = "playing";
+    expect(checkUndo(s, { kind: "rebuy", victimId: 1 })).toBeNull();
+  });
+});

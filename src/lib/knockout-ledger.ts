@@ -343,7 +343,21 @@ export function planUndo(snapshot: LedgerSnapshot, req: UndoRequest): KnockoutPl
       victim.eliminatedByIds = eliminatorsOf(builder.groupsOf(victim).at(-1));
     }
   } else {
-    throw new LedgerInvariantError();
+    // Remove uma recompra do grupo mais recente; quando o grupo esvazia
+    // (segundo toque de um duplo, ou rebuy simples) reverte o Knockout.
+    victim.rebuyCount -= 1;
+    const lastRebuy = builder
+      .liveRows()
+      .filter((r) => r.type === "rebuy" && r.playerId === victim.playerId)
+      .at(-1);
+    if (lastRebuy) {
+      const group = builder.groupsOf(victim).find((g) => g.createdAt === lastRebuy.createdAt);
+      builder.deleteIds.push(lastRebuy.id);
+      if (group && group.rebuyRows.length === 1) {
+        builder.revertBounty(victim, group);
+        victim.eliminatedByIds = eliminatorsOf(builder.groupsOf(victim).at(-1));
+      }
+    }
   }
 
   return { inserts: [], deleteIds: builder.deleteIds, patches: state.patches(), crowned: false, uncrowned };
