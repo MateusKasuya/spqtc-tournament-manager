@@ -5,7 +5,8 @@ Convenções deste repositório que o tooling não enforça — ESLint e `tsc` c
 ## Arquitetura em camadas
 
 - Fluxo: páginas RSC (`src/app`) buscam dados via `src/db/queries/*` e renderizam; toda mutação passa por server action (`src/actions/*`); componentes client chamam as actions diretamente.
-- Lógica de domínio pura (cálculo de bounty, tabela de pontos, defaults) vive em `src/lib/` como função pura e testável. Actions orquestram (auth → validação → transação → revalidate); cálculo não trivial não fica inline na action.
+- Lógica de domínio pura (Ledger de Knockout, tabela de pontos, defaults) vive em `src/lib/` como função pura e testável. Actions orquestram (auth → validação → transação → revalidate); cálculo não trivial não fica inline na action.
+- Persistência de eventos vive em `src/db/ledger/*` (adapter de ledger, ver abaixo): a action descreve o evento e delega; o adapter carrega o snapshot, chama o núcleo puro e aplica o plano dentro da transação do chamador.
 - Um arquivo por entidade em `src/actions/` e `src/db/queries/` (`seasons.ts`, `participants.ts`, …).
 
 ## Server actions (`src/actions`)
@@ -20,6 +21,16 @@ Toda action segue o mesmo esqueleto, nesta ordem:
 
 - Erro esperado (validação, regra de negócio, estado inválido) retorna `{ error: string }` — nunca `throw`. Exceção é só para bug/infra.
 - Mensagens de `error`/`success` em pt-BR, voltadas ao usuário final.
+
+## Adapter de ledger (`src/db/ledger`)
+
+Persistência de eventos (hoje: o Ledger de Knockout, `knockout-ledger.ts`). Categoria distinta de query e de action:
+
+- Recebe a transação do chamador (`LedgerExecutor`) e nunca abre a própria; sem auth, sem `revalidatePath`. A action continua dona de auth → precondição → `db.transaction` → revalidate.
+- Toda regra fica no núcleo puro em `src/lib/` (snapshot → plano); o adapter só carrega o snapshot, carimba um único `createdAt` do app nas linhas do evento (ADR 0001), aplica o plano (insert em lote, delete por id, um update por patch) e devolve o resultado.
+- Estado esperado nunca lança para fora da action: erros do ledger são classes próprias (`KnockoutLedgerError`) que a action converte para `{ error }`; um resultado negativo é erro de invariante e aborta a transação inteira.
+- A precondição roda fora da transação (mensagem ao usuário) e de novo dentro dela, após o lock do torneio; se o estado mudou, o adapter aborta com "A mesa mudou, recarregue e tente de novo".
+- Leituras derivadas do ledger (ex.: contagem de Knockouts por Eliminador) também moram aqui, não em `queries/`.
 
 ## Queries (`src/db/queries`)
 

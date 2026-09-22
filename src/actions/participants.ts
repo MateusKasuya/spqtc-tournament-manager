@@ -2,22 +2,13 @@
 
 import { db } from "@/db";
 import { participants, transactions, tournaments } from "@/db/schema";
-import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/require-admin";
-import { getParticipantById, getParticipantByPlayerAndTournament, getPlayingCount } from "@/db/queries/participants";
-import { computeBountyDistribution } from "@/lib/bounty";
+import { getParticipantById, getParticipantByPlayerAndTournament } from "@/db/queries/participants";
+import { checkKnockout, checkUndo, initialBounty, KnockoutLedgerError, type KnockoutEvent, type UndoRequest } from "@/lib/knockout-ledger";
+import { applyKnockout, undoKnockout, loadKnockoutSnapshot } from "@/db/ledger/knockout-ledger";
 import { z } from "zod";
-
-// transactions.created_at is timestamptz (microsecond precision), but JS Date only
-// has millisecond precision — reading it into a Date and comparing back via eq()
-// silently drops the sub-millisecond digits, so the equality almost never matches
-// in real Postgres (pglite's coarser clock hides this in tests). Casting to text
-// keeps the exact stored value and the comparison never leaves SQL.
-const CREATED_AT_TEXT = sql<string>`${transactions.createdAt}::text`;
-function sameCreatedAt(createdAtText: string) {
-  return eq(transactions.createdAt, sql`${createdAtText}::timestamptz`);
-}
 
 export async function addParticipant(tournamentId: number, playerId: number) {
   const auth = await requireAdmin();
@@ -113,15 +104,10 @@ export async function confirmBuyIn(participantId: number) {
     .from(tournaments)
     .where(eq(tournaments.id, participant.tournamentId));
 
-  const isBounty = tournament.tournamentType === "bounty_builder";
-  const initialBounty = isBounty
-    ? Math.floor(((tournament.buyInAmount - tournament.rankingFeeAmount) * tournament.bountyPercentage) / 100)
-    : 0;
-
   await db.transaction(async (tx) => {
     await tx
       .update(participants)
-      .set({ buyInPaid: true, status: "playing", currentBounty: initialBounty })
+      .set({ buyInPaid: true, status: "playing", currentBounty: initialBounty(tournament) })
       .where(eq(participants.id, participantId));
 
     await tx.insert(transactions).values({
@@ -174,192 +160,56 @@ export async function undoBuyIn(participantId: number) {
   return { success: true };
 }
 
-export async function addRebuy(participantId: number, eliminatedByPlayerIds?: number[]) {
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Contexto de um Knockout ou Desfazer: o participante e o snapshot do torneio
+// lido fora da transação, para a precondição responder ao admin.
+async function loadKnockoutContext(participantId: number) {
+  const participant = await getParticipantById(participantId);
+  if (!participant) return { error: "Participante nao encontrado" };
+  const snapshot = await loadKnockoutSnapshot(db, participant.tournamentId);
+  if (!snapshot) return { error: "Torneio nao encontrado" };
+  return { participant, snapshot };
+}
+
+// Roda a operação do ledger na transação; estado esperado do ledger vira
+// { error } no contrato da action, bug/infra continua lançando.
+async function runKnockoutLedger(work: (tx: Tx) => Promise<unknown>) {
+  try {
+    await db.transaction(work);
+    return null;
+  } catch (e) {
+    if (e instanceof KnockoutLedgerError) return { error: e.message };
+    throw e;
+  }
+}
+
+// Rebuy e rebuy duplo são o mesmo Knockout com count 1 ou 2; addDoubleRebuy
+// continua exportada porque a mesa a chama por nome.
+async function registerRebuy(participantId: number, eliminatedByPlayerIds: number[] | undefined, count: 1 | 2) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const participant = await getParticipantById(participantId);
-  if (!participant) return { error: "Participante nao encontrado" };
-  if (!participant.buyInPaid) return { error: "Jogador ainda nao pagou buy-in" };
+  const ctx = await loadKnockoutContext(participantId);
+  if ("error" in ctx) return ctx;
 
-  const [tournament] = await db
-    .select({
-      rebuyAmount: tournaments.rebuyAmount,
-      maxRebuys: tournaments.maxRebuys,
-      tournamentType: tournaments.tournamentType,
-      bountyPercentage: tournaments.bountyPercentage,
-    })
-    .from(tournaments)
-    .where(eq(tournaments.id, participant.tournamentId));
+  const event: KnockoutEvent = { kind: "rebuy", victimId: participantId, eliminatorPlayerIds: eliminatedByPlayerIds ?? [], count };
+  const refused = checkKnockout(ctx.snapshot, event);
+  if (refused) return refused;
 
-  if (tournament.rebuyAmount === 0) return { error: "Torneio nao permite rebuy" };
-  if (tournament.maxRebuys > 0 && participant.rebuyCount >= tournament.maxRebuys) {
-    return { error: `Limite de rebuys atingido (max: ${tournament.maxRebuys})` };
-  }
+  const failed = await runKnockoutLedger((tx) => applyKnockout(tx, ctx.participant.tournamentId, event));
+  if (failed) return failed;
 
-  const isBounty = tournament.tournamentType === "bounty_builder";
-  if (isBounty && (!eliminatedByPlayerIds || eliminatedByPlayerIds.length === 0)) {
-    return { error: "Selecione quem eliminou o jogador" };
-  }
-
-  const newBounty = isBounty
-    ? Math.floor((tournament.rebuyAmount * tournament.bountyPercentage) / 100)
-    : 0;
-
-  await db.transaction(async (tx) => {
-    if (isBounty && eliminatedByPlayerIds && eliminatedByPlayerIds.length > 0) {
-      const bountyTxs = computeBountyDistribution(
-        participant.id,
-        participant.currentBounty,
-        eliminatedByPlayerIds,
-        participant.tournamentId
-      );
-
-      if (bountyTxs.length > 0) {
-        await tx.insert(transactions).values(bountyTxs);
-
-        const eliminatorParticipants = await tx
-          .select({ id: participants.id, playerId: participants.playerId, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
-          .from(participants)
-          .where(
-            and(
-              eq(participants.tournamentId, participant.tournamentId),
-              inArray(participants.playerId, eliminatedByPlayerIds)
-            )
-          );
-
-        for (const ep of eliminatorParticipants) {
-          const tx_ = bountyTxs.find((b) => b.playerId === ep.playerId);
-          if (tx_) {
-            await tx
-              .update(participants)
-              .set({
-                currentBounty: ep.currentBounty + tx_.bountyChange,
-                bountiesCollected: ep.bountiesCollected + tx_.amount,
-              })
-              .where(eq(participants.id, ep.id));
-          }
-        }
-      }
-    }
-
-    await tx
-      .update(participants)
-      .set({
-        rebuyCount: participant.rebuyCount + 1,
-        currentBounty: isBounty ? newBounty : participant.currentBounty,
-        eliminatedByIds: isBounty ? (eliminatedByPlayerIds ?? []) : participant.eliminatedByIds,
-      })
-      .where(eq(participants.id, participantId));
-
-    await tx.insert(transactions).values({
-      tournamentId: participant.tournamentId,
-      playerId: participant.playerId,
-      type: "rebuy",
-      amount: tournament.rebuyAmount,
-    });
-  });
-
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  revalidatePath(`/torneios/${ctx.participant.tournamentId}`, "layout");
   return { success: true };
 }
 
+export async function addRebuy(participantId: number, eliminatedByPlayerIds?: number[]) {
+  return registerRebuy(participantId, eliminatedByPlayerIds, 1);
+}
+
 export async function addDoubleRebuy(participantId: number, eliminatedByPlayerIds?: number[]) {
-  const auth = await requireAdmin();
-  if ("error" in auth) return auth;
-
-  const participant = await getParticipantById(participantId);
-  if (!participant) return { error: "Participante nao encontrado" };
-  if (!participant.buyInPaid) return { error: "Jogador ainda nao pagou buy-in" };
-
-  const [tournament] = await db
-    .select({
-      rebuyAmount: tournaments.rebuyAmount,
-      maxRebuys: tournaments.maxRebuys,
-      tournamentType: tournaments.tournamentType,
-      bountyPercentage: tournaments.bountyPercentage,
-    })
-    .from(tournaments)
-    .where(eq(tournaments.id, participant.tournamentId));
-
-  if (tournament.rebuyAmount === 0) return { error: "Torneio nao permite rebuy" };
-  if (tournament.maxRebuys > 0 && participant.rebuyCount + 2 > tournament.maxRebuys) {
-    return { error: `Limite de rebuys atingido (max: ${tournament.maxRebuys})` };
-  }
-
-  const isBounty = tournament.tournamentType === "bounty_builder";
-  if (isBounty && (!eliminatedByPlayerIds || eliminatedByPlayerIds.length === 0)) {
-    return { error: "Selecione quem eliminou o jogador" };
-  }
-
-  const newBounty = isBounty
-    ? Math.floor((tournament.rebuyAmount * tournament.bountyPercentage) / 100)
-    : 0;
-
-  await db.transaction(async (tx) => {
-    if (isBounty && eliminatedByPlayerIds && eliminatedByPlayerIds.length > 0) {
-      const bountyTxs = computeBountyDistribution(
-        participant.id,
-        participant.currentBounty,
-        eliminatedByPlayerIds,
-        participant.tournamentId
-      );
-
-      if (bountyTxs.length > 0) {
-        await tx.insert(transactions).values(bountyTxs);
-
-        const eliminatorParticipants = await tx
-          .select({ id: participants.id, playerId: participants.playerId, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
-          .from(participants)
-          .where(
-            and(
-              eq(participants.tournamentId, participant.tournamentId),
-              inArray(participants.playerId, eliminatedByPlayerIds)
-            )
-          );
-
-        for (const ep of eliminatorParticipants) {
-          const tx_ = bountyTxs.find((b) => b.playerId === ep.playerId);
-          if (tx_) {
-            await tx
-              .update(participants)
-              .set({
-                currentBounty: ep.currentBounty + tx_.bountyChange,
-                bountiesCollected: ep.bountiesCollected + tx_.amount,
-              })
-              .where(eq(participants.id, ep.id));
-          }
-        }
-      }
-    }
-
-    await tx
-      .update(participants)
-      .set({
-        rebuyCount: participant.rebuyCount + 2,
-        currentBounty: isBounty ? newBounty : participant.currentBounty,
-        eliminatedByIds: isBounty ? (eliminatedByPlayerIds ?? []) : participant.eliminatedByIds,
-      })
-      .where(eq(participants.id, participantId));
-
-    await tx.insert(transactions).values([
-      {
-        tournamentId: participant.tournamentId,
-        playerId: participant.playerId,
-        type: "rebuy",
-        amount: tournament.rebuyAmount,
-      },
-      {
-        tournamentId: participant.tournamentId,
-        playerId: participant.playerId,
-        type: "rebuy",
-        amount: tournament.rebuyAmount,
-      },
-    ]);
-  });
-
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
-  return { success: true };
+  return registerRebuy(participantId, eliminatedByPlayerIds, 2);
 }
 
 export async function addAddon(participantId: number) {
@@ -399,127 +249,17 @@ export async function undoRebuy(participantId: number) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const participant = await getParticipantById(participantId);
-  if (!participant) return { error: "Participante nao encontrado" };
-  if (participant.rebuyCount <= 0) return { error: "Nenhum rebuy para desfazer" };
-  if (participant.status !== "playing") {
-    return { error: "Desfaca a eliminacao antes de desfazer o rebuy" };
-  }
+  const ctx = await loadKnockoutContext(participantId);
+  if ("error" in ctx) return ctx;
 
-  const [tournament] = await db
-    .select({ tournamentType: tournaments.tournamentType, bountyPercentage: tournaments.bountyPercentage, rebuyAmount: tournaments.rebuyAmount })
-    .from(tournaments)
-    .where(eq(tournaments.id, participant.tournamentId));
+  const req: UndoRequest = { kind: "rebuy", victimId: participantId };
+  const refused = checkUndo(ctx.snapshot, req);
+  if (refused) return refused;
 
-  const isBounty = tournament.tournamentType === "bounty_builder";
+  const failed = await runKnockoutLedger((tx) => undoKnockout(tx, ctx.participant.tournamentId, req));
+  if (failed) return failed;
 
-  const [lastRebuyTx] = await db
-    .select({ id: transactions.id, createdAt: CREATED_AT_TEXT })
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.playerId, participant.playerId),
-        eq(transactions.tournamentId, participant.tournamentId),
-        eq(transactions.type, "rebuy")
-      )
-    )
-    .orderBy(desc(transactions.createdAt))
-    .limit(1);
-
-  await db.transaction(async (tx) => {
-    if (lastRebuyTx) {
-      await tx.delete(transactions).where(eq(transactions.id, lastRebuyTx.id));
-    }
-
-    // Para duplo rebuy: ambas as transações têm o mesmo timestamp.
-    // Só revertemos o bounty quando não restar outra rebuy no mesmo timestamp
-    // (ou seja, no segundo undo do duplo rebuy, não no primeiro).
-    const siblingRebuy = lastRebuyTx
-      ? await tx
-          .select({ id: transactions.id })
-          .from(transactions)
-          .where(
-            and(
-              eq(transactions.playerId, participant.playerId),
-              eq(transactions.tournamentId, participant.tournamentId),
-              eq(transactions.type, "rebuy"),
-              sameCreatedAt(lastRebuyTx.createdAt)
-            )
-          )
-          .limit(1)
-      : [];
-
-    const isDoubleRebuyFirstUndo = siblingRebuy.length > 0;
-
-    if (isBounty && lastRebuyTx && !isDoubleRebuyFirstUndo) {
-      const bountyTxs = await tx
-        .select({ id: transactions.id, playerId: transactions.playerId, amount: transactions.amount, bountyChange: transactions.bountyChange })
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.tournamentId, participant.tournamentId),
-            eq(transactions.type, "bounty_earned"),
-            eq(transactions.relatedParticipantId, participant.id),
-            sameCreatedAt(lastRebuyTx.createdAt)
-          )
-        );
-
-      if (bountyTxs.length > 0) {
-        const eliminatorPlayerIds = bountyTxs.map((b) => b.playerId);
-        const eliminatorParticipants = await tx
-          .select({ id: participants.id, playerId: participants.playerId, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
-          .from(participants)
-          .where(
-            and(
-              eq(participants.tournamentId, participant.tournamentId),
-              inArray(participants.playerId, eliminatorPlayerIds)
-            )
-          );
-
-        for (const ep of eliminatorParticipants) {
-          const btx = bountyTxs.find((b) => b.playerId === ep.playerId);
-          if (btx) {
-            await tx
-              .update(participants)
-              .set({
-                currentBounty: Math.max(0, ep.currentBounty - btx.bountyChange),
-                bountiesCollected: Math.max(0, ep.bountiesCollected - btx.amount),
-              })
-              .where(eq(participants.id, ep.id));
-          }
-        }
-
-        const oldBounty = bountyTxs.reduce((sum, b) => sum + b.amount + b.bountyChange, 0);
-
-        await tx.delete(transactions).where(
-          and(
-            eq(transactions.tournamentId, participant.tournamentId),
-            eq(transactions.type, "bounty_earned"),
-            eq(transactions.relatedParticipantId, participant.id),
-            sameCreatedAt(lastRebuyTx.createdAt)
-          )
-        );
-
-        await tx
-          .update(participants)
-          .set({
-            rebuyCount: participant.rebuyCount - 1,
-            currentBounty: oldBounty,
-            eliminatedByIds: [],
-          })
-          .where(eq(participants.id, participantId));
-
-        return;
-      }
-    }
-
-    await tx
-      .update(participants)
-      .set({ rebuyCount: participant.rebuyCount - 1 })
-      .where(eq(participants.id, participantId));
-  });
-
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  revalidatePath(`/torneios/${ctx.participant.tournamentId}`, "layout");
   return { success: true };
 }
 
@@ -600,130 +340,42 @@ export async function undoBonusChip(participantId: number) {
   return { success: true };
 }
 
+// Pausa o timer quando a eliminação final coroa o campeão; fica na action
+// porque o relógio do torneio não pertence ao Ledger de Knockout.
+async function pauseTimerAtEnd(tx: Tx, tournamentId: number) {
+  const [t] = await tx
+    .select({ timerRunning: tournaments.timerRunning, timerRemainingSecs: tournaments.timerRemainingSecs, timerStartedAt: tournaments.timerStartedAt })
+    .from(tournaments)
+    .where(eq(tournaments.id, tournamentId));
+
+  if (t?.timerRunning && t.timerStartedAt) {
+    const elapsed = Math.floor((Date.now() - new Date(t.timerStartedAt).getTime()) / 1000);
+    const remaining = Math.max(0, (t.timerRemainingSecs ?? 0) - elapsed);
+    await tx
+      .update(tournaments)
+      .set({ timerRunning: false, timerStartedAt: null, timerRemainingSecs: remaining, updatedAt: new Date() })
+      .where(eq(tournaments.id, tournamentId));
+  }
+}
+
 export async function eliminatePlayer(participantId: number, eliminatedByPlayerIds?: number[]) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const participant = await getParticipantById(participantId);
-  if (!participant) return { error: "Participante nao encontrado" };
-  if (participant.status !== "playing") return { error: "Jogador nao esta em jogo" };
+  const ctx = await loadKnockoutContext(participantId);
+  if ("error" in ctx) return ctx;
 
-  const [tournament] = await db
-    .select({
-      tournamentType: tournaments.tournamentType,
-      timerRunning: tournaments.timerRunning,
-      timerRemainingSecs: tournaments.timerRemainingSecs,
-      timerStartedAt: tournaments.timerStartedAt,
-    })
-    .from(tournaments)
-    .where(eq(tournaments.id, participant.tournamentId));
+  const event: KnockoutEvent = { kind: "elimination", victimId: participantId, eliminatorPlayerIds: eliminatedByPlayerIds ?? [] };
+  const refused = checkKnockout(ctx.snapshot, event);
+  if (refused) return refused;
 
-  const isBounty = tournament.tournamentType === "bounty_builder";
-  if (isBounty && (!eliminatedByPlayerIds || eliminatedByPlayerIds.length === 0)) {
-    return { error: "Selecione quem eliminou o jogador" };
-  }
-
-  const playingCount = await getPlayingCount(participant.tournamentId);
-  const finishPosition = playingCount;
-
-  await db.transaction(async (tx) => {
-    await tx
-      .update(participants)
-      .set({
-        status: "eliminated",
-        finishPosition,
-        eliminatedAt: new Date(),
-        eliminatedByIds: isBounty ? (eliminatedByPlayerIds ?? []) : participant.eliminatedByIds,
-      })
-      .where(eq(participants.id, participantId));
-
-    if (isBounty && eliminatedByPlayerIds && eliminatedByPlayerIds.length > 0) {
-      const bountyTxs = computeBountyDistribution(
-        participant.id,
-        participant.currentBounty,
-        eliminatedByPlayerIds,
-        participant.tournamentId
-      );
-
-      if (bountyTxs.length > 0) {
-        await tx.insert(transactions).values(bountyTxs);
-
-        const eliminatorParticipants = await tx
-          .select({ id: participants.id, playerId: participants.playerId, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
-          .from(participants)
-          .where(
-            and(
-              eq(participants.tournamentId, participant.tournamentId),
-              inArray(participants.playerId, eliminatedByPlayerIds)
-            )
-          );
-
-        for (const ep of eliminatorParticipants) {
-          const btx = bountyTxs.find((b) => b.playerId === ep.playerId);
-          if (btx) {
-            await tx
-              .update(participants)
-              .set({
-                currentBounty: ep.currentBounty + btx.bountyChange,
-                bountiesCollected: ep.bountiesCollected + btx.amount,
-              })
-              .where(eq(participants.id, ep.id));
-          }
-        }
-
-        await tx
-          .update(participants)
-          .set({ currentBounty: 0 })
-          .where(eq(participants.id, participantId));
-      }
-    }
-
-    if (playingCount - 1 === 1) {
-      const [champion] = await tx
-        .select({ id: participants.id, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected, playerId: participants.playerId })
-        .from(participants)
-        .where(and(eq(participants.tournamentId, participant.tournamentId), eq(participants.status, "playing")));
-
-      if (champion) {
-        await tx
-          .update(participants)
-          .set({ status: "finished", finishPosition: 1 })
-          .where(eq(participants.id, champion.id));
-
-        if (isBounty && champion.currentBounty > 0) {
-          await tx.insert(transactions).values({
-            tournamentId: participant.tournamentId,
-            playerId: champion.playerId,
-            type: "bounty_earned",
-            amount: champion.currentBounty,
-            bountyChange: 0,
-            relatedParticipantId: champion.id,
-          });
-
-          await tx
-            .update(participants)
-            .set({ bountiesCollected: champion.bountiesCollected + champion.currentBounty, currentBounty: 0 })
-            .where(eq(participants.id, champion.id));
-        }
-      }
-
-      const [t] = await tx
-        .select({ timerRunning: tournaments.timerRunning, timerRemainingSecs: tournaments.timerRemainingSecs, timerStartedAt: tournaments.timerStartedAt })
-        .from(tournaments)
-        .where(eq(tournaments.id, participant.tournamentId));
-
-      if (t?.timerRunning && t.timerStartedAt) {
-        const elapsed = Math.floor((Date.now() - new Date(t.timerStartedAt).getTime()) / 1000);
-        const remaining = Math.max(0, (t.timerRemainingSecs ?? 0) - elapsed);
-        await tx
-          .update(tournaments)
-          .set({ timerRunning: false, timerStartedAt: null, timerRemainingSecs: remaining, updatedAt: new Date() })
-          .where(eq(tournaments.id, participant.tournamentId));
-      }
-    }
+  const failed = await runKnockoutLedger(async (tx) => {
+    const { crowned } = await applyKnockout(tx, ctx.participant.tournamentId, event);
+    if (crowned) await pauseTimerAtEnd(tx, ctx.participant.tournamentId);
   });
+  if (failed) return failed;
 
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  revalidatePath(`/torneios/${ctx.participant.tournamentId}`, "layout");
   return { success: true };
 }
 
@@ -731,179 +383,17 @@ export async function undoElimination(participantId: number) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const participant = await getParticipantById(participantId);
-  if (!participant) return { error: "Participante nao encontrado" };
-  if (participant.status !== "eliminated" && participant.status !== "finished") {
-    return { error: "Jogador nao esta eliminado" };
-  }
+  const ctx = await loadKnockoutContext(participantId);
+  if ("error" in ctx) return ctx;
 
-  const [tournament] = await db
-    .select({ tournamentType: tournaments.tournamentType })
-    .from(tournaments)
-    .where(eq(tournaments.id, participant.tournamentId));
+  const req: UndoRequest = { kind: "elimination", victimId: participantId };
+  const refused = checkUndo(ctx.snapshot, req);
+  if (refused) return refused;
 
-  const isBounty = tournament.tournamentType === "bounty_builder";
+  const failed = await runKnockoutLedger((tx) => undoKnockout(tx, ctx.participant.tournamentId, req));
+  if (failed) return failed;
 
-  await db.transaction(async (tx) => {
-    // Se esta foi a eliminação final, ela coroou um campeão automaticamente.
-    // Descoroar ANTES de reverter a vítima e restaurar o bounty próprio que o
-    // campeão coletou ao ser coroado — senão essa transação fica órfã e o
-    // currentBounty/bountiesCollected dele ficam errados.
-    if (participant.status === "eliminated") {
-      const [champion] = await tx
-        .select({ id: participants.id, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
-        .from(participants)
-        .where(
-          and(
-            eq(participants.tournamentId, participant.tournamentId),
-            eq(participants.status, "finished")
-          )
-        );
-
-      if (champion) {
-        if (isBounty) {
-          const [latestSelf] = await tx
-            .select({ createdAt: CREATED_AT_TEXT })
-            .from(transactions)
-            .where(
-              and(
-                eq(transactions.tournamentId, participant.tournamentId),
-                eq(transactions.type, "bounty_earned"),
-                eq(transactions.relatedParticipantId, champion.id)
-              )
-            )
-            .orderBy(desc(transactions.createdAt))
-            .limit(1);
-          // Escopa ao timestamp da coroacao (bounty proprio mais recente),
-          // sem varrer bounties de rebuys anteriores do campeao.
-          const selfTxs = latestSelf
-            ? await tx
-                .select({ amount: transactions.amount, bountyChange: transactions.bountyChange })
-                .from(transactions)
-                .where(
-                  and(
-                    eq(transactions.tournamentId, participant.tournamentId),
-                    eq(transactions.type, "bounty_earned"),
-                    eq(transactions.relatedParticipantId, champion.id),
-                    sameCreatedAt(latestSelf.createdAt)
-                  )
-                )
-            : [];
-          const restored = selfTxs.reduce((sum, b) => sum + b.amount + b.bountyChange, 0);
-          if (latestSelf) {
-            await tx.delete(transactions).where(
-              and(
-                eq(transactions.tournamentId, participant.tournamentId),
-                eq(transactions.type, "bounty_earned"),
-                eq(transactions.relatedParticipantId, champion.id),
-                sameCreatedAt(latestSelf.createdAt)
-              )
-            );
-          }
-          await tx
-            .update(participants)
-            .set({
-              status: "playing",
-              finishPosition: null,
-              currentBounty: champion.currentBounty + restored,
-              bountiesCollected: Math.max(0, champion.bountiesCollected - restored),
-            })
-            .where(eq(participants.id, champion.id));
-        } else {
-          await tx
-            .update(participants)
-            .set({ status: "playing", finishPosition: null })
-            .where(eq(participants.id, champion.id));
-        }
-      }
-    }
-
-    if (isBounty) {
-      // A eliminacao e o evento mais recente da vitima; seus bounty_earned
-      // compartilham o mesmo timestamp. Escopar a reversao a esse timestamp
-      // evita varrer bounties de rebuys anteriores da mesma vitima.
-      const [latestElim] = await tx
-        .select({ createdAt: CREATED_AT_TEXT })
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.tournamentId, participant.tournamentId),
-            eq(transactions.type, "bounty_earned"),
-            eq(transactions.relatedParticipantId, participant.id)
-          )
-        )
-        .orderBy(desc(transactions.createdAt))
-        .limit(1);
-
-      const bountyTxs = latestElim
-        ? await tx
-            .select({ id: transactions.id, playerId: transactions.playerId, amount: transactions.amount, bountyChange: transactions.bountyChange })
-            .from(transactions)
-            .where(
-              and(
-                eq(transactions.tournamentId, participant.tournamentId),
-                eq(transactions.type, "bounty_earned"),
-                eq(transactions.relatedParticipantId, participant.id),
-                sameCreatedAt(latestElim.createdAt)
-              )
-            )
-        : [];
-
-      if (latestElim && bountyTxs.length > 0) {
-        const eliminatorPlayerIds = bountyTxs.map((b) => b.playerId);
-        const eliminatorParticipants = await tx
-          .select({ id: participants.id, playerId: participants.playerId, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
-          .from(participants)
-          .where(
-            and(
-              eq(participants.tournamentId, participant.tournamentId),
-              inArray(participants.playerId, eliminatorPlayerIds)
-            )
-          );
-
-        for (const ep of eliminatorParticipants) {
-          const btx = bountyTxs.find((b) => b.playerId === ep.playerId);
-          if (btx) {
-            await tx
-              .update(participants)
-              .set({
-                currentBounty: Math.max(0, ep.currentBounty - btx.bountyChange),
-                bountiesCollected: Math.max(0, ep.bountiesCollected - btx.amount),
-              })
-              .where(eq(participants.id, ep.id));
-          }
-        }
-
-        const oldBounty = bountyTxs.reduce((sum, b) => sum + b.amount + b.bountyChange, 0);
-
-        await tx.delete(transactions).where(
-          and(
-            eq(transactions.tournamentId, participant.tournamentId),
-            eq(transactions.type, "bounty_earned"),
-            eq(transactions.relatedParticipantId, participant.id),
-            sameCreatedAt(latestElim.createdAt)
-          )
-        );
-
-        await tx
-          .update(participants)
-          .set({ status: "playing", finishPosition: null, eliminatedAt: null, currentBounty: oldBounty, eliminatedByIds: [] })
-          .where(eq(participants.id, participantId));
-      } else {
-        await tx
-          .update(participants)
-          .set({ status: "playing", finishPosition: null, eliminatedAt: null, eliminatedByIds: [] })
-          .where(eq(participants.id, participantId));
-      }
-    } else {
-      await tx
-        .update(participants)
-        .set({ status: "playing", finishPosition: null, eliminatedAt: null })
-        .where(eq(participants.id, participantId));
-    }
-  });
-
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  revalidatePath(`/torneios/${ctx.participant.tournamentId}`, "layout");
   return { success: true };
 }
 
