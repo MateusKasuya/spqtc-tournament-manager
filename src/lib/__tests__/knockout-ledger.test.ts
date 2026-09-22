@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   planKnockout,
+  planUndo,
   checkKnockout,
+  checkUndo,
+  LedgerUndoBlockedError,
   type LedgerSnapshot,
   type LedgerParticipant,
   type LedgerRow,
@@ -136,5 +139,109 @@ describe("Ledger de Knockout: eliminação", () => {
     // torneio normal não exige Eliminador
     const n = makeSnapshot([0, 0], { tournamentType: "normal" });
     expect(checkKnockout(n, { kind: "elimination", victimId: 1, eliminatorPlayerIds: [] })).toBeNull();
+  });
+});
+
+describe("Ledger de Knockout: Desfazer eliminação", () => {
+  it("round-trip: aplicar e desfazer devolve o snapshot original (bounty × N Eliminadores × modo)", () => {
+    for (const mode of ["bounty_builder", "normal"] as const) {
+      for (const b of [0, 7, 100]) {
+        for (const n of [1, 2, 3]) {
+          const s = makeSnapshot([b, 40, 40, 40], { tournamentType: mode });
+          const eliminators = Array.from({ length: n }, (_, i) => 101 + i);
+          const applied = applyPlan(s, planKnockout(s, { kind: "elimination", victimId: 1, eliminatorPlayerIds: eliminators }));
+          const undone = applyPlan(applied, planUndo(applied, { kind: "elimination", victimId: 1 }));
+          expect(undone.participants).toEqual(s.participants);
+          expect(undone.rows).toEqual([]);
+        }
+      }
+    }
+  });
+
+  it("round-trip da eliminação final: descoroa e só depois reverte a Vítima (campeão também Eliminador)", () => {
+    const s = makeSnapshot([40, 40]);
+    const applied = applyPlan(s, planKnockout(s, { kind: "elimination", victimId: 1, eliminatorPlayerIds: [101] }));
+    const plan = planUndo(applied, { kind: "elimination", victimId: 1 });
+    expect(plan.uncrowned).toBe(true);
+    expect(plan.patches.filter((p) => p.participantId === 2)).toHaveLength(1);
+    const undone = applyPlan(applied, plan);
+    expect(undone.participants).toEqual(s.participants);
+    expect(undone.rows).toEqual([]);
+  });
+
+  it("Desfazer no campeão só descoroa: devolve o Bounty da Coroação e não toca na última Vítima", () => {
+    const s = makeSnapshot([40, 40]);
+    const applied = applyPlan(s, planKnockout(s, { kind: "elimination", victimId: 1, eliminatorPlayerIds: [101] }));
+    const plan = planUndo(applied, { kind: "elimination", victimId: 2 });
+    expect(plan.uncrowned).toBe(true);
+    const undone = applyPlan(applied, plan);
+    expect(undone.participants[1]).toMatchObject({ status: "playing", finishPosition: null, currentBounty: 60, bountiesCollected: 20 });
+    expect(undone.participants[0]).toMatchObject({ status: "eliminated", finishPosition: 2, currentBounty: 0 });
+    expect(undone.rows).toHaveLength(1);
+    expect(undone.rows[0]).toMatchObject({ playerId: 101, relatedParticipantId: 1, amount: 20, bountyChange: 20 });
+  });
+
+  it("Coroação com Bounty zero desfeita apaga a linha de valor zero e não altera prêmio antigo do campeão", () => {
+    const s = makeSnapshot([40, 0, 0]);
+    // P2 elimina P0 (P2 coleta 20, Bounty 20); P1 elimina P2 → P1 campeão com Bounty 0... mas P1 recebe 10/10
+    const s1 = applyPlan(s, planKnockout(s, { kind: "elimination", victimId: 1, eliminatorPlayerIds: [102] }), "2026-09-22 12:00:01+00");
+    const s2 = applyPlan(s1, planKnockout(s1, { kind: "elimination", victimId: 3, eliminatorPlayerIds: [101] }), "2026-09-22 12:00:02+00");
+    const undone = applyPlan(s2, planUndo(s2, { kind: "elimination", victimId: 3 }), "2026-09-22 12:00:03+00");
+    expect(undone.participants).toEqual(s1.participants);
+    expect(undone.rows).toEqual(s1.rows);
+  });
+
+  it("agrupa pelo texto exato de createdAt: microssegundos distintos separam o rebuy da eliminação", () => {
+    const s = makeSnapshot([30, 60, 55]);
+    s.participants[0].rebuyCount = 1;
+    s.participants[0].eliminatedByIds = [102];
+    s.participants[0].status = "eliminated";
+    s.participants[0].finishPosition = 3;
+    s.participants[0].currentBounty = 0;
+    s.participants[1].bountiesCollected = 20;
+    s.participants[2].bountiesCollected = 15;
+    s.rows = [
+      { id: 1, playerId: 101, type: "bounty_earned", amount: 20, bountyChange: 20, relatedParticipantId: 1, createdAt: "2026-01-01 00:00:00.123457+00" },
+      { id: 2, playerId: 100, type: "rebuy", amount: 60, bountyChange: 0, relatedParticipantId: null, createdAt: "2026-01-01 00:00:00.123457+00" },
+      { id: 3, playerId: 102, type: "bounty_earned", amount: 15, bountyChange: 15, relatedParticipantId: 1, createdAt: "2026-01-01 00:00:00.123458+00" },
+    ];
+    const plan = planUndo(s, { kind: "elimination", victimId: 1 });
+    expect(plan.deleteIds).toEqual([3]);
+    const undone = applyPlan(s, plan);
+    expect(undone.participants[0]).toMatchObject({ status: "playing", currentBounty: 30, rebuyCount: 1, eliminatedByIds: [101] });
+    expect(undone.participants[1]).toMatchObject({ currentBounty: 60, bountiesCollected: 20 });
+    expect(undone.participants[2]).toMatchObject({ currentBounty: 40, bountiesCollected: 0 });
+  });
+
+  it("Vítima recebe de volta o que tinha antes mais o que acumulou depois como Eliminadora", () => {
+    const s = makeSnapshot([40, 40, 40]);
+    const s1 = applyPlan(s, planKnockout(s, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: [101], count: 1 }), "2026-09-22 12:00:01+00");
+    // P0 (Bounty novo 30) elimina P1 e acumula 30 → 60
+    const s2 = applyPlan(s1, planKnockout(s1, { kind: "elimination", victimId: 2, eliminatorPlayerIds: [100] }), "2026-09-22 12:00:02+00");
+    expect(s2.participants[0].currentBounty).toBe(60);
+    const s3 = applyPlan(s2, planKnockout(s2, { kind: "elimination", victimId: 1, eliminatorPlayerIds: [102] }), "2026-09-22 12:00:03+00");
+    const undone = applyPlan(s3, planUndo(s3, { kind: "elimination", victimId: 1 }));
+    expect(undone.participants).toEqual(s2.participants);
+  });
+
+  it("recusa Desfazer quando um Eliminador já foi Vítima de Knockout posterior; aceita após desfazer o posterior", () => {
+    const s = makeSnapshot([40, 40, 40, 40]);
+    const s1 = applyPlan(s, planKnockout(s, { kind: "elimination", victimId: 1, eliminatorPlayerIds: [101] }), "2026-09-22 12:00:01+00");
+    const s2 = applyPlan(s1, planKnockout(s1, { kind: "elimination", victimId: 2, eliminatorPlayerIds: [102] }), "2026-09-22 12:00:02+00");
+    expect(() => planUndo(s2, { kind: "elimination", victimId: 1 })).toThrow(LedgerUndoBlockedError);
+    const s3 = applyPlan(s2, planUndo(s2, { kind: "elimination", victimId: 2 }));
+    expect(s3.participants).toEqual(s1.participants);
+    const s4 = applyPlan(s3, planUndo(s3, { kind: "elimination", victimId: 1 }));
+    expect(s4.participants).toEqual(s.participants);
+  });
+
+  it("precondições do Desfazer em pt-BR", () => {
+    const s = makeSnapshot([40, 40, 40]);
+    expect(checkUndo(s, { kind: "elimination", victimId: 1 })).toEqual({ error: "Jogador nao esta eliminado" });
+    expect(checkUndo(s, { kind: "elimination", victimId: 99 })).toEqual({ error: "Participante nao encontrado" });
+    s.participants[0].status = "eliminated";
+    expect(checkUndo(s, { kind: "elimination", victimId: 1 })).toBeNull();
+    s.participants[0].status = "finished";
+    expect(checkUndo(s, { kind: "elimination", victimId: 1 })).toBeNull();
   });
 });

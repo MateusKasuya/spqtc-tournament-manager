@@ -144,6 +144,18 @@ export function checkKnockout(snapshot: LedgerSnapshot, event: KnockoutEvent): {
   return null;
 }
 
+export function checkUndo(snapshot: LedgerSnapshot, req: UndoRequest): { error: string } | null {
+  const victim = snapshot.participants.find((p) => p.id === req.victimId);
+  if (!victim) return { error: "Participante nao encontrado" };
+  if (req.kind === "elimination") {
+    if (victim.status !== "eliminated" && victim.status !== "finished") return { error: "Jogador nao esta eliminado" };
+  } else {
+    if (victim.rebuyCount <= 0) return { error: "Nenhum rebuy para desfazer" };
+    if (victim.status !== "playing") return { error: "Desfaca a eliminacao antes de desfazer o rebuy" };
+  }
+  return null;
+}
+
 // Cópia de trabalho dos participantes: o plano é construído mutando a cópia e
 // o patch de cada participante sai do diff com o original (fold automático).
 class WorkingState {
@@ -212,6 +224,129 @@ function splitBounty(victim: LedgerParticipant, eliminatorPlayerIds: number[]): 
       relatedParticipantId: victim.id,
     };
   });
+}
+
+// Um Knockout (ou Coroação) de uma Vítima: as linhas que compartilham o mesmo
+// created_at (texto). Eliminação: só bounty_earned dos Eliminadores. Rebuy: as
+// mesmas mais as linhas de rebuy da Vítima. Coroação: uma autocoleta.
+interface EventGroup {
+  createdAt: string;
+  maxId: number;
+  kind: "elimination" | "rebuy" | "coronation";
+  bountyRows: LedgerRow[];
+  rebuyRows: LedgerRow[];
+}
+
+function groupsOfVictim(rows: LedgerRow[], victim: LedgerParticipant): EventGroup[] {
+  const byCreatedAt = new Map<string, EventGroup>();
+  for (const row of rows) {
+    const isBounty = row.type === "bounty_earned" && row.relatedParticipantId === victim.id;
+    const isRebuy = row.type === "rebuy" && row.playerId === victim.playerId;
+    if (!isBounty && !isRebuy) continue;
+    let group = byCreatedAt.get(row.createdAt);
+    if (!group) {
+      group = { createdAt: row.createdAt, maxId: 0, kind: "elimination", bountyRows: [], rebuyRows: [] };
+      byCreatedAt.set(row.createdAt, group);
+    }
+    (isRebuy ? group.rebuyRows : group.bountyRows).push(row);
+    group.maxId = Math.max(group.maxId, row.id);
+  }
+  const groups = Array.from(byCreatedAt.values());
+  for (const g of groups) {
+    if (g.rebuyRows.length > 0) g.kind = "rebuy";
+    else if (g.bountyRows.some((r) => r.playerId === victim.playerId)) g.kind = "coronation";
+  }
+  return groups.sort((a, b) => a.maxId - b.maxId);
+}
+
+function eliminatorsOf(group: EventGroup | undefined) {
+  return group ? group.bountyRows.map((r) => r.playerId) : [];
+}
+
+// Reversão por delta de um evento: cada Eliminador devolve exatamente o que a
+// sua linha registrou; a Vítima recebe o que tinha antes mais o que acumulou
+// depois como Eliminadora (linhas posteriores), nunca a configuração do torneio.
+class UndoBuilder {
+  readonly deleteIds: number[] = [];
+  readonly state: WorkingState;
+  private readonly rows: LedgerRow[];
+
+  constructor(snapshot: LedgerSnapshot) {
+    this.state = new WorkingState(snapshot.participants);
+    this.rows = snapshot.rows;
+  }
+
+  liveRows() {
+    return this.rows.filter((r) => !this.deleteIds.includes(r.id));
+  }
+
+  groupsOf(victim: LedgerParticipant) {
+    return groupsOfVictim(this.liveRows(), victim);
+  }
+
+  private assertNoLaterKnockoutOf(participant: LedgerParticipant, afterId: number) {
+    const blocked = this.liveRows().some(
+      (r) =>
+        r.id > afterId &&
+        ((r.type === "bounty_earned" && r.relatedParticipantId === participant.id && r.playerId !== participant.playerId) ||
+          (r.type === "rebuy" && r.playerId === participant.playerId))
+    );
+    if (blocked) throw new LedgerUndoBlockedError();
+  }
+
+  revertBounty(victim: LedgerParticipant, group: EventGroup) {
+    for (const row of group.bountyRows) {
+      const eliminator = this.state.byPlayer(row.playerId);
+      if (eliminator.id !== victim.id) this.assertNoLaterKnockoutOf(eliminator, group.maxId);
+      eliminator.currentBounty -= row.bountyChange;
+      eliminator.bountiesCollected -= row.amount;
+    }
+    const before = group.bountyRows.reduce((sum, r) => sum + r.amount + r.bountyChange, 0);
+    const accruedAfter = this.liveRows()
+      .filter((r) => r.id > group.maxId && r.type === "bounty_earned" && r.playerId === victim.playerId)
+      .reduce((sum, r) => sum + r.bountyChange, 0);
+    victim.currentBounty = before + accruedAfter;
+    this.deleteIds.push(...group.bountyRows.map((r) => r.id));
+  }
+
+  uncrown(champion: LedgerParticipant) {
+    const latest = this.groupsOf(champion).at(-1);
+    if (latest?.kind === "coronation") this.revertBounty(champion, latest);
+    champion.status = "playing";
+    champion.finishPosition = null;
+  }
+}
+
+export function planUndo(snapshot: LedgerSnapshot, req: UndoRequest): KnockoutPlan {
+  if (checkUndo(snapshot, req)) throw new LedgerStateChangedError();
+
+  const builder = new UndoBuilder(snapshot);
+  const { state } = builder;
+  const victim = state.byId(req.victimId);
+  let uncrowned = false;
+
+  if (req.kind === "elimination") {
+    if (victim.status === "finished") {
+      builder.uncrown(victim);
+      uncrowned = true;
+    } else {
+      const champion = state.all().find((p) => p.status === "finished");
+      if (champion) {
+        builder.uncrown(champion);
+        uncrowned = true;
+      }
+      const latest = builder.groupsOf(victim).at(-1);
+      if (latest?.kind === "elimination") builder.revertBounty(victim, latest);
+      victim.status = "playing";
+      victim.finishPosition = null;
+      state.setEliminatedAt(victim.id, null);
+      victim.eliminatedByIds = eliminatorsOf(builder.groupsOf(victim).at(-1));
+    }
+  } else {
+    throw new LedgerInvariantError();
+  }
+
+  return { inserts: [], deleteIds: builder.deleteIds, patches: state.patches(), crowned: false, uncrowned };
 }
 
 export function planKnockout(snapshot: LedgerSnapshot, event: KnockoutEvent): KnockoutPlan {

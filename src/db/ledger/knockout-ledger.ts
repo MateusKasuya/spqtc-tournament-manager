@@ -6,10 +6,12 @@ import * as schema from "@/db/schema";
 import { participants, tournaments, transactions } from "@/db/schema";
 import {
   planKnockout,
+  planUndo,
   LedgerStateChangedError,
   type KnockoutEvent,
   type KnockoutPlan,
   type LedgerSnapshot,
+  type UndoRequest,
 } from "@/lib/knockout-ledger";
 
 export type LedgerExecutor = PgDatabase<PgQueryResultHKT, typeof schema>;
@@ -102,4 +104,13 @@ export async function applyKnockout(tx: LedgerExecutor, tournamentId: number, ev
   const plan = planKnockout({ ...snapshot, now: stamp }, event);
   await applyPlan(tx, tournamentId, plan, stamp);
   return { crowned: plan.crowned };
+}
+
+export async function undoKnockout(tx: LedgerExecutor, tournamentId: number, req: UndoRequest) {
+  await lockTournament(tx, tournamentId);
+  const snapshot = await loadKnockoutSnapshot(tx, tournamentId);
+  if (!snapshot) throw new LedgerStateChangedError();
+  const plan = planUndo(snapshot, req);
+  await applyPlan(tx, tournamentId, plan, snapshot.now);
+  return { uncrowned: plan.uncrowned };
 }

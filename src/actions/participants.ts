@@ -7,8 +7,8 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/require-admin";
 import { getParticipantById, getParticipantByPlayerAndTournament } from "@/db/queries/participants";
 import { computeBountyDistribution } from "@/lib/bounty";
-import { checkKnockout, KnockoutLedgerError, type KnockoutEvent } from "@/lib/knockout-ledger";
-import { applyKnockout, loadKnockoutSnapshot, type LedgerExecutor } from "@/db/ledger/knockout-ledger";
+import { checkKnockout, checkUndo, KnockoutLedgerError, type KnockoutEvent, type UndoRequest } from "@/lib/knockout-ledger";
+import { applyKnockout, undoKnockout, loadKnockoutSnapshot, type LedgerExecutor } from "@/db/ledger/knockout-ledger";
 import { z } from "zod";
 
 // transactions.created_at is timestamptz (microsecond precision), but JS Date only
@@ -654,175 +654,20 @@ export async function undoElimination(participantId: number) {
 
   const participant = await getParticipantById(participantId);
   if (!participant) return { error: "Participante nao encontrado" };
-  if (participant.status !== "eliminated" && participant.status !== "finished") {
-    return { error: "Jogador nao esta eliminado" };
+
+  const snapshot = await loadKnockoutSnapshot(db, participant.tournamentId);
+  if (!snapshot) return { error: "Torneio nao encontrado" };
+
+  const req: UndoRequest = { kind: "elimination", victimId: participantId };
+  const refused = checkUndo(snapshot, req);
+  if (refused) return refused;
+
+  try {
+    await db.transaction((tx) => undoKnockout(tx, participant.tournamentId, req));
+  } catch (e) {
+    if (e instanceof KnockoutLedgerError) return { error: e.message };
+    throw e;
   }
-
-  const [tournament] = await db
-    .select({ tournamentType: tournaments.tournamentType })
-    .from(tournaments)
-    .where(eq(tournaments.id, participant.tournamentId));
-
-  const isBounty = tournament.tournamentType === "bounty_builder";
-
-  await db.transaction(async (tx) => {
-    // Se esta foi a eliminação final, ela coroou um campeão automaticamente.
-    // Descoroar ANTES de reverter a vítima e restaurar o bounty próprio que o
-    // campeão coletou ao ser coroado — senão essa transação fica órfã e o
-    // currentBounty/bountiesCollected dele ficam errados.
-    if (participant.status === "eliminated") {
-      const [champion] = await tx
-        .select({ id: participants.id, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
-        .from(participants)
-        .where(
-          and(
-            eq(participants.tournamentId, participant.tournamentId),
-            eq(participants.status, "finished")
-          )
-        );
-
-      if (champion) {
-        if (isBounty) {
-          const [latestSelf] = await tx
-            .select({ createdAt: CREATED_AT_TEXT })
-            .from(transactions)
-            .where(
-              and(
-                eq(transactions.tournamentId, participant.tournamentId),
-                eq(transactions.type, "bounty_earned"),
-                eq(transactions.relatedParticipantId, champion.id)
-              )
-            )
-            .orderBy(desc(transactions.createdAt))
-            .limit(1);
-          // Escopa ao timestamp da coroacao (bounty proprio mais recente),
-          // sem varrer bounties de rebuys anteriores do campeao.
-          const selfTxs = latestSelf
-            ? await tx
-                .select({ amount: transactions.amount, bountyChange: transactions.bountyChange })
-                .from(transactions)
-                .where(
-                  and(
-                    eq(transactions.tournamentId, participant.tournamentId),
-                    eq(transactions.type, "bounty_earned"),
-                    eq(transactions.relatedParticipantId, champion.id),
-                    sameCreatedAt(latestSelf.createdAt)
-                  )
-                )
-            : [];
-          const restored = selfTxs.reduce((sum, b) => sum + b.amount + b.bountyChange, 0);
-          if (latestSelf) {
-            await tx.delete(transactions).where(
-              and(
-                eq(transactions.tournamentId, participant.tournamentId),
-                eq(transactions.type, "bounty_earned"),
-                eq(transactions.relatedParticipantId, champion.id),
-                sameCreatedAt(latestSelf.createdAt)
-              )
-            );
-          }
-          await tx
-            .update(participants)
-            .set({
-              status: "playing",
-              finishPosition: null,
-              currentBounty: champion.currentBounty + restored,
-              bountiesCollected: Math.max(0, champion.bountiesCollected - restored),
-            })
-            .where(eq(participants.id, champion.id));
-        } else {
-          await tx
-            .update(participants)
-            .set({ status: "playing", finishPosition: null })
-            .where(eq(participants.id, champion.id));
-        }
-      }
-    }
-
-    if (isBounty) {
-      // A eliminacao e o evento mais recente da vitima; seus bounty_earned
-      // compartilham o mesmo timestamp. Escopar a reversao a esse timestamp
-      // evita varrer bounties de rebuys anteriores da mesma vitima.
-      const [latestElim] = await tx
-        .select({ createdAt: CREATED_AT_TEXT })
-        .from(transactions)
-        .where(
-          and(
-            eq(transactions.tournamentId, participant.tournamentId),
-            eq(transactions.type, "bounty_earned"),
-            eq(transactions.relatedParticipantId, participant.id)
-          )
-        )
-        .orderBy(desc(transactions.createdAt))
-        .limit(1);
-
-      const bountyTxs = latestElim
-        ? await tx
-            .select({ id: transactions.id, playerId: transactions.playerId, amount: transactions.amount, bountyChange: transactions.bountyChange })
-            .from(transactions)
-            .where(
-              and(
-                eq(transactions.tournamentId, participant.tournamentId),
-                eq(transactions.type, "bounty_earned"),
-                eq(transactions.relatedParticipantId, participant.id),
-                sameCreatedAt(latestElim.createdAt)
-              )
-            )
-        : [];
-
-      if (latestElim && bountyTxs.length > 0) {
-        const eliminatorPlayerIds = bountyTxs.map((b) => b.playerId);
-        const eliminatorParticipants = await tx
-          .select({ id: participants.id, playerId: participants.playerId, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
-          .from(participants)
-          .where(
-            and(
-              eq(participants.tournamentId, participant.tournamentId),
-              inArray(participants.playerId, eliminatorPlayerIds)
-            )
-          );
-
-        for (const ep of eliminatorParticipants) {
-          const btx = bountyTxs.find((b) => b.playerId === ep.playerId);
-          if (btx) {
-            await tx
-              .update(participants)
-              .set({
-                currentBounty: Math.max(0, ep.currentBounty - btx.bountyChange),
-                bountiesCollected: Math.max(0, ep.bountiesCollected - btx.amount),
-              })
-              .where(eq(participants.id, ep.id));
-          }
-        }
-
-        const oldBounty = bountyTxs.reduce((sum, b) => sum + b.amount + b.bountyChange, 0);
-
-        await tx.delete(transactions).where(
-          and(
-            eq(transactions.tournamentId, participant.tournamentId),
-            eq(transactions.type, "bounty_earned"),
-            eq(transactions.relatedParticipantId, participant.id),
-            sameCreatedAt(latestElim.createdAt)
-          )
-        );
-
-        await tx
-          .update(participants)
-          .set({ status: "playing", finishPosition: null, eliminatedAt: null, currentBounty: oldBounty, eliminatedByIds: [] })
-          .where(eq(participants.id, participantId));
-      } else {
-        await tx
-          .update(participants)
-          .set({ status: "playing", finishPosition: null, eliminatedAt: null, eliminatedByIds: [] })
-          .where(eq(participants.id, participantId));
-      }
-    } else {
-      await tx
-        .update(participants)
-        .set({ status: "playing", finishPosition: null, eliminatedAt: null })
-        .where(eq(participants.id, participantId));
-    }
-  });
 
   revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };

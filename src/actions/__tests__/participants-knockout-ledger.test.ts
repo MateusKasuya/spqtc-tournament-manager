@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { transactions } from "@/db/schema";
-import { confirmBuyIn, eliminatePlayer } from "@/actions/participants";
+import { participants, transactions } from "@/db/schema";
+import { confirmBuyIn, eliminatePlayer, undoElimination, addRebuy } from "@/actions/participants";
 import { getParticipantById } from "@/db/queries/participants";
 import { getTournamentFinancialSummary } from "@/db/queries/transactions";
 import { seedTournament, seedPlayer, seedParticipant, seedPlayingParticipants } from "@/test/setup";
@@ -85,5 +85,87 @@ describe("Knockout (eliminação) via Ledger de Knockout", () => {
     expect(await getParticipantById(p1)).toMatchObject({ status: "finished", finishPosition: 1 });
     expect(await bountyRows(t)).toHaveLength(0);
     expect((await getTournamentFinancialSummary(t)).bounty_earned).toBe(0);
+  });
+});
+
+describe("Desfazer eliminação via Ledger de Knockout", () => {
+  it("recusa Desfazer com dependência posterior; aceita depois de desfazer o posterior", async () => {
+    const t = await seedTournament(BOUNTY_CONFIG);
+    const { players, parts } = await setupBounty(t, 4);
+    await eliminatePlayer(parts[0], [players[1]]); // P1 coleta 20, Bounty 60
+    await eliminatePlayer(parts[1], [players[2]]); // P2 coleta 30, Bounty 70
+
+    expect(await undoElimination(parts[0])).toEqual({ error: "Desfaca primeiro as eliminacoes posteriores" });
+    expect(await getParticipantById(parts[0])).toMatchObject({ status: "eliminated", finishPosition: 4 });
+    expect(await bountyRows(t)).toHaveLength(2);
+
+    expect(await undoElimination(parts[1])).not.toHaveProperty("error");
+    expect(await getParticipantById(parts[1])).toMatchObject({ status: "playing", currentBounty: 60, bountiesCollected: 20 });
+    expect(await getParticipantById(parts[2])).toMatchObject({ currentBounty: 40, bountiesCollected: 0 });
+
+    expect(await undoElimination(parts[0])).not.toHaveProperty("error");
+    expect(await getParticipantById(parts[0])).toMatchObject({ status: "playing", finishPosition: null, currentBounty: 40, eliminatedByIds: [] });
+    expect(await getParticipantById(parts[1])).toMatchObject({ currentBounty: 40, bountiesCollected: 0 });
+    expect(await bountyRows(t)).toHaveLength(0);
+  });
+
+  it("Coroação com Bounty zero desfeita: apaga a linha zero e não apaga prêmio antigo do campeão", async () => {
+    const t = await seedTournament(BOUNTY_CONFIG);
+    const { players, parts } = await setupBounty(t, 3);
+    await eliminatePlayer(parts[0], [players[2]]); // P2 coleta 20 → Bounty 60
+    // Cenário alvo: campeão com Bounty zero na Coroação. Zera o Bounty de P1 direto
+    // no banco; P1 então elimina P2 (recebe 30 em dinheiro e 30 de Bounty) e é
+    // coroado coletando os 30 de Bounty que acabou de receber.
+    await testDb.update(participants).set({ currentBounty: 0 }).where(eq(participants.id, parts[1]));
+    await eliminatePlayer(parts[2], [players[1]]);
+
+    const before = await getParticipantById(parts[1]);
+    expect(before).toMatchObject({ status: "finished", currentBounty: 0, bountiesCollected: 60 });
+    const rowsBefore = await bountyRows(t);
+    expect(rowsBefore.at(-1)).toMatchObject({ playerId: players[1], relatedParticipantId: parts[1], amount: 30, bountyChange: 0 });
+
+    expect(await undoElimination(parts[2])).not.toHaveProperty("error");
+    expect(await getParticipantById(parts[1])).toMatchObject({ status: "playing", finishPosition: null, currentBounty: 0, bountiesCollected: 0 });
+    expect(await getParticipantById(parts[2])).toMatchObject({ status: "playing", currentBounty: 60, bountiesCollected: 20 });
+    expect(await bountyRows(t)).toHaveLength(1);
+  });
+
+  it("Coroação com Bounty zero (linha zero) e Desfazer no campeão só descoroa", async () => {
+    const t = await seedTournament(BOUNTY_CONFIG);
+    const p0 = await seedPlayer("P0");
+    const p1 = await seedPlayer("P1");
+    const v = await seedParticipant(t, p0, { status: "playing", buyInPaid: true, currentBounty: 0, bountiesCollected: 50 });
+    const champ = await seedParticipant(t, p1, { status: "playing", buyInPaid: true, currentBounty: 0, bountiesCollected: 80 });
+    await eliminatePlayer(v, [p1]);
+    expect(await bountyRows(t)).toHaveLength(2);
+
+    expect(await undoElimination(champ)).not.toHaveProperty("error");
+    expect(await getParticipantById(champ)).toMatchObject({ status: "playing", finishPosition: null, currentBounty: 0, bountiesCollected: 80 });
+    expect(await getParticipantById(v)).toMatchObject({ status: "eliminated", finishPosition: 2, bountiesCollected: 50 });
+    expect(await bountyRows(t)).toHaveLength(1);
+  });
+
+  it("Desfazer no campeão devolve o Bounty coletado na Coroação sem tocar na última Vítima", async () => {
+    const t = await seedTournament(BOUNTY_CONFIG);
+    const { players, parts } = await setupBounty(t, 2);
+    await eliminatePlayer(parts[0], [players[1]]);
+    expect(await getParticipantById(parts[1])).toMatchObject({ status: "finished", currentBounty: 0, bountiesCollected: 80 });
+
+    expect(await undoElimination(parts[1])).not.toHaveProperty("error");
+    expect(await getParticipantById(parts[1])).toMatchObject({ status: "playing", finishPosition: null, currentBounty: 60, bountiesCollected: 20 });
+    expect(await getParticipantById(parts[0])).toMatchObject({ status: "eliminated", finishPosition: 2, currentBounty: 0 });
+    expect((await getTournamentFinancialSummary(t)).bounty_earned).toBe(20);
+  });
+
+  it("lista de Eliminadores volta à do Knockout anterior após Desfazer", async () => {
+    const t = await seedTournament(BOUNTY_CONFIG);
+    const { players, parts } = await setupBounty(t, 4);
+    await addRebuy(parts[0], [players[1]]);
+    expect((await getParticipantById(parts[0]))?.eliminatedByIds).toEqual([players[1]]);
+    await eliminatePlayer(parts[0], [players[2], players[3]]);
+    expect((await getParticipantById(parts[0]))?.eliminatedByIds).toEqual([players[2], players[3]]);
+
+    await undoElimination(parts[0]);
+    expect((await getParticipantById(parts[0]))?.eliminatedByIds).toEqual([players[1]]);
   });
 });
