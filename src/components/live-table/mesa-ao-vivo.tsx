@@ -12,7 +12,7 @@ import { BlindInfo } from "./blind-info";
 import { TournamentStats } from "./tournament-stats";
 import { QuickActions } from "./quick-actions";
 import { StickyTimerBar } from "./sticky-timer-bar";
-import { advanceBlindLevel, updateTournamentStatus, endBreak } from "@/actions/tournaments";
+import { expireLevel, updateTournamentStatus } from "@/actions/tournaments";
 import { getMesaLiveData } from "@/actions/mesa";
 import { playLevelSound } from "@/lib/play-level-sound";
 import Link from "next/link";
@@ -137,29 +137,22 @@ export function MesaAoVivo({
   useEffect(() => {
     if (remainingSeconds === 0 && isRunning && isAdmin && !autoAdvancedRef.current) {
       autoAdvancedRef.current = true;
-      // Passa o timerStartedAt observado como trava de idempotencia: se outra
-      // aba/dispositivo admin ja processou este mesmo fim de nivel, o servidor
-      // reconhece que o estado mudou e ignora esta chamada em vez de avancar
-      // (ou encerrar o intervalo) de novo — evita pular um nivel de blind.
+      // Passa o timerStartedAt observado como trava de idempotencia: o
+      // servidor decide entre avancar e encerrar o Intervalo avulso, e
+      // reconhece quando outra aba/dispositivo admin ja processou este mesmo
+      // Fim do nivel (o gravado mudou) para nao pular um nivel de blind.
       const expectedTimerStartedAt = liveTournament.timerStartedAt
         ? new Date(liveTournament.timerStartedAt).toISOString()
         : null;
-      if (liveTournament.breakActive) {
-        playLevelSound();
-        startTransition(async () => {
-          await endBreak(tournament.id);
-        });
-      } else {
-        playLevelSound();
-        startTransition(async () => {
-          await advanceBlindLevel(tournament.id, expectedTimerStartedAt);
-        });
-      }
+      playLevelSound();
+      startTransition(async () => {
+        await expireLevel(tournament.id, expectedTimerStartedAt);
+      });
     }
     if (remainingSeconds > 0) {
       autoAdvancedRef.current = false;
     }
-  }, [remainingSeconds, isRunning, isAdmin, tournament.id, liveTournament.breakActive, liveTournament.timerStartedAt]);
+  }, [remainingSeconds, isRunning, isAdmin, tournament.id, liveTournament.timerStartedAt]);
 
   if (!currentLevel) {
     return (

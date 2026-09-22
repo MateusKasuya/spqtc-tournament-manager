@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { eq } from "drizzle-orm";
-import { startTimer, pauseTimer, updateBlindStructure } from "@/actions/tournaments";
+import { startTimer, pauseTimer, advanceBlindLevel, goBackBlindLevel, expireLevel, updateBlindStructure } from "@/actions/tournaments";
 import { tournaments } from "@/db/schema";
 import { testDb } from "@/test/db";
 import { seedTournament, makeLevels } from "@/test/setup";
@@ -76,5 +76,114 @@ describe("pauseTimer", () => {
 
     const after = await getTournament(t);
     expect(after.timerRunning).toBe(false);
+  });
+});
+
+describe("advanceBlindLevel", () => {
+  it("aponta pro próximo Nível e mantém 'correndo' se já estava", async () => {
+    const t = await seedTournament({ currentBlindLevel: 1, timerRunning: true, timerStartedAt: new Date(), timerRemainingSecs: 5 });
+    await updateBlindStructure(t, makeLevels(3));
+
+    const res = await advanceBlindLevel(t);
+    expect(res).toEqual({ success: true });
+
+    const after = await getTournament(t);
+    expect(after.currentBlindLevel).toBe(2);
+    expect(after.timerRunning).toBe(true);
+    expect(after.timerStartedAt).not.toBeNull();
+    expect(after.timerRemainingSecs).toBe(15 * 60);
+  });
+
+  it("aponta pro próximo Nível e permanece pausado se já estava", async () => {
+    const t = await seedTournament({ currentBlindLevel: 1, timerRunning: false });
+    await updateBlindStructure(t, makeLevels(3));
+
+    const res = await advanceBlindLevel(t);
+    expect(res).toEqual({ success: true });
+
+    const after = await getTournament(t);
+    expect(after.currentBlindLevel).toBe(2);
+    expect(after.timerRunning).toBe(false);
+    expect(after.timerStartedAt).toBeNull();
+  });
+
+  it("recusa 'Ja esta no ultimo nivel' quando não há próximo", async () => {
+    const t = await seedTournament({ currentBlindLevel: 3 });
+    await updateBlindStructure(t, makeLevels(3));
+
+    const res = await advanceBlindLevel(t);
+    expect(res).toEqual({ error: "Ja esta no ultimo nivel" });
+  });
+
+  it("segundo clique concorrente com o Nível já alterado: só um sucede, o outro recebe 'A mesa mudou'", async () => {
+    const t = await seedTournament({ currentBlindLevel: 1, timerRunning: false });
+    await updateBlindStructure(t, makeLevels(3));
+
+    const [a, b] = await Promise.all([advanceBlindLevel(t), advanceBlindLevel(t)]);
+    const results = [a, b];
+    expect(results.filter((r) => "success" in r)).toHaveLength(1);
+    expect(results.filter((r) => "error" in r && r.error === "A mesa mudou, recarregue e tente de novo")).toHaveLength(1);
+  });
+});
+
+describe("goBackBlindLevel", () => {
+  it("aponta pro Nível anterior e sempre pausa, mesmo se estava correndo", async () => {
+    const t = await seedTournament({ currentBlindLevel: 2, timerRunning: true, timerStartedAt: new Date(), timerRemainingSecs: 5 });
+    await updateBlindStructure(t, makeLevels(3));
+
+    const res = await goBackBlindLevel(t);
+    expect(res).toEqual({ success: true });
+
+    const after = await getTournament(t);
+    expect(after.currentBlindLevel).toBe(1);
+    expect(after.timerRunning).toBe(false);
+    expect(after.timerStartedAt).toBeNull();
+    expect(after.timerRemainingSecs).toBe(15 * 60);
+  });
+
+  it("recusa 'Ja esta no primeiro nivel' quando não há anterior", async () => {
+    const t = await seedTournament({ currentBlindLevel: 1 });
+    await updateBlindStructure(t, makeLevels(3));
+
+    const res = await goBackBlindLevel(t);
+    expect(res).toEqual({ error: "Ja esta no primeiro nivel" });
+  });
+});
+
+describe("expireLevel", () => {
+  it("instante observado defasado: sucesso sem mudar o Nível (outra tela já processou)", async () => {
+    const startedAt = new Date();
+    const t = await seedTournament({ currentBlindLevel: 1, timerRunning: true, timerStartedAt: startedAt, timerRemainingSecs: 0 });
+    await updateBlindStructure(t, makeLevels(3));
+
+    const res = await expireLevel(t, "2020-01-01T00:00:00.000Z");
+    expect(res).toEqual({ success: true });
+
+    const after = await getTournament(t);
+    expect(after.currentBlindLevel).toBe(1);
+  });
+
+  it("instante observado coincide: avança pro próximo Nível", async () => {
+    const startedAt = new Date();
+    const t = await seedTournament({ currentBlindLevel: 1, timerRunning: true, timerStartedAt: startedAt, timerRemainingSecs: 0 });
+    await updateBlindStructure(t, makeLevels(3));
+
+    const res = await expireLevel(t, startedAt.toISOString());
+    expect(res).toEqual({ success: true });
+
+    const after = await getTournament(t);
+    expect(after.currentBlindLevel).toBe(2);
+  });
+
+  it("no último Nível: sucesso sem mudar nada (Relógio fica em zero)", async () => {
+    const startedAt = new Date();
+    const t = await seedTournament({ currentBlindLevel: 3, timerRunning: true, timerStartedAt: startedAt, timerRemainingSecs: 0 });
+    await updateBlindStructure(t, makeLevels(3));
+
+    const res = await expireLevel(t, startedAt.toISOString());
+    expect(res).toEqual({ success: true });
+
+    const after = await getTournament(t);
+    expect(after.currentBlindLevel).toBe(3);
   });
 });

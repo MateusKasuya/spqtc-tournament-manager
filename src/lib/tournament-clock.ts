@@ -64,3 +64,74 @@ export function pauseTimer(state: ClockState, now: Date): ClockResult {
     },
   };
 }
+
+export function toIsoOrNull(value: Date | string | null): string | null {
+  if (!value) return null;
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function sortedLevels(levels: ClockLevel[]): ClockLevel[] {
+  return [...levels].sort((a, b) => a.level - b.level);
+}
+
+// Avançar (clique manual ou Fim do nível): aponta pro próximo Nível com a
+// duração cheia; mantém "correndo" se já estava, senão fica pausado.
+export function advanceLevel(state: ClockState, levels: ClockLevel[], now: Date): ClockResult {
+  const next = sortedLevels(levels).find((l) => l.level > state.currentBlindLevel);
+  if (!next) return { ok: false, error: "Ja esta no ultimo nivel" };
+
+  return {
+    ok: true,
+    state: {
+      ...state,
+      currentBlindLevel: next.level,
+      timerRemainingSecs: next.durationMinutes * 60,
+      timerStartedAt: state.timerRunning ? now : null,
+    },
+  };
+}
+
+// Voltar: correção, não fluxo — aponta pro Nível anterior com a duração
+// cheia e sempre pausado, nunca continua correndo.
+export function goBackLevel(state: ClockState, levels: ClockLevel[]): ClockResult {
+  const sorted = sortedLevels(levels);
+  const currentIndex = sorted.findIndex((l) => l.level === state.currentBlindLevel);
+  const prev = currentIndex > 0 ? sorted[currentIndex - 1] : undefined;
+  if (!prev) return { ok: false, error: "Ja esta no primeiro nivel" };
+
+  return {
+    ok: true,
+    state: {
+      ...state,
+      currentBlindLevel: prev.level,
+      timerRemainingSecs: prev.durationMinutes * 60,
+      timerRunning: false,
+      timerStartedAt: null,
+    },
+  };
+}
+
+export type ExpireLevelResult =
+  | { ok: true; changed: false }
+  | { ok: true; changed: true; state: ClockState }
+  | { ok: false; error: string };
+
+// Fim do nível: o instante de início observado pela tela é a trava. Se
+// difere do gravado, outra tela já processou este zero — nada a fazer. Se
+// coincide, avança; se não há próximo Nível, o Relógio fica em zero (sem
+// erro — "Ja esta no ultimo nivel" é só para o clique manual).
+export function expireLevel(
+  state: ClockState,
+  levels: ClockLevel[],
+  observedTimerStartedAt: string | null,
+  now: Date
+): ExpireLevelResult {
+  if (toIsoOrNull(state.timerStartedAt) !== observedTimerStartedAt) {
+    return { ok: true, changed: false };
+  }
+
+  const advanced = advanceLevel(state, levels, now);
+  if (!advanced.ok) return { ok: true, changed: false };
+
+  return { ok: true, changed: true, state: advanced.state };
+}
