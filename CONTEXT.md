@@ -51,3 +51,37 @@ _Avoid_: undo, estorno
 
 **Conservação**:
 Propriedade de que a soma dos Bounties em jogo mais os Bounties coletados é sempre igual ao total de Bounty armado por buy-ins e rebuys. Todo Knockout e todo Desfazer a preservam.
+
+### Relógio
+
+**Relógio do torneio**:
+Estado do tempo da mesa ao vivo: o Nível atual, o Tempo restante, se está correndo ou em Pausa, e se há um Intervalo avulso em andamento. Existe um por torneio e é o mesmo em todas as telas abertas.
+_Avoid_: timer (em prosa), cronômetro
+
+**Nível**:
+Entrada da estrutura de blinds (small, big, ante, duração). O Relógio sempre aponta para um Nível.
+_Avoid_: level, estágio, blind atual
+
+**Intervalo da estrutura**:
+Nível marcado como intervalo dentro da estrutura de blinds. Conta como um Nível: tem duração própria e o Relógio passa por ele na ordem.
+_Avoid_: break estrutural, nível de break
+
+**Intervalo avulso**:
+Pausa cronometrada que o admin inicia fora da estrutura (por exemplo 5, 10 ou 15 minutos). Ao terminar, o Nível volta com o Tempo restante que tinha quando o Intervalo avulso começou.
+_Avoid_: break, intervalo dinâmico
+
+**Pausa**:
+Relógio parado com o Tempo restante congelado. Não é um Intervalo: nada conta enquanto dura.
+_Avoid_: stop, parada
+
+**Tempo restante**:
+Segundos que faltam no Nível ou no Intervalo avulso. É derivado do instante em que o Relógio começou a correr e do tempo que tinha ao começar; nenhuma tela conta o tempo por conta própria.
+_Avoid_: countdown, remaining
+
+**Fim do nível**:
+Momento em que o Tempo restante chega a zero com o Relógio correndo. O Relógio passa ao próximo Nível (ou encerra o Intervalo avulso) exatamente uma vez, mesmo com várias telas de admin abertas.
+_Avoid_: auto-advance, estourar o timer
+
+**Pausa automática**:
+Pausa aplicada pelo próprio sistema quando a Coroação encerra o torneio.
+
