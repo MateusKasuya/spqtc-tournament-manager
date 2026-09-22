@@ -5,8 +5,10 @@ import { participants, transactions, tournaments } from "@/db/schema";
 import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/require-admin";
-import { getParticipantById, getParticipantByPlayerAndTournament, getPlayingCount } from "@/db/queries/participants";
+import { getParticipantById, getParticipantByPlayerAndTournament } from "@/db/queries/participants";
 import { computeBountyDistribution } from "@/lib/bounty";
+import { checkKnockout, KnockoutLedgerError, type KnockoutEvent } from "@/lib/knockout-ledger";
+import { applyKnockout, loadKnockoutSnapshot, type LedgerExecutor } from "@/db/ledger/knockout-ledger";
 import { z } from "zod";
 
 // transactions.created_at is timestamptz (microsecond precision), but JS Date only
@@ -600,128 +602,47 @@ export async function undoBonusChip(participantId: number) {
   return { success: true };
 }
 
+// Pausa o timer quando a eliminação final coroa o campeão; fica na action
+// porque o relógio do torneio não pertence ao Ledger de Knockout.
+async function pauseTimerAtEnd(tx: LedgerExecutor, tournamentId: number) {
+  const [t] = await tx
+    .select({ timerRunning: tournaments.timerRunning, timerRemainingSecs: tournaments.timerRemainingSecs, timerStartedAt: tournaments.timerStartedAt })
+    .from(tournaments)
+    .where(eq(tournaments.id, tournamentId));
+
+  if (t?.timerRunning && t.timerStartedAt) {
+    const elapsed = Math.floor((Date.now() - new Date(t.timerStartedAt).getTime()) / 1000);
+    const remaining = Math.max(0, (t.timerRemainingSecs ?? 0) - elapsed);
+    await tx
+      .update(tournaments)
+      .set({ timerRunning: false, timerStartedAt: null, timerRemainingSecs: remaining, updatedAt: new Date() })
+      .where(eq(tournaments.id, tournamentId));
+  }
+}
+
 export async function eliminatePlayer(participantId: number, eliminatedByPlayerIds?: number[]) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
   const participant = await getParticipantById(participantId);
   if (!participant) return { error: "Participante nao encontrado" };
-  if (participant.status !== "playing") return { error: "Jogador nao esta em jogo" };
 
-  const [tournament] = await db
-    .select({
-      tournamentType: tournaments.tournamentType,
-      timerRunning: tournaments.timerRunning,
-      timerRemainingSecs: tournaments.timerRemainingSecs,
-      timerStartedAt: tournaments.timerStartedAt,
-    })
-    .from(tournaments)
-    .where(eq(tournaments.id, participant.tournamentId));
+  const snapshot = await loadKnockoutSnapshot(db, participant.tournamentId);
+  if (!snapshot) return { error: "Torneio nao encontrado" };
 
-  const isBounty = tournament.tournamentType === "bounty_builder";
-  if (isBounty && (!eliminatedByPlayerIds || eliminatedByPlayerIds.length === 0)) {
-    return { error: "Selecione quem eliminou o jogador" };
+  const event: KnockoutEvent = { kind: "elimination", victimId: participantId, eliminatorPlayerIds: eliminatedByPlayerIds ?? [] };
+  const refused = checkKnockout(snapshot, event);
+  if (refused) return refused;
+
+  try {
+    await db.transaction(async (tx) => {
+      const { crowned } = await applyKnockout(tx, participant.tournamentId, event);
+      if (crowned) await pauseTimerAtEnd(tx, participant.tournamentId);
+    });
+  } catch (e) {
+    if (e instanceof KnockoutLedgerError) return { error: e.message };
+    throw e;
   }
-
-  const playingCount = await getPlayingCount(participant.tournamentId);
-  const finishPosition = playingCount;
-
-  await db.transaction(async (tx) => {
-    await tx
-      .update(participants)
-      .set({
-        status: "eliminated",
-        finishPosition,
-        eliminatedAt: new Date(),
-        eliminatedByIds: isBounty ? (eliminatedByPlayerIds ?? []) : participant.eliminatedByIds,
-      })
-      .where(eq(participants.id, participantId));
-
-    if (isBounty && eliminatedByPlayerIds && eliminatedByPlayerIds.length > 0) {
-      const bountyTxs = computeBountyDistribution(
-        participant.id,
-        participant.currentBounty,
-        eliminatedByPlayerIds,
-        participant.tournamentId
-      );
-
-      if (bountyTxs.length > 0) {
-        await tx.insert(transactions).values(bountyTxs);
-
-        const eliminatorParticipants = await tx
-          .select({ id: participants.id, playerId: participants.playerId, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
-          .from(participants)
-          .where(
-            and(
-              eq(participants.tournamentId, participant.tournamentId),
-              inArray(participants.playerId, eliminatedByPlayerIds)
-            )
-          );
-
-        for (const ep of eliminatorParticipants) {
-          const btx = bountyTxs.find((b) => b.playerId === ep.playerId);
-          if (btx) {
-            await tx
-              .update(participants)
-              .set({
-                currentBounty: ep.currentBounty + btx.bountyChange,
-                bountiesCollected: ep.bountiesCollected + btx.amount,
-              })
-              .where(eq(participants.id, ep.id));
-          }
-        }
-
-        await tx
-          .update(participants)
-          .set({ currentBounty: 0 })
-          .where(eq(participants.id, participantId));
-      }
-    }
-
-    if (playingCount - 1 === 1) {
-      const [champion] = await tx
-        .select({ id: participants.id, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected, playerId: participants.playerId })
-        .from(participants)
-        .where(and(eq(participants.tournamentId, participant.tournamentId), eq(participants.status, "playing")));
-
-      if (champion) {
-        await tx
-          .update(participants)
-          .set({ status: "finished", finishPosition: 1 })
-          .where(eq(participants.id, champion.id));
-
-        if (isBounty && champion.currentBounty > 0) {
-          await tx.insert(transactions).values({
-            tournamentId: participant.tournamentId,
-            playerId: champion.playerId,
-            type: "bounty_earned",
-            amount: champion.currentBounty,
-            bountyChange: 0,
-            relatedParticipantId: champion.id,
-          });
-
-          await tx
-            .update(participants)
-            .set({ bountiesCollected: champion.bountiesCollected + champion.currentBounty, currentBounty: 0 })
-            .where(eq(participants.id, champion.id));
-        }
-      }
-
-      const [t] = await tx
-        .select({ timerRunning: tournaments.timerRunning, timerRemainingSecs: tournaments.timerRemainingSecs, timerStartedAt: tournaments.timerStartedAt })
-        .from(tournaments)
-        .where(eq(tournaments.id, participant.tournamentId));
-
-      if (t?.timerRunning && t.timerStartedAt) {
-        const elapsed = Math.floor((Date.now() - new Date(t.timerStartedAt).getTime()) / 1000);
-        const remaining = Math.max(0, (t.timerRemainingSecs ?? 0) - elapsed);
-        await tx
-          .update(tournaments)
-          .set({ timerRunning: false, timerStartedAt: null, timerRemainingSecs: remaining, updatedAt: new Date() })
-          .where(eq(tournaments.id, participant.tournamentId));
-      }
-    }
-  });
 
   revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };
