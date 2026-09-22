@@ -6,7 +6,6 @@ import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/require-admin";
 import { getParticipantById, getParticipantByPlayerAndTournament } from "@/db/queries/participants";
-import { computeBountyDistribution } from "@/lib/bounty";
 import { checkKnockout, checkUndo, KnockoutLedgerError, type KnockoutEvent, type UndoRequest } from "@/lib/knockout-ledger";
 import { applyKnockout, undoKnockout, loadKnockoutSnapshot, type LedgerExecutor } from "@/db/ledger/knockout-ledger";
 import { z } from "zod";
@@ -176,192 +175,39 @@ export async function undoBuyIn(participantId: number) {
   return { success: true };
 }
 
-export async function addRebuy(participantId: number, eliminatedByPlayerIds?: number[]) {
+// Rebuy e rebuy duplo são o mesmo Knockout com count 1 ou 2; addDoubleRebuy
+// continua exportada porque a mesa a chama por nome.
+async function registerRebuy(participantId: number, eliminatedByPlayerIds: number[] | undefined, count: 1 | 2) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
   const participant = await getParticipantById(participantId);
   if (!participant) return { error: "Participante nao encontrado" };
-  if (!participant.buyInPaid) return { error: "Jogador ainda nao pagou buy-in" };
 
-  const [tournament] = await db
-    .select({
-      rebuyAmount: tournaments.rebuyAmount,
-      maxRebuys: tournaments.maxRebuys,
-      tournamentType: tournaments.tournamentType,
-      bountyPercentage: tournaments.bountyPercentage,
-    })
-    .from(tournaments)
-    .where(eq(tournaments.id, participant.tournamentId));
+  const snapshot = await loadKnockoutSnapshot(db, participant.tournamentId);
+  if (!snapshot) return { error: "Torneio nao encontrado" };
 
-  if (tournament.rebuyAmount === 0) return { error: "Torneio nao permite rebuy" };
-  if (tournament.maxRebuys > 0 && participant.rebuyCount >= tournament.maxRebuys) {
-    return { error: `Limite de rebuys atingido (max: ${tournament.maxRebuys})` };
+  const event: KnockoutEvent = { kind: "rebuy", victimId: participantId, eliminatorPlayerIds: eliminatedByPlayerIds ?? [], count };
+  const refused = checkKnockout(snapshot, event);
+  if (refused) return refused;
+
+  try {
+    await db.transaction((tx) => applyKnockout(tx, participant.tournamentId, event));
+  } catch (e) {
+    if (e instanceof KnockoutLedgerError) return { error: e.message };
+    throw e;
   }
-
-  const isBounty = tournament.tournamentType === "bounty_builder";
-  if (isBounty && (!eliminatedByPlayerIds || eliminatedByPlayerIds.length === 0)) {
-    return { error: "Selecione quem eliminou o jogador" };
-  }
-
-  const newBounty = isBounty
-    ? Math.floor((tournament.rebuyAmount * tournament.bountyPercentage) / 100)
-    : 0;
-
-  await db.transaction(async (tx) => {
-    if (isBounty && eliminatedByPlayerIds && eliminatedByPlayerIds.length > 0) {
-      const bountyTxs = computeBountyDistribution(
-        participant.id,
-        participant.currentBounty,
-        eliminatedByPlayerIds,
-        participant.tournamentId
-      );
-
-      if (bountyTxs.length > 0) {
-        await tx.insert(transactions).values(bountyTxs);
-
-        const eliminatorParticipants = await tx
-          .select({ id: participants.id, playerId: participants.playerId, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
-          .from(participants)
-          .where(
-            and(
-              eq(participants.tournamentId, participant.tournamentId),
-              inArray(participants.playerId, eliminatedByPlayerIds)
-            )
-          );
-
-        for (const ep of eliminatorParticipants) {
-          const tx_ = bountyTxs.find((b) => b.playerId === ep.playerId);
-          if (tx_) {
-            await tx
-              .update(participants)
-              .set({
-                currentBounty: ep.currentBounty + tx_.bountyChange,
-                bountiesCollected: ep.bountiesCollected + tx_.amount,
-              })
-              .where(eq(participants.id, ep.id));
-          }
-        }
-      }
-    }
-
-    await tx
-      .update(participants)
-      .set({
-        rebuyCount: participant.rebuyCount + 1,
-        currentBounty: isBounty ? newBounty : participant.currentBounty,
-        eliminatedByIds: isBounty ? (eliminatedByPlayerIds ?? []) : participant.eliminatedByIds,
-      })
-      .where(eq(participants.id, participantId));
-
-    await tx.insert(transactions).values({
-      tournamentId: participant.tournamentId,
-      playerId: participant.playerId,
-      type: "rebuy",
-      amount: tournament.rebuyAmount,
-    });
-  });
 
   revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
   return { success: true };
 }
 
+export async function addRebuy(participantId: number, eliminatedByPlayerIds?: number[]) {
+  return registerRebuy(participantId, eliminatedByPlayerIds, 1);
+}
+
 export async function addDoubleRebuy(participantId: number, eliminatedByPlayerIds?: number[]) {
-  const auth = await requireAdmin();
-  if ("error" in auth) return auth;
-
-  const participant = await getParticipantById(participantId);
-  if (!participant) return { error: "Participante nao encontrado" };
-  if (!participant.buyInPaid) return { error: "Jogador ainda nao pagou buy-in" };
-
-  const [tournament] = await db
-    .select({
-      rebuyAmount: tournaments.rebuyAmount,
-      maxRebuys: tournaments.maxRebuys,
-      tournamentType: tournaments.tournamentType,
-      bountyPercentage: tournaments.bountyPercentage,
-    })
-    .from(tournaments)
-    .where(eq(tournaments.id, participant.tournamentId));
-
-  if (tournament.rebuyAmount === 0) return { error: "Torneio nao permite rebuy" };
-  if (tournament.maxRebuys > 0 && participant.rebuyCount + 2 > tournament.maxRebuys) {
-    return { error: `Limite de rebuys atingido (max: ${tournament.maxRebuys})` };
-  }
-
-  const isBounty = tournament.tournamentType === "bounty_builder";
-  if (isBounty && (!eliminatedByPlayerIds || eliminatedByPlayerIds.length === 0)) {
-    return { error: "Selecione quem eliminou o jogador" };
-  }
-
-  const newBounty = isBounty
-    ? Math.floor((tournament.rebuyAmount * tournament.bountyPercentage) / 100)
-    : 0;
-
-  await db.transaction(async (tx) => {
-    if (isBounty && eliminatedByPlayerIds && eliminatedByPlayerIds.length > 0) {
-      const bountyTxs = computeBountyDistribution(
-        participant.id,
-        participant.currentBounty,
-        eliminatedByPlayerIds,
-        participant.tournamentId
-      );
-
-      if (bountyTxs.length > 0) {
-        await tx.insert(transactions).values(bountyTxs);
-
-        const eliminatorParticipants = await tx
-          .select({ id: participants.id, playerId: participants.playerId, currentBounty: participants.currentBounty, bountiesCollected: participants.bountiesCollected })
-          .from(participants)
-          .where(
-            and(
-              eq(participants.tournamentId, participant.tournamentId),
-              inArray(participants.playerId, eliminatedByPlayerIds)
-            )
-          );
-
-        for (const ep of eliminatorParticipants) {
-          const tx_ = bountyTxs.find((b) => b.playerId === ep.playerId);
-          if (tx_) {
-            await tx
-              .update(participants)
-              .set({
-                currentBounty: ep.currentBounty + tx_.bountyChange,
-                bountiesCollected: ep.bountiesCollected + tx_.amount,
-              })
-              .where(eq(participants.id, ep.id));
-          }
-        }
-      }
-    }
-
-    await tx
-      .update(participants)
-      .set({
-        rebuyCount: participant.rebuyCount + 2,
-        currentBounty: isBounty ? newBounty : participant.currentBounty,
-        eliminatedByIds: isBounty ? (eliminatedByPlayerIds ?? []) : participant.eliminatedByIds,
-      })
-      .where(eq(participants.id, participantId));
-
-    await tx.insert(transactions).values([
-      {
-        tournamentId: participant.tournamentId,
-        playerId: participant.playerId,
-        type: "rebuy",
-        amount: tournament.rebuyAmount,
-      },
-      {
-        tournamentId: participant.tournamentId,
-        playerId: participant.playerId,
-        type: "rebuy",
-        amount: tournament.rebuyAmount,
-      },
-    ]);
-  });
-
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
-  return { success: true };
+  return registerRebuy(participantId, eliminatedByPlayerIds, 2);
 }
 
 export async function addAddon(participantId: number) {

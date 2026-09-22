@@ -245,3 +245,52 @@ describe("Ledger de Knockout: Desfazer eliminação", () => {
     expect(checkUndo(s, { kind: "elimination", victimId: 1 })).toBeNull();
   });
 });
+
+describe("Ledger de Knockout: rebuy", () => {
+  it("Conservação para rebuy simples e duplo: o total cresce exatamente pelo Bounty novo armado", () => {
+    for (const count of [1, 2] as const) {
+      for (const b of [0, 7, 100]) {
+        for (const n of [1, 2, 3]) {
+          const s = makeSnapshot([b, 40, 40, 40]);
+          const eliminators = Array.from({ length: n }, (_, i) => 101 + i);
+          const after = applyPlan(s, planKnockout(s, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: eliminators, count }));
+          expect(totalBounty(after)).toBe(totalBounty(s) + 30); // rebuy 60 × 50% = 30
+          expect(after.participants[0]).toMatchObject({ rebuyCount: count, currentBounty: 30, status: "playing", eliminatedByIds: eliminators });
+        }
+      }
+    }
+  });
+
+  it("rebuy duplo: duas linhas de rebuy e as linhas de bounty compartilham o mesmo evento", () => {
+    const s = makeSnapshot([40, 40, 40]);
+    const plan = planKnockout(s, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: [101], count: 2 });
+    expect(plan.inserts).toEqual([
+      { playerId: 101, type: "bounty_earned", amount: 20, bountyChange: 20, relatedParticipantId: 1 },
+      { playerId: 100, type: "rebuy", amount: 60, bountyChange: 0, relatedParticipantId: null },
+      { playerId: 100, type: "rebuy", amount: 60, bountyChange: 0, relatedParticipantId: null },
+    ]);
+    expect(plan.crowned).toBe(false);
+  });
+
+  it("torneio normal: rebuy incrementa o contador e grava só a linha de rebuy", () => {
+    const s = makeSnapshot([0, 0, 0], { tournamentType: "normal" });
+    const plan = planKnockout(s, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: [], count: 1 });
+    expect(plan.inserts).toEqual([{ playerId: 100, type: "rebuy", amount: 60, bountyChange: 0, relatedParticipantId: null }]);
+    expect(plan.patches).toEqual([{ participantId: 1, set: { rebuyCount: 1 } }]);
+  });
+
+  it("precondições do rebuy: buy-in, torneio sem rebuy, limite, fora de jogo, Eliminadores", () => {
+    const s = makeSnapshot([40, 40, 40]);
+    s.participants[0].buyInPaid = false;
+    expect(checkKnockout(s, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: [101], count: 1 })).toEqual({ error: "Jogador ainda nao pagou buy-in" });
+    s.participants[0].buyInPaid = true;
+    expect(checkKnockout({ ...s, rules: { ...s.rules, rebuyAmount: 0 } }, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: [101], count: 1 })).toEqual({ error: "Torneio nao permite rebuy" });
+    expect(checkKnockout({ ...s, rules: { ...s.rules, maxRebuys: 1 } }, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: [101], count: 2 })).toEqual({ error: "Limite de rebuys atingido (max: 1)" });
+    expect(checkKnockout({ ...s, rules: { ...s.rules, maxRebuys: 2 } }, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: [101], count: 2 })).toBeNull();
+    expect(checkKnockout(s, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: [], count: 1 })).toEqual({ error: "Selecione quem eliminou o jogador" });
+    expect(checkKnockout(s, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: [100], count: 1 })).toEqual({ error: "Jogador nao pode eliminar a si mesmo" });
+    s.participants[1].status = "eliminated";
+    expect(checkKnockout(s, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: [101], count: 1 })).toEqual({ error: "Eliminador nao esta em jogo" });
+    expect(checkKnockout(s, { kind: "rebuy", victimId: 2, eliminatorPlayerIds: [102], count: 1 })).toEqual({ error: "Jogador nao esta em jogo" });
+  });
+});

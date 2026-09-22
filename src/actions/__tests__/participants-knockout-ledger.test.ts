@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { participants, transactions } from "@/db/schema";
-import { confirmBuyIn, eliminatePlayer, undoElimination, addRebuy } from "@/actions/participants";
+import { confirmBuyIn, eliminatePlayer, undoElimination, addRebuy, addDoubleRebuy } from "@/actions/participants";
 import { getParticipantById } from "@/db/queries/participants";
 import { getTournamentFinancialSummary } from "@/db/queries/transactions";
 import { seedTournament, seedPlayer, seedParticipant, seedPlayingParticipants } from "@/test/setup";
@@ -167,5 +167,42 @@ describe("Desfazer eliminação via Ledger de Knockout", () => {
 
     await undoElimination(parts[0]);
     expect((await getParticipantById(parts[0]))?.eliminatedByIds).toEqual([players[1]]);
+  });
+});
+
+describe("Rebuy via Ledger de Knockout", () => {
+  it("rebuy duplo grava duas recompras e um único Knockout", async () => {
+    const t = await seedTournament(BOUNTY_CONFIG);
+    const { players, parts } = await setupBounty(t, 3);
+    expect(await addDoubleRebuy(parts[0], [players[1]])).not.toHaveProperty("error");
+
+    expect(await getParticipantById(parts[0])).toMatchObject({ rebuyCount: 2, currentBounty: 30, eliminatedByIds: [players[1]] });
+    expect(await getParticipantById(parts[1])).toMatchObject({ currentBounty: 60, bountiesCollected: 20 });
+    const rows = await testDb.select().from(transactions).where(eq(transactions.tournamentId, t)).orderBy(transactions.id);
+    const rebuys = rows.filter((r) => r.type === "rebuy");
+    const bounties = rows.filter((r) => r.type === "bounty_earned");
+    expect(rebuys).toHaveLength(2);
+    expect(bounties).toHaveLength(1);
+    const stamps = new Set([...rebuys, ...bounties].map((r) => r.createdAt.toISOString()));
+    expect(stamps.size).toBe(1);
+  });
+
+  it("torneio normal: rebuy incrementa o contador sem linhas de bounty", async () => {
+    const t = await seedTournament({ rebuyAmount: 50 });
+    const [p0] = await seedPlayingParticipants(t, 2);
+    expect(await addRebuy(p0)).not.toHaveProperty("error");
+    expect(await addDoubleRebuy(p0)).not.toHaveProperty("error");
+    expect(await getParticipantById(p0)).toMatchObject({ rebuyCount: 3, currentBounty: 0 });
+    expect(await bountyRows(t)).toHaveLength(0);
+    expect((await getTournamentFinancialSummary(t)).rebuy).toBe(150);
+  });
+
+  it("recusas de Eliminador fora de jogo e Vítima na própria lista valem para rebuy", async () => {
+    const t = await seedTournament(BOUNTY_CONFIG);
+    const { players, parts } = await setupBounty(t, 3);
+    await eliminatePlayer(parts[2], [players[1]]);
+    expect(await addRebuy(parts[0], [players[2]])).toEqual({ error: "Eliminador nao esta em jogo" });
+    expect(await addDoubleRebuy(parts[0], [players[0]])).toEqual({ error: "Jogador nao pode eliminar a si mesmo" });
+    expect(await getParticipantById(parts[0])).toMatchObject({ rebuyCount: 0, currentBounty: 40 });
   });
 });
