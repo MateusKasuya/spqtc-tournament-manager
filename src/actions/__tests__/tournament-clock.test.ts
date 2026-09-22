@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { eq } from "drizzle-orm";
-import { startTimer, pauseTimer, advanceBlindLevel, goBackBlindLevel, expireLevel, updateBlindStructure } from "@/actions/tournaments";
+import { startTimer, pauseTimer, advanceBlindLevel, goBackBlindLevel, expireLevel, startBreak, endBreak, updateBlindStructure } from "@/actions/tournaments";
 import { tournaments } from "@/db/schema";
 import { testDb } from "@/test/db";
 import { seedTournament, makeLevels } from "@/test/setup";
@@ -185,5 +185,93 @@ describe("expireLevel", () => {
 
     const after = await getTournament(t);
     expect(after.currentBlindLevel).toBe(3);
+  });
+
+  it("com Intervalo avulso ativo e instante coincidente: encerra o intervalo e deixa o Nível pausado", async () => {
+    const startedAt = new Date();
+    const t = await seedTournament({
+      currentBlindLevel: 1,
+      timerRunning: true,
+      timerStartedAt: startedAt,
+      timerRemainingSecs: 0,
+      breakActive: true,
+      levelRemainingSecs: 321,
+      breakTotalSecs: 600,
+    });
+    await updateBlindStructure(t, makeLevels(3));
+
+    const res = await expireLevel(t, startedAt.toISOString());
+    expect(res).toEqual({ success: true });
+
+    const after = await getTournament(t);
+    expect(after.breakActive).toBe(false);
+    expect(after.currentBlindLevel).toBe(1);
+    expect(after.timerRemainingSecs).toBe(321);
+    expect(after.timerRunning).toBe(false);
+  });
+});
+
+describe("startBreak", () => {
+  it("guarda o Tempo restante do Nível e inicia o Intervalo avulso", async () => {
+    const t = await seedTournament({ timerRunning: true, timerStartedAt: new Date(), timerRemainingSecs: 500 });
+
+    const res = await startBreak(t, 10);
+    expect(res).toEqual({ success: true });
+
+    const after = await getTournament(t);
+    expect(after.breakActive).toBe(true);
+    expect(after.levelRemainingSecs).toBeLessThanOrEqual(500);
+    expect(after.levelRemainingSecs).toBeGreaterThanOrEqual(498);
+    expect(after.breakTotalSecs).toBe(10 * 60);
+    expect(after.timerRemainingSecs).toBe(10 * 60);
+    expect(after.timerRunning).toBe(true);
+  });
+
+  it("segundo clique concorrente com o intervalo já iniciado: só um sucede, o outro recebe 'A mesa mudou'", async () => {
+    const t = await seedTournament({ timerRunning: false, timerRemainingSecs: 500 });
+
+    const [a, b] = await Promise.all([startBreak(t, 10), startBreak(t, 10)]);
+    const results = [a, b];
+    expect(results.filter((r) => "success" in r)).toHaveLength(1);
+    expect(results.filter((r) => "error" in r && r.error === "A mesa mudou, recarregue e tente de novo")).toHaveLength(1);
+  });
+});
+
+describe("endBreak", () => {
+  it("devolve o Nível pausado com o Tempo restante guardado e limpa os campos do intervalo", async () => {
+    const t = await seedTournament({
+      timerRunning: true,
+      timerStartedAt: new Date(),
+      timerRemainingSecs: 300,
+      breakActive: true,
+      levelRemainingSecs: 777,
+      breakTotalSecs: 600,
+    });
+
+    const res = await endBreak(t);
+    expect(res).toEqual({ success: true });
+
+    const after = await getTournament(t);
+    expect(after.breakActive).toBe(false);
+    expect(after.levelRemainingSecs).toBeNull();
+    expect(after.breakTotalSecs).toBeNull();
+    expect(after.timerRemainingSecs).toBe(777);
+    expect(after.timerRunning).toBe(false);
+    expect(after.timerStartedAt).toBeNull();
+  });
+
+  it("chamado duas vezes seguidas é idempotente (sem 'A mesa mudou' na segunda)", async () => {
+    const t = await seedTournament({
+      timerRunning: true,
+      timerStartedAt: new Date(),
+      breakActive: true,
+      levelRemainingSecs: 777,
+      breakTotalSecs: 600,
+    });
+
+    const first = await endBreak(t);
+    const second = await endBreak(t);
+    expect(first).toEqual({ success: true });
+    expect(second).toEqual({ success: true });
   });
 });

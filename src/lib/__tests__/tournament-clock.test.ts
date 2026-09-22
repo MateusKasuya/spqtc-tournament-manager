@@ -6,6 +6,8 @@ import {
   advanceLevel,
   goBackLevel,
   expireLevel,
+  startBreak,
+  endBreak,
   toIsoOrNull,
   type ClockState,
   type ClockLevel,
@@ -171,5 +173,111 @@ describe("Relógio do torneio: Fim do nível", () => {
     const state: ClockState = { ...BASE, currentBlindLevel: 3, timerRunning: true, timerStartedAt: NOW, timerRemainingSecs: 0 };
     const result = expireLevel(state, LEVELS, toIsoOrNull(NOW), NOW);
     expect(result).toEqual({ ok: true, changed: false });
+  });
+
+  it("com Intervalo avulso ativo e instante coincidente: encerra o intervalo em vez de avançar", () => {
+    const state: ClockState = {
+      ...BASE,
+      currentBlindLevel: 1,
+      timerRunning: true,
+      timerStartedAt: NOW,
+      timerRemainingSecs: 0,
+      breakActive: true,
+      levelRemainingSecs: 321,
+      breakTotalSecs: 600,
+    };
+    const result = expireLevel(state, LEVELS, toIsoOrNull(NOW), NOW);
+    expect(result.ok).toBe(true);
+    if (result.ok && result.changed) {
+      expect(result.state.breakActive).toBe(false);
+      expect(result.state.currentBlindLevel).toBe(1);
+      expect(result.state.timerRemainingSecs).toBe(321);
+      expect(result.state.timerRunning).toBe(false);
+    }
+  });
+
+  it("com Intervalo avulso ativo e instante defasado: nada a fazer (a trava age antes do branch de intervalo)", () => {
+    const state: ClockState = {
+      ...BASE,
+      timerRunning: true,
+      timerStartedAt: NOW,
+      breakActive: true,
+      levelRemainingSecs: 321,
+      breakTotalSecs: 600,
+    };
+    const result = expireLevel(state, LEVELS, "2020-01-01T00:00:00.000Z", NOW);
+    expect(result).toEqual({ ok: true, changed: false });
+  });
+
+  it("Intervalo da estrutura (isBreak: true) avança como qualquer outro Nível", () => {
+    const levelsWithBreak: ClockLevel[] = [
+      { level: 1, durationMinutes: 15, isBreak: false },
+      { level: 2, durationMinutes: 5, isBreak: true },
+      { level: 3, durationMinutes: 20, isBreak: false },
+    ];
+    const state: ClockState = { ...BASE, currentBlindLevel: 1, timerRunning: true, timerStartedAt: NOW, timerRemainingSecs: 0 };
+    const result = expireLevel(state, levelsWithBreak, toIsoOrNull(NOW), NOW);
+    expect(result.ok).toBe(true);
+    if (result.ok && result.changed) {
+      expect(result.state.currentBlindLevel).toBe(2);
+      expect(result.state.timerRemainingSecs).toBe(5 * 60);
+    }
+  });
+});
+
+describe("Relógio do torneio: Intervalo avulso", () => {
+  it("Iniciar guarda o Tempo restante do Nível (Relógio correndo) e liga o intervalo", () => {
+    const startedAt = new Date(NOW.getTime() - 10_000);
+    const state: ClockState = { ...BASE, timerRunning: true, timerStartedAt: startedAt, timerRemainingSecs: 100 };
+    const result = startBreak(state, 10, NOW);
+    expect(result.breakActive).toBe(true);
+    expect(result.levelRemainingSecs).toBe(90);
+    expect(result.breakTotalSecs).toBe(10 * 60);
+    expect(result.timerRemainingSecs).toBe(10 * 60);
+    expect(result.timerRunning).toBe(true);
+    expect(result.timerStartedAt).toBe(NOW);
+  });
+
+  it("Iniciar guarda o Tempo restante do Nível (Relógio pausado)", () => {
+    const result = startBreak({ ...BASE, timerRunning: false, timerRemainingSecs: 500 }, 5, NOW);
+    expect(result.levelRemainingSecs).toBe(500);
+    expect(result.breakTotalSecs).toBe(5 * 60);
+  });
+
+  it("Encerrar sem intervalo ativo é sucesso sem mudança (idempotente)", () => {
+    expect(endBreak({ ...BASE, breakActive: false })).toEqual({ ok: true, changed: false });
+  });
+
+  it("Encerrar devolve o Tempo restante guardado do Nível, pausado, e limpa os campos do intervalo", () => {
+    const state: ClockState = {
+      ...BASE,
+      timerRunning: true,
+      timerStartedAt: NOW,
+      timerRemainingSecs: 300,
+      breakActive: true,
+      levelRemainingSecs: 777,
+      breakTotalSecs: 600,
+    };
+    const result = endBreak(state);
+    expect(result.ok).toBe(true);
+    if (result.ok && result.changed) {
+      expect(result.state).toEqual({
+        ...state,
+        breakActive: false,
+        levelRemainingSecs: null,
+        breakTotalSecs: null,
+        timerRemainingSecs: 777,
+        timerRunning: false,
+        timerStartedAt: null,
+      });
+    }
+  });
+
+  it("round-trip: Iniciar seguido de Encerrar (sem tempo decorrido) devolve o Tempo restante original do Nível", () => {
+    const state: ClockState = { ...BASE, timerRunning: true, timerStartedAt: NOW, timerRemainingSecs: 543 };
+    const started = startBreak(state, 15, NOW);
+    const ended = endBreak(started);
+    expect(ended.ok).toBe(true);
+    if (ended.ok && ended.changed) expect(ended.state.timerRemainingSecs).toBe(543);
   });
 });

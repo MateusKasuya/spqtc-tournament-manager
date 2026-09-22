@@ -111,24 +111,63 @@ export function goBackLevel(state: ClockState, levels: ClockLevel[]): ClockResul
   };
 }
 
-export type ExpireLevelResult =
+export type ClockChangeResult =
   | { ok: true; changed: false }
   | { ok: true; changed: true; state: ClockState }
   | { ok: false; error: string };
 
+// Iniciar Intervalo avulso: sem recusa (a UI já limita as durações). Guarda
+// o Tempo restante do Nível naquele instante e põe o Relógio correndo com a
+// duração do intervalo.
+export function startBreak(state: ClockState, durationMinutes: number, now: Date): ClockState {
+  return {
+    ...state,
+    breakActive: true,
+    levelRemainingSecs: remainingSecs(state, now),
+    breakTotalSecs: durationMinutes * 60,
+    timerRemainingSecs: durationMinutes * 60,
+    timerRunning: true,
+    timerStartedAt: now,
+  };
+}
+
+// Encerrar Intervalo avulso: sem intervalo ativo é sucesso sem mudança
+// (idempotente). Devolve o Tempo restante guardado do Nível, pausado.
+export function endBreak(state: ClockState): ClockChangeResult {
+  if (!state.breakActive) return { ok: true, changed: false };
+
+  return {
+    ok: true,
+    changed: true,
+    state: {
+      ...state,
+      breakActive: false,
+      levelRemainingSecs: null,
+      breakTotalSecs: null,
+      timerRemainingSecs: state.levelRemainingSecs ?? 0,
+      timerRunning: false,
+      timerStartedAt: null,
+    },
+  };
+}
+
 // Fim do nível: o instante de início observado pela tela é a trava. Se
 // difere do gravado, outra tela já processou este zero — nada a fazer. Se
-// coincide, avança; se não há próximo Nível, o Relógio fica em zero (sem
-// erro — "Ja esta no ultimo nivel" é só para o clique manual).
+// coincide: com Intervalo avulso ativo, encerra o intervalo; senão avança
+// (sem próximo Nível, o Relógio fica em zero — sem erro, que é só para o
+// clique manual). Um Intervalo da estrutura é um Nível comum aqui: nada
+// olha `isBreak` no caminho de Avançar.
 export function expireLevel(
   state: ClockState,
   levels: ClockLevel[],
   observedTimerStartedAt: string | null,
   now: Date
-): ExpireLevelResult {
+): ClockChangeResult {
   if (toIsoOrNull(state.timerStartedAt) !== observedTimerStartedAt) {
     return { ok: true, changed: false };
   }
+
+  if (state.breakActive) return endBreak(state);
 
   const advanced = advanceLevel(state, levels, now);
   if (!advanced.ok) return { ok: true, changed: false };

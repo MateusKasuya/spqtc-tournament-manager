@@ -16,6 +16,8 @@ import {
   advanceLevel,
   goBackLevel,
   expireLevel as expireLevelClock,
+  startBreak as startBreakClock,
+  endBreak as endBreakClock,
 } from "@/lib/tournament-clock";
 
 const tournamentSchema = z.object({
@@ -582,8 +584,12 @@ export async function expireLevel(tournamentId: number, observedTimerStartedAt: 
     .update(tournaments)
     .set({
       currentBlindLevel: result.state.currentBlindLevel,
+      timerRunning: result.state.timerRunning,
       timerRemainingSecs: result.state.timerRemainingSecs,
       timerStartedAt: result.state.timerStartedAt,
+      breakActive: result.state.breakActive,
+      levelRemainingSecs: result.state.levelRemainingSecs,
+      breakTotalSecs: result.state.breakTotalSecs,
       updatedAt: new Date(),
     })
     .where(and(eq(tournaments.id, tournamentId), eq(tournaments.currentBlindLevel, tournament.currentBlindLevel)))
@@ -602,35 +608,29 @@ export async function startBreak(tournamentId: number, durationMinutes: number) 
   if ("error" in auth) return auth;
 
   const [tournament] = await db
-    .select({
-      timerRemainingSecs: tournaments.timerRemainingSecs,
-      timerStartedAt: tournaments.timerStartedAt,
-      timerRunning: tournaments.timerRunning,
-    })
+    .select(CLOCK_STATE_COLUMNS)
     .from(tournaments)
     .where(eq(tournaments.id, tournamentId));
 
   if (!tournament) return { error: "Torneio nao encontrado" };
 
-  // Calcula o tempo restante atual para salvar antes do intervalo
-  let levelRemaining = tournament.timerRemainingSecs ?? 0;
-  if (tournament.timerRunning && tournament.timerStartedAt) {
-    const elapsed = Math.floor((Date.now() - new Date(tournament.timerStartedAt).getTime()) / 1000);
-    levelRemaining = Math.max(0, levelRemaining - elapsed);
-  }
+  const nextState = startBreakClock(tournament, durationMinutes, new Date());
 
-  await db
+  const updated = await db
     .update(tournaments)
     .set({
-      breakActive: true,
-      levelRemainingSecs: levelRemaining,
-      breakTotalSecs: durationMinutes * 60,
-      timerRemainingSecs: durationMinutes * 60,
-      timerRunning: true,
-      timerStartedAt: new Date(),
+      breakActive: nextState.breakActive,
+      levelRemainingSecs: nextState.levelRemainingSecs,
+      breakTotalSecs: nextState.breakTotalSecs,
+      timerRemainingSecs: nextState.timerRemainingSecs,
+      timerRunning: nextState.timerRunning,
+      timerStartedAt: nextState.timerStartedAt,
       updatedAt: new Date(),
     })
-    .where(eq(tournaments.id, tournamentId));
+    .where(and(eq(tournaments.id, tournamentId), eq(tournaments.breakActive, tournament.breakActive)))
+    .returning({ id: tournaments.id });
+
+  if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
 
   revalidatePath(`/torneios/${tournamentId}`);
   return { success: true };
@@ -641,28 +641,34 @@ export async function endBreak(tournamentId: number) {
   if ("error" in auth) return auth;
 
   const [tournament] = await db
-    .select({ levelRemainingSecs: tournaments.levelRemainingSecs, breakActive: tournaments.breakActive })
+    .select(CLOCK_STATE_COLUMNS)
     .from(tournaments)
     .where(eq(tournaments.id, tournamentId));
 
   if (!tournament) return { error: "Torneio nao encontrado" };
-  // Idempotente: se duas abas admin disparam o auto-advance no mesmo instante
-  // (countdown do intervalo chegando a zero em ambas), a segunda chamada acha
-  // o intervalo ja encerrado e nao deve zerar timerRemainingSecs de novo.
-  if (!tournament.breakActive) return { success: true };
 
-  await db
+  const result = endBreakClock(tournament);
+  if (!result.ok) return { error: result.error };
+  // Idempotente: se duas abas admin disparam o "Encerrar intervalo" ou o
+  // auto-advance no mesmo instante, a segunda chamada acha o intervalo ja
+  // encerrado e nao deve zerar timerRemainingSecs de novo.
+  if (!result.changed) return { success: true };
+
+  const updated = await db
     .update(tournaments)
     .set({
-      breakActive: false,
-      levelRemainingSecs: null,
-      breakTotalSecs: null,
-      timerRemainingSecs: tournament.levelRemainingSecs ?? 0,
-      timerRunning: false,
-      timerStartedAt: null,
+      breakActive: result.state.breakActive,
+      levelRemainingSecs: result.state.levelRemainingSecs,
+      breakTotalSecs: result.state.breakTotalSecs,
+      timerRemainingSecs: result.state.timerRemainingSecs,
+      timerRunning: result.state.timerRunning,
+      timerStartedAt: result.state.timerStartedAt,
       updatedAt: new Date(),
     })
-    .where(eq(tournaments.id, tournamentId));
+    .where(and(eq(tournaments.id, tournamentId), eq(tournaments.breakActive, tournament.breakActive)))
+    .returning({ id: tournaments.id });
+
+  if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
 
   revalidatePath(`/torneios/${tournamentId}`);
   return { success: true };
