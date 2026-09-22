@@ -45,11 +45,3 @@ export async function getParticipantByPlayerAndTournament(playerId: number, tour
     .where(and(eq(participants.playerId, playerId), eq(participants.tournamentId, tournamentId)));
   return participant ?? null;
 }
-
-export async function getPlayingCount(tournamentId: number) {
-  const result = await db
-    .select({ id: participants.id })
-    .from(participants)
-    .where(and(eq(participants.tournamentId, tournamentId), eq(participants.status, "playing")));
-  return result.length;
-}

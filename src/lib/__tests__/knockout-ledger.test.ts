@@ -4,6 +4,9 @@ import {
   planUndo,
   checkKnockout,
   checkUndo,
+  splitBounty,
+  initialBounty,
+  rebuyBounty,
   LedgerUndoBlockedError,
   type LedgerSnapshot,
   type LedgerParticipant,
@@ -359,5 +362,45 @@ describe("Ledger de Knockout: Desfazer rebuy", () => {
     expect(checkUndo(s, { kind: "rebuy", victimId: 1 })).toEqual({ error: "Desfaca a eliminacao antes de desfazer o rebuy" });
     s.participants[0].status = "playing";
     expect(checkUndo(s, { kind: "rebuy", victimId: 1 })).toBeNull();
+  });
+});
+
+describe("Ledger de Knockout: fórmulas de Bounty", () => {
+  it("Bounty inicial e de rebuy: percentual do valor líquido, zero em torneio normal", () => {
+    expect(initialBounty(RULES)).toBe(40); // floor((100 - 20) * 50 / 100)
+    expect(rebuyBounty(RULES)).toBe(30); // floor(60 * 50 / 100)
+    expect(initialBounty({ ...RULES, tournamentType: "normal" })).toBe(0);
+    expect(rebuyBounty({ ...RULES, tournamentType: "normal" })).toBe(0);
+    expect(initialBounty({ ...RULES, buyInAmount: 55, rankingFeeAmount: 10, bountyPercentage: 33 })).toBe(14); // floor(45 * 0.33)
+  });
+
+  it("divisão: 1 Eliminador, Bounty par (100) → metade dinheiro / metade Bounty", () => {
+    expect(splitBounty(100, [10])).toEqual([{ playerId: 10, amount: 50, bountyChange: 50 }]);
+  });
+
+  it("divisão: Bounty zero gera uma parte zero por Eliminador; sem Eliminadores → vazio; ids repetidos contam uma vez", () => {
+    expect(splitBounty(0, [10, 11])).toEqual([
+      { playerId: 10, amount: 0, bountyChange: 0 },
+      { playerId: 11, amount: 0, bountyChange: 0 },
+    ]);
+    expect(splitBounty(100, [])).toEqual([]);
+    expect(splitBounty(100, [10, 10])).toEqual([{ playerId: 10, amount: 50, bountyChange: 50 }]);
+  });
+
+  it("divisão: resto inteiro vai aos primeiros índices (101 entre 2 → 25+25 / 26+25)", () => {
+    expect(splitBounty(101, [10, 11])).toEqual([
+      { playerId: 10, amount: 25, bountyChange: 26 },
+      { playerId: 11, amount: 25, bountyChange: 25 },
+    ]);
+  });
+
+  it("divisão conserva o total: soma(amount) + soma(bountyChange) === Bounty, p/ valores e Ns variados", () => {
+    for (const b of [1, 7, 100, 101, 333]) {
+      for (const n of [1, 2, 3, 5]) {
+        const ids = Array.from({ length: n }, (_, i) => i + 1);
+        const total = splitBounty(b, ids).reduce((s, t) => s + t.amount + t.bountyChange, 0);
+        expect(total).toBe(b);
+      }
+    }
   });
 });

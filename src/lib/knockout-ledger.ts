@@ -2,7 +2,7 @@
 // Recebe um snapshot (regras, participantes, linhas do ledger, instante atual)
 // e um Knockout ou um pedido de Desfazer, e devolve um plano: linhas a inserir,
 // ids a apagar, um patch por participante. Sem banco, sem relógio.
-import { computeBountyDistribution } from "@/lib/bounty";
+// Também é o único lugar das fórmulas de Bounty: inicial, de rebuy e a divisão.
 
 export type TournamentType = "normal" | "bounty_builder";
 export type ParticipantStatus = "registered" | "playing" | "eliminated" | "finished";
@@ -98,18 +98,40 @@ export class LedgerInvariantError extends KnockoutLedgerError {
   }
 }
 
-export function isBountyBuilder(rules: LedgerRules) {
+export function isBountyBuilder(rules: Pick<LedgerRules, "tournamentType">) {
   return rules.tournamentType === "bounty_builder";
 }
 
-export function initialBounty(rules: LedgerRules) {
+export function initialBounty(rules: Pick<LedgerRules, "tournamentType" | "buyInAmount" | "rankingFeeAmount" | "bountyPercentage">) {
   if (!isBountyBuilder(rules)) return 0;
   return Math.floor(((rules.buyInAmount - rules.rankingFeeAmount) * rules.bountyPercentage) / 100);
 }
 
-export function rebuyBounty(rules: LedgerRules) {
+export function rebuyBounty(rules: Pick<LedgerRules, "tournamentType" | "rebuyAmount" | "bountyPercentage">) {
   if (!isBountyBuilder(rules)) return 0;
   return Math.floor((rules.rebuyAmount * rules.bountyPercentage) / 100);
+}
+
+export interface BountyShare {
+  playerId: number;
+  amount: number;
+  bountyChange: number;
+}
+
+// Divisão do Bounty da Vítima entre os Eliminadores: metade em dinheiro, metade
+// em Bounty; o resto inteiro vai +1 aos primeiros índices, conservando o total.
+// Sempre devolve uma parte por Eliminador, mesmo com Bounty zero.
+export function splitBounty(victimBounty: number, eliminatorPlayerIds: number[]): BountyShare[] {
+  const ids = uniqueIds(eliminatorPlayerIds);
+  const n = ids.length;
+  if (n === 0) return [];
+  const halfPayment = Math.floor(Math.max(0, victimBounty) / 2);
+  const halfAccrual = Math.max(0, victimBounty) - halfPayment;
+  return ids.map((playerId, i) => ({
+    playerId,
+    amount: Math.floor(halfPayment / n) + (i < halfPayment % n ? 1 : 0),
+    bountyChange: Math.floor(halfAccrual / n) + (i < halfAccrual % n ? 1 : 0),
+  }));
 }
 
 function uniqueIds(ids: number[]) {
@@ -210,20 +232,12 @@ function sameIds(a: number[], b: number[]) {
   return a.length === b.length && a.every((v, i) => v === b[i]);
 }
 
-// Divisão do Bounty da Vítima entre os Eliminadores. Sempre devolve uma linha
-// por Eliminador, mesmo com Bounty zero ("sempre gravar").
-function splitBounty(victim: LedgerParticipant, eliminatorPlayerIds: number[]): LedgerRowInsert[] {
-  const shares = computeBountyDistribution(victim.id, victim.currentBounty, eliminatorPlayerIds, 0);
-  return uniqueIds(eliminatorPlayerIds).map((playerId) => {
-    const share = shares.find((s) => s.playerId === playerId);
-    return {
-      playerId,
-      type: "bounty_earned",
-      amount: share?.amount ?? 0,
-      bountyChange: share?.bountyChange ?? 0,
-      relatedParticipantId: victim.id,
-    };
-  });
+function bountyRowsFor(victim: LedgerParticipant, eliminatorPlayerIds: number[]): LedgerRowInsert[] {
+  return splitBounty(victim.currentBounty, eliminatorPlayerIds).map((share) => ({
+    ...share,
+    type: "bounty_earned",
+    relatedParticipantId: victim.id,
+  }));
 }
 
 // Um Knockout (ou Coroação) de uma Vítima: as linhas que compartilham o mesmo
@@ -374,7 +388,7 @@ export function planKnockout(snapshot: LedgerSnapshot, event: KnockoutEvent): Kn
   let crowned = false;
 
   if (isBountyBuilder(rules)) {
-    for (const share of splitBounty(victim, event.eliminatorPlayerIds)) {
+    for (const share of bountyRowsFor(victim, event.eliminatorPlayerIds)) {
       const eliminator = state.byPlayer(share.playerId);
       eliminator.currentBounty += share.bountyChange;
       eliminator.bountiesCollected += share.amount;

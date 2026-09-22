@@ -6,7 +6,7 @@ import { eq, and, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/require-admin";
 import { getParticipantById, getParticipantByPlayerAndTournament } from "@/db/queries/participants";
-import { checkKnockout, checkUndo, KnockoutLedgerError, type KnockoutEvent, type UndoRequest } from "@/lib/knockout-ledger";
+import { checkKnockout, checkUndo, initialBounty, KnockoutLedgerError, type KnockoutEvent, type UndoRequest } from "@/lib/knockout-ledger";
 import { applyKnockout, undoKnockout, loadKnockoutSnapshot, type LedgerExecutor } from "@/db/ledger/knockout-ledger";
 import { z } from "zod";
 
@@ -104,15 +104,10 @@ export async function confirmBuyIn(participantId: number) {
     .from(tournaments)
     .where(eq(tournaments.id, participant.tournamentId));
 
-  const isBounty = tournament.tournamentType === "bounty_builder";
-  const initialBounty = isBounty
-    ? Math.floor(((tournament.buyInAmount - tournament.rankingFeeAmount) * tournament.bountyPercentage) / 100)
-    : 0;
-
   await db.transaction(async (tx) => {
     await tx
       .update(participants)
-      .set({ buyInPaid: true, status: "playing", currentBounty: initialBounty })
+      .set({ buyInPaid: true, status: "playing", currentBounty: initialBounty(tournament) })
       .where(eq(participants.id, participantId));
 
     await tx.insert(transactions).values({
