@@ -1,7 +1,7 @@
 // Adapter do Ledger de Knockout: persistência de eventos ligada à transação do
 // chamador. Sem auth, sem revalidate, nunca abre a própria transação.
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, count, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import * as schema from "@/db/schema";
 import { participants, tournaments, transactions } from "@/db/schema";
 import {
@@ -113,4 +113,22 @@ export async function undoKnockout(tx: LedgerExecutor, tournamentId: number, req
   const plan = planUndo(snapshot, req);
   await applyPlan(tx, tournamentId, plan, snapshot.now);
   return { uncrowned: plan.uncrowned };
+}
+
+// Knockouts por Eliminador para os pontos de ranking, a partir do ledger.
+// Exclui a autocoleta da Coroação (Eliminador igual à Vítima).
+export async function countKnockoutsByEliminator(executor: LedgerExecutor, tournamentId: number) {
+  const rows = await executor
+    .select({ playerId: transactions.playerId, knockouts: count(transactions.id) })
+    .from(transactions)
+    .innerJoin(participants, eq(transactions.relatedParticipantId, participants.id))
+    .where(
+      and(
+        eq(transactions.tournamentId, tournamentId),
+        eq(transactions.type, "bounty_earned"),
+        ne(transactions.playerId, participants.playerId)
+      )
+    )
+    .groupBy(transactions.playerId);
+  return new Map(rows.map((r) => [r.playerId, Number(r.knockouts)]));
 }

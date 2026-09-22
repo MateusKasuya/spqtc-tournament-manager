@@ -2,9 +2,10 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { db } from "@/db";
-import { tournaments, blindStructures, prizeStructures, participants, transactions } from "@/db/schema";
-import { eq, and, isNotNull, gt, asc, count, ne } from "drizzle-orm";
+import { tournaments, blindStructures, prizeStructures, participants } from "@/db/schema";
+import { eq, and, isNotNull, gt, asc } from "drizzle-orm";
 import { computeParticipantPoints } from "@/lib/points-table";
+import { countKnockoutsByEliminator } from "@/db/ledger/knockout-ledger";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -221,25 +222,8 @@ export async function updateTournamentStatus(
     if (status === "finished") {
       const isBounty = current.tournamentType === "bounty_builder";
 
-      // Knockouts por eliminador, a partir do ledger de bounty.
-      // Exclui a auto-coleta do campeão: bounty_earned onde o eliminador é o
-      // próprio dono da participação relacionada (playerId == related.playerId).
-      const koByPlayer = new Map<number, number>();
-      if (isBounty) {
-        const koRows = await tx
-          .select({ playerId: transactions.playerId, ko: count(transactions.id) })
-          .from(transactions)
-          .innerJoin(participants, eq(transactions.relatedParticipantId, participants.id))
-          .where(
-            and(
-              eq(transactions.tournamentId, id),
-              eq(transactions.type, "bounty_earned"),
-              ne(transactions.playerId, participants.playerId)
-            )
-          )
-          .groupBy(transactions.playerId);
-        for (const r of koRows) koByPlayer.set(r.playerId, Number(r.ko));
-      }
+      // Knockouts por Eliminador a partir do Ledger de Knockout (sem a autocoleta da Coroação).
+      const koByPlayer = isBounty ? await countKnockoutsByEliminator(tx, id) : new Map<number, number>();
 
       const finishedParticipants = await tx
         .select({

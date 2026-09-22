@@ -83,4 +83,21 @@ describe("pontos de eliminação (bounty)", () => {
     expect(await pts(parts[1])).toBe(10); // pos2
     expect(await pts(parts[0])).toBe(8); // pos3
   });
+
+  it("5. Knockout de Vítima com Bounty zero conta 0.25 para o Eliminador; Coroação não conta", async () => {
+    const t = await seedTournament(BOUNTY_CONFIG);
+    const players = [await seedPlayer("P0"), await seedPlayer("P1"), await seedPlayer("P2")];
+    const parts = [
+      await seedParticipant(t, players[0], { status: "playing", buyInPaid: true, currentBounty: 0 }),
+      await seedParticipant(t, players[1], { status: "playing", buyInPaid: true, currentBounty: 0 }),
+      await seedParticipant(t, players[2], { status: "playing", buyInPaid: true, currentBounty: 0 }),
+    ];
+    await eliminatePlayer(parts[0], [players[1]]); // Bounty zero: linha de valor zero, ainda é um Knockout
+    await eliminatePlayer(parts[1], [players[2]]); // p2 campeão com Bounty zero (autocoleta zero não conta)
+    await updateTournamentStatus(t, "finished");
+
+    expect(await pts(parts[2])).toBe(12.25);
+    expect(await pts(parts[1])).toBe(10.25);
+    expect(await pts(parts[0])).toBe(8);
+  });
 });
