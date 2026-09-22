@@ -171,7 +171,7 @@ describe("Desfazer eliminação via Ledger de Knockout", () => {
 });
 
 describe("Rebuy via Ledger de Knockout", () => {
-  it("rebuy duplo grava duas recompras e um único Knockout", async () => {
+  it("rebuy duplo grava duas linhas de rebuy e um único Knockout", async () => {
     const t = await seedTournament(BOUNTY_CONFIG);
     const { players, parts } = await setupBounty(t, 3);
     expect(await addDoubleRebuy(parts[0], [players[1]])).not.toHaveProperty("error");
@@ -208,7 +208,7 @@ describe("Rebuy via Ledger de Knockout", () => {
 });
 
 describe("Desfazer rebuy via Ledger de Knockout", () => {
-  it("undo de rebuy que não gerou linhas de bounty (legado) tira o Bounty do rebuy", async () => {
+  it("Desfazer rebuy que não gerou linhas de bounty (legado) tira o Bounty do rebuy", async () => {
     const t = await seedTournament(BOUNTY_CONFIG);
     const { players, parts } = await setupBounty(t, 2);
     await testDb.update(participants).set({ rebuyCount: 1, currentBounty: 30 }).where(eq(participants.id, parts[0]));
@@ -219,7 +219,7 @@ describe("Desfazer rebuy via Ledger de Knockout", () => {
     expect((await getTournamentFinancialSummary(t)).rebuy).toBe(0);
   });
 
-  it("undo de rebuy após a Vítima acumular como Eliminadora preserva o acúmulo (delta, não absoluto)", async () => {
+  it("Desfazer rebuy após a Vítima acumular como Eliminadora preserva o acúmulo (delta, não absoluto)", async () => {
     const t = await seedTournament(BOUNTY_CONFIG);
     const { players, parts } = await setupBounty(t, 3);
     await addRebuy(parts[0], [players[1]]); // P1 coleta 20 → 60; P0 Bounty novo 30
@@ -249,7 +249,7 @@ describe("Desfazer rebuy via Ledger de Knockout", () => {
     expect(await undoRebuy(parts[0])).toEqual({ error: "Nenhum rebuy para desfazer" });
   });
 
-  it("recusa undo de rebuy com dependência posterior", async () => {
+  it("recusa Desfazer rebuy com dependência posterior", async () => {
     const t = await seedTournament(BOUNTY_CONFIG);
     const { players, parts } = await setupBounty(t, 3);
     await addRebuy(parts[0], [players[1]]);

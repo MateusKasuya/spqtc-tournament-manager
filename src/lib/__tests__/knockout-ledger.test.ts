@@ -8,6 +8,7 @@ import {
   initialBounty,
   rebuyBounty,
   LedgerUndoBlockedError,
+  LedgerInvariantError,
   type LedgerSnapshot,
   type LedgerParticipant,
   type LedgerRow,
@@ -314,7 +315,7 @@ describe("Ledger de Knockout: Desfazer rebuy", () => {
     }
   });
 
-  it("rebuy duplo desfeito em dois toques: o primeiro tira uma recompra sem tocar no Bounty, o segundo reverte o Knockout", () => {
+  it("rebuy duplo desfeito em dois toques: o primeiro tira um rebuy sem tocar no Bounty, o segundo reverte o Knockout", () => {
     const s = makeSnapshot([40, 40, 40]);
     const s1 = applyPlan(s, planKnockout(s, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: [101], count: 2 }));
     const first = planUndo(s1, { kind: "rebuy", victimId: 1 });
@@ -402,5 +403,43 @@ describe("Ledger de Knockout: fórmulas de Bounty", () => {
         expect(total).toBe(b);
       }
     }
+  });
+});
+
+describe("Ledger de Knockout: invariantes", () => {
+  it("Desfazer que deixaria um Eliminador negativo aborta com erro de invariante, não clamp", () => {
+    const s = makeSnapshot([0, 5]);
+    s.participants[0].status = "eliminated";
+    s.participants[0].finishPosition = 2;
+    s.participants[1].bountiesCollected = 20;
+    // a linha diz que P1 acumulou 20, mas o Bounty atual de P1 é 5: ledger inconsistente
+    s.rows = [{ id: 1, playerId: 101, type: "bounty_earned", amount: 20, bountyChange: 20, relatedParticipantId: 1, createdAt: "2026-01-01 00:00:00+00" }];
+    expect(() => planUndo(s, { kind: "elimination", victimId: 1 })).toThrow(LedgerInvariantError);
+  });
+
+  it("Knockout de Vítima com Bounty negativo aborta com erro de invariante", () => {
+    const s = makeSnapshot([-1, 40]);
+    expect(() => planKnockout(s, { kind: "elimination", victimId: 1, eliminatorPlayerIds: [101] })).toThrow(LedgerInvariantError);
+  });
+
+  it("editar o valor do rebuy ou a porcentagem de bounty durante o torneio não corrompe o Desfazer", () => {
+    const s = makeSnapshot([40, 40, 40]);
+    const s1 = applyPlan(s, planKnockout(s, { kind: "rebuy", victimId: 1, eliminatorPlayerIds: [101], count: 1 }), "2026-09-22 12:00:01+00");
+    const s2 = applyPlan(s1, planKnockout(s1, { kind: "elimination", victimId: 1, eliminatorPlayerIds: [102] }), "2026-09-22 12:00:02+00");
+    const edited = { ...s2, rules: { ...s2.rules, rebuyAmount: 200, bountyPercentage: 90 } };
+    const u1 = applyPlan(edited, planUndo(edited, { kind: "elimination", victimId: 1 }));
+    expect(u1.participants).toEqual(s1.participants);
+    const u2 = applyPlan(u1, planUndo(u1, { kind: "rebuy", victimId: 1 }));
+    expect(u2.participants).toEqual(s.participants);
+    expect(u2.rows).toEqual([]);
+  });
+
+  it("torneio normal: Knockout e Desfazer não tocam na lista de Eliminadores", () => {
+    const s = makeSnapshot([0, 0, 0], { tournamentType: "normal" });
+    s.participants[0].eliminatedByIds = [7];
+    const s1 = applyPlan(s, planKnockout(s, { kind: "elimination", victimId: 1, eliminatorPlayerIds: [] }));
+    expect(s1.participants[0].eliminatedByIds).toEqual([7]);
+    const s2 = applyPlan(s1, planUndo(s1, { kind: "elimination", victimId: 1 }));
+    expect(s2.participants).toEqual(s.participants);
   });
 });

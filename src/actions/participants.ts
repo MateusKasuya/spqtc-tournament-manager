@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/require-admin";
 import { getParticipantById, getParticipantByPlayerAndTournament } from "@/db/queries/participants";
 import { checkKnockout, checkUndo, initialBounty, KnockoutLedgerError, type KnockoutEvent, type UndoRequest } from "@/lib/knockout-ledger";
-import { applyKnockout, undoKnockout, loadKnockoutSnapshot, type LedgerExecutor } from "@/db/ledger/knockout-ledger";
+import { applyKnockout, undoKnockout, loadKnockoutSnapshot } from "@/db/ledger/knockout-ledger";
 import { z } from "zod";
 
 export async function addParticipant(tournamentId: number, playerId: number) {
@@ -160,30 +160,47 @@ export async function undoBuyIn(participantId: number) {
   return { success: true };
 }
 
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Contexto de um Knockout ou Desfazer: o participante e o snapshot do torneio
+// lido fora da transação, para a precondição responder ao admin.
+async function loadKnockoutContext(participantId: number) {
+  const participant = await getParticipantById(participantId);
+  if (!participant) return { error: "Participante nao encontrado" };
+  const snapshot = await loadKnockoutSnapshot(db, participant.tournamentId);
+  if (!snapshot) return { error: "Torneio nao encontrado" };
+  return { participant, snapshot };
+}
+
+// Roda a operação do ledger na transação; estado esperado do ledger vira
+// { error } no contrato da action, bug/infra continua lançando.
+async function runKnockoutLedger(work: (tx: Tx) => Promise<unknown>) {
+  try {
+    await db.transaction(work);
+    return null;
+  } catch (e) {
+    if (e instanceof KnockoutLedgerError) return { error: e.message };
+    throw e;
+  }
+}
+
 // Rebuy e rebuy duplo são o mesmo Knockout com count 1 ou 2; addDoubleRebuy
 // continua exportada porque a mesa a chama por nome.
 async function registerRebuy(participantId: number, eliminatedByPlayerIds: number[] | undefined, count: 1 | 2) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const participant = await getParticipantById(participantId);
-  if (!participant) return { error: "Participante nao encontrado" };
-
-  const snapshot = await loadKnockoutSnapshot(db, participant.tournamentId);
-  if (!snapshot) return { error: "Torneio nao encontrado" };
+  const ctx = await loadKnockoutContext(participantId);
+  if ("error" in ctx) return ctx;
 
   const event: KnockoutEvent = { kind: "rebuy", victimId: participantId, eliminatorPlayerIds: eliminatedByPlayerIds ?? [], count };
-  const refused = checkKnockout(snapshot, event);
+  const refused = checkKnockout(ctx.snapshot, event);
   if (refused) return refused;
 
-  try {
-    await db.transaction((tx) => applyKnockout(tx, participant.tournamentId, event));
-  } catch (e) {
-    if (e instanceof KnockoutLedgerError) return { error: e.message };
-    throw e;
-  }
+  const failed = await runKnockoutLedger((tx) => applyKnockout(tx, ctx.participant.tournamentId, event));
+  if (failed) return failed;
 
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  revalidatePath(`/torneios/${ctx.participant.tournamentId}`, "layout");
   return { success: true };
 }
 
@@ -232,24 +249,17 @@ export async function undoRebuy(participantId: number) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const participant = await getParticipantById(participantId);
-  if (!participant) return { error: "Participante nao encontrado" };
-
-  const snapshot = await loadKnockoutSnapshot(db, participant.tournamentId);
-  if (!snapshot) return { error: "Torneio nao encontrado" };
+  const ctx = await loadKnockoutContext(participantId);
+  if ("error" in ctx) return ctx;
 
   const req: UndoRequest = { kind: "rebuy", victimId: participantId };
-  const refused = checkUndo(snapshot, req);
+  const refused = checkUndo(ctx.snapshot, req);
   if (refused) return refused;
 
-  try {
-    await db.transaction((tx) => undoKnockout(tx, participant.tournamentId, req));
-  } catch (e) {
-    if (e instanceof KnockoutLedgerError) return { error: e.message };
-    throw e;
-  }
+  const failed = await runKnockoutLedger((tx) => undoKnockout(tx, ctx.participant.tournamentId, req));
+  if (failed) return failed;
 
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  revalidatePath(`/torneios/${ctx.participant.tournamentId}`, "layout");
   return { success: true };
 }
 
@@ -332,7 +342,7 @@ export async function undoBonusChip(participantId: number) {
 
 // Pausa o timer quando a eliminação final coroa o campeão; fica na action
 // porque o relógio do torneio não pertence ao Ledger de Knockout.
-async function pauseTimerAtEnd(tx: LedgerExecutor, tournamentId: number) {
+async function pauseTimerAtEnd(tx: Tx, tournamentId: number) {
   const [t] = await tx
     .select({ timerRunning: tournaments.timerRunning, timerRemainingSecs: tournaments.timerRemainingSecs, timerStartedAt: tournaments.timerStartedAt })
     .from(tournaments)
@@ -352,27 +362,20 @@ export async function eliminatePlayer(participantId: number, eliminatedByPlayerI
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const participant = await getParticipantById(participantId);
-  if (!participant) return { error: "Participante nao encontrado" };
-
-  const snapshot = await loadKnockoutSnapshot(db, participant.tournamentId);
-  if (!snapshot) return { error: "Torneio nao encontrado" };
+  const ctx = await loadKnockoutContext(participantId);
+  if ("error" in ctx) return ctx;
 
   const event: KnockoutEvent = { kind: "elimination", victimId: participantId, eliminatorPlayerIds: eliminatedByPlayerIds ?? [] };
-  const refused = checkKnockout(snapshot, event);
+  const refused = checkKnockout(ctx.snapshot, event);
   if (refused) return refused;
 
-  try {
-    await db.transaction(async (tx) => {
-      const { crowned } = await applyKnockout(tx, participant.tournamentId, event);
-      if (crowned) await pauseTimerAtEnd(tx, participant.tournamentId);
-    });
-  } catch (e) {
-    if (e instanceof KnockoutLedgerError) return { error: e.message };
-    throw e;
-  }
+  const failed = await runKnockoutLedger(async (tx) => {
+    const { crowned } = await applyKnockout(tx, ctx.participant.tournamentId, event);
+    if (crowned) await pauseTimerAtEnd(tx, ctx.participant.tournamentId);
+  });
+  if (failed) return failed;
 
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  revalidatePath(`/torneios/${ctx.participant.tournamentId}`, "layout");
   return { success: true };
 }
 
@@ -380,24 +383,17 @@ export async function undoElimination(participantId: number) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const participant = await getParticipantById(participantId);
-  if (!participant) return { error: "Participante nao encontrado" };
-
-  const snapshot = await loadKnockoutSnapshot(db, participant.tournamentId);
-  if (!snapshot) return { error: "Torneio nao encontrado" };
+  const ctx = await loadKnockoutContext(participantId);
+  if ("error" in ctx) return ctx;
 
   const req: UndoRequest = { kind: "elimination", victimId: participantId };
-  const refused = checkUndo(snapshot, req);
+  const refused = checkUndo(ctx.snapshot, req);
   if (refused) return refused;
 
-  try {
-    await db.transaction((tx) => undoKnockout(tx, participant.tournamentId, req));
-  } catch (e) {
-    if (e instanceof KnockoutLedgerError) return { error: e.message };
-    throw e;
-  }
+  const failed = await runKnockoutLedger((tx) => undoKnockout(tx, ctx.participant.tournamentId, req));
+  if (failed) return failed;
 
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  revalidatePath(`/torneios/${ctx.participant.tournamentId}`, "layout");
   return { success: true };
 }
 

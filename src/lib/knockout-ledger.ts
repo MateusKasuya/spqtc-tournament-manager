@@ -122,11 +122,12 @@ export interface BountyShare {
 // em Bounty; o resto inteiro vai +1 aos primeiros índices, conservando o total.
 // Sempre devolve uma parte por Eliminador, mesmo com Bounty zero.
 export function splitBounty(victimBounty: number, eliminatorPlayerIds: number[]): BountyShare[] {
+  if (victimBounty < 0) throw new LedgerInvariantError();
   const ids = uniqueIds(eliminatorPlayerIds);
   const n = ids.length;
   if (n === 0) return [];
-  const halfPayment = Math.floor(Math.max(0, victimBounty) / 2);
-  const halfAccrual = Math.max(0, victimBounty) - halfPayment;
+  const halfPayment = Math.floor(victimBounty / 2);
+  const halfAccrual = victimBounty - halfPayment;
   return ids.map((playerId, i) => ({
     playerId,
     amount: Math.floor(halfPayment / n) + (i < halfPayment % n ? 1 : 0),
@@ -281,21 +282,69 @@ function eliminatorsOf(group: EventGroup | undefined) {
 // sua linha registrou; a Vítima recebe o que tinha antes mais o que acumulou
 // depois como Eliminadora (linhas posteriores), nunca a configuração do torneio.
 class UndoBuilder {
-  readonly deleteIds: number[] = [];
-  readonly state: WorkingState;
+  private readonly deleteIds: number[] = [];
+  private readonly state: WorkingState;
   private readonly rows: LedgerRow[];
+  private readonly rules: LedgerRules;
+  private uncrowned = false;
 
   constructor(snapshot: LedgerSnapshot) {
     this.state = new WorkingState(snapshot.participants);
     this.rows = snapshot.rows;
+    this.rules = snapshot.rules;
   }
 
-  liveRows() {
+  // Desfazer no campeão só descoroa. Ao desfazer a eliminação de uma Vítima
+  // com campeão coroado, descoroa antes de reverter a Vítima.
+  undoElimination(victimId: number) {
+    const victim = this.state.byId(victimId);
+    if (victim.status === "finished") {
+      this.uncrown(victim);
+      return;
+    }
+    const champion = this.state.all().find((p) => p.status === "finished");
+    if (champion) this.uncrown(champion);
+
+    const latest = this.groupsOf(victim).at(-1);
+    if (latest?.kind === "elimination") this.revertBounty(victim, latest);
+    victim.status = "playing";
+    victim.finishPosition = null;
+    this.state.setEliminatedAt(victim.id, null);
+    this.restoreEliminators(victim);
+  }
+
+  // Remove uma linha de rebuy do grupo mais recente; quando o grupo esvazia
+  // (segundo toque de um duplo, ou rebuy simples) reverte o Knockout.
+  undoRebuy(victimId: number) {
+    const victim = this.state.byId(victimId);
+    victim.rebuyCount -= 1;
+    const lastRebuy = this.liveRows()
+      .filter((r) => r.type === "rebuy" && r.playerId === victim.playerId)
+      .at(-1);
+    if (!lastRebuy) return;
+    const group = this.groupsOf(victim).find((g) => g.createdAt === lastRebuy.createdAt);
+    this.deleteIds.push(lastRebuy.id);
+    if (group && group.rebuyRows.length === 1) {
+      this.revertBounty(victim, group);
+      this.restoreEliminators(victim);
+    }
+  }
+
+  plan(): KnockoutPlan {
+    return { inserts: [], deleteIds: this.deleteIds, patches: this.state.patches(), crowned: false, uncrowned: this.uncrowned };
+  }
+
+  private liveRows() {
     return this.rows.filter((r) => !this.deleteIds.includes(r.id));
   }
 
-  groupsOf(victim: LedgerParticipant) {
+  private groupsOf(victim: LedgerParticipant) {
     return groupsOfVictim(this.liveRows(), victim);
+  }
+
+  // A lista de Eliminadores volta à do Knockout anterior em vigor.
+  private restoreEliminators(victim: LedgerParticipant) {
+    if (isBountyBuilder(this.rules)) victim.eliminatedByIds = eliminatorsOf(this.groupsOf(victim).at(-1));
   }
 
   private assertNoLaterKnockoutOf(participant: LedgerParticipant, afterId: number) {
@@ -308,7 +357,7 @@ class UndoBuilder {
     if (blocked) throw new LedgerUndoBlockedError();
   }
 
-  revertBounty(victim: LedgerParticipant, group: EventGroup) {
+  private revertBounty(victim: LedgerParticipant, group: EventGroup) {
     for (const row of group.bountyRows) {
       const eliminator = this.state.byPlayer(row.playerId);
       if (eliminator.id !== victim.id) this.assertNoLaterKnockoutOf(eliminator, group.maxId);
@@ -323,58 +372,21 @@ class UndoBuilder {
     this.deleteIds.push(...group.bountyRows.map((r) => r.id));
   }
 
-  uncrown(champion: LedgerParticipant) {
+  private uncrown(champion: LedgerParticipant) {
     const latest = this.groupsOf(champion).at(-1);
     if (latest?.kind === "coronation") this.revertBounty(champion, latest);
     champion.status = "playing";
     champion.finishPosition = null;
+    this.uncrowned = true;
   }
 }
 
 export function planUndo(snapshot: LedgerSnapshot, req: UndoRequest): KnockoutPlan {
   if (checkUndo(snapshot, req)) throw new LedgerStateChangedError();
-
   const builder = new UndoBuilder(snapshot);
-  const { state } = builder;
-  const victim = state.byId(req.victimId);
-  let uncrowned = false;
-
-  if (req.kind === "elimination") {
-    if (victim.status === "finished") {
-      builder.uncrown(victim);
-      uncrowned = true;
-    } else {
-      const champion = state.all().find((p) => p.status === "finished");
-      if (champion) {
-        builder.uncrown(champion);
-        uncrowned = true;
-      }
-      const latest = builder.groupsOf(victim).at(-1);
-      if (latest?.kind === "elimination") builder.revertBounty(victim, latest);
-      victim.status = "playing";
-      victim.finishPosition = null;
-      state.setEliminatedAt(victim.id, null);
-      victim.eliminatedByIds = eliminatorsOf(builder.groupsOf(victim).at(-1));
-    }
-  } else {
-    // Remove uma recompra do grupo mais recente; quando o grupo esvazia
-    // (segundo toque de um duplo, ou rebuy simples) reverte o Knockout.
-    victim.rebuyCount -= 1;
-    const lastRebuy = builder
-      .liveRows()
-      .filter((r) => r.type === "rebuy" && r.playerId === victim.playerId)
-      .at(-1);
-    if (lastRebuy) {
-      const group = builder.groupsOf(victim).find((g) => g.createdAt === lastRebuy.createdAt);
-      builder.deleteIds.push(lastRebuy.id);
-      if (group && group.rebuyRows.length === 1) {
-        builder.revertBounty(victim, group);
-        victim.eliminatedByIds = eliminatorsOf(builder.groupsOf(victim).at(-1));
-      }
-    }
-  }
-
-  return { inserts: [], deleteIds: builder.deleteIds, patches: state.patches(), crowned: false, uncrowned };
+  if (req.kind === "elimination") builder.undoElimination(req.victimId);
+  else builder.undoRebuy(req.victimId);
+  return builder.plan();
 }
 
 export function planKnockout(snapshot: LedgerSnapshot, event: KnockoutEvent): KnockoutPlan {
@@ -395,8 +407,8 @@ export function planKnockout(snapshot: LedgerSnapshot, event: KnockoutEvent): Kn
       inserts.push(share);
     }
     victim.currentBounty = 0;
+    victim.eliminatedByIds = uniqueIds(event.eliminatorPlayerIds);
   }
-  victim.eliminatedByIds = uniqueIds(event.eliminatorPlayerIds);
 
   if (event.kind === "elimination") {
     victim.status = "eliminated";
