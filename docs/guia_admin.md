@@ -54,7 +54,8 @@ Só pode haver uma temporada ativa por vez. Para encerrar uma temporada, clique 
 Na página do torneio → aba **Blinds** → **Editar Blinds**:
 - Adicione níveis manualmente ou carregue um **template salvo**
 - Cada nível tem: small blind, big blind, ante, duração (minutos)
-- Marque níveis especiais: **Break**, **Nível de Add-on**, **Big Ante**
+- Marque níveis especiais: **Break** (Intervalo da estrutura — o Relógio trata como um Nível comum, com a duração que você definir), **Nível de Add-on**, **Big Ante**
+- Dá para editar com o torneio em andamento: o Relógio continua no mesmo Nível. Se você editar ou remover o próprio Nível atual, o Relógio pausa no Nível que ficou com aquele número (ou no último, se ele sumiu) com a duração cheia
 - Salve — você pode salvar como template para reutilizar
 
 ### Configurar premiação
@@ -86,10 +87,15 @@ O status muda para **Em andamento** e o botão **Mesa ao Vivo** aparece.
 
 Clique em **Mesa ao Vivo** para abrir o painel de gerenciamento em tempo real.
 
-**Timer:**
-- **Play/Pause** — controla o tempo do nível atual
-- **Avançar nível** — vai para o próximo nível de blinds manualmente
-- O timer toca um som ao encerrar cada nível
+**Relógio:**
+- **Play/Pause** — inicia o Relógio ou faz a Pausa. O Tempo restante congela no segundo em que você pausa e continua dali ao retomar
+- Sem estrutura de blinds o Relógio não inicia: aparece **"Sem estrutura de blinds"**. Configure os blinds antes
+- **Próximo nível** — vai para o próximo Nível com a duração cheia. Se o Relógio estava correndo, continua correndo
+- **Nível anterior** — volta para o Nível anterior com a duração cheia e **pausado** (voltar é correção de um avanço errado; aperte play para continuar)
+- **Fim do nível** — quando o Tempo restante chega a zero, o Relógio passa sozinho ao próximo Nível e toca um som. Acontece uma vez só, mesmo com a mesa aberta em várias telas de admin (celular e TV). No último Nível, o Relógio fica em zero
+- **Intervalo** (Intervalo avulso) — pausa cronometrada de 5, 10 ou 15 minutos fora da estrutura. O Relógio conta o intervalo em todas as telas e guarda o Tempo restante do Nível. Ao terminar (ou ao clicar **Encerrar intervalo**), o Nível volta **pausado** com o tempo que tinha; aperte play para retomar
+- Ao eliminar o último jogador (Coroação), o Relógio pausa automaticamente
+- Se dois admins apertarem o mesmo botão ao mesmo tempo, o segundo vê **"A mesa mudou, recarregue e tente de novo"** e o clique não é aplicado. Um clique feito depois que a outra tela já atualizou conta como um novo clique (por exemplo, apertar **Próximo nível** de novo avança mais um Nível)
 
 **Blinds:**
 - Exibe o nível atual, small blind, big blind e ante

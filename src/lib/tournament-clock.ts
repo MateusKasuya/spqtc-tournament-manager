@@ -180,6 +180,66 @@ export function expireLevel(
   return { ok: true, changed: true, state: advanced.state };
 }
 
+// Nível com o conteúdo completo da estrutura de blinds: Reancorar identifica
+// o Nível pelo conteúdo, não pelo número.
+export interface StructureLevel extends ClockLevel {
+  smallBlind: number;
+  bigBlind: number;
+  ante: number;
+  isAddonLevel: boolean;
+  isBigAnte: boolean;
+}
+
+function sameContent(a: StructureLevel, b: StructureLevel): boolean {
+  return (
+    a.smallBlind === b.smallBlind &&
+    a.bigBlind === b.bigBlind &&
+    a.ante === b.ante &&
+    a.durationMinutes === b.durationMinutes &&
+    a.isBreak === b.isBreak &&
+    a.isAddonLevel === b.isAddonLevel &&
+    a.isBigAnte === b.isBigAnte
+  );
+}
+
+// Reancorar ao editar a estrutura: o editor renumera todos os Níveis a cada
+// edição, então o Nível atual é reencontrado pelo conteúdo do Nível antigo e
+// passa a apontar pro novo número, sem mexer no Relógio. Se o conteúdo sumiu
+// (o próprio Nível atual foi editado ou removido), preserva o número quando
+// ele ainda existe, ou clampeia pro último válido; como não há como saber
+// quanto tempo já tinha passado nesse Nível, pausa e reseta pra duração cheia.
+export function reanchorLevel(
+  state: ClockState,
+  oldLevel: StructureLevel | null,
+  newLevels: StructureLevel[]
+): ClockChangeResult {
+  if (!oldLevel) return { ok: true, changed: false };
+
+  const matched = newLevels.find((l) => sameContent(l, oldLevel));
+  if (matched) {
+    if (matched.level === state.currentBlindLevel) return { ok: true, changed: false };
+    return { ok: true, changed: true, state: { ...state, currentBlindLevel: matched.level } };
+  }
+
+  const stillExists = newLevels.some((l) => l.level === state.currentBlindLevel);
+  const newLevel = stillExists
+    ? state.currentBlindLevel
+    : Math.max(1, Math.min(state.currentBlindLevel, newLevels.length));
+  const newLevelRow = newLevels.find((l) => l.level === newLevel);
+
+  return {
+    ok: true,
+    changed: true,
+    state: {
+      ...state,
+      currentBlindLevel: newLevel,
+      timerRunning: false,
+      timerStartedAt: null,
+      timerRemainingSecs: newLevelRow ? newLevelRow.durationMinutes * 60 : null,
+    },
+  };
+}
+
 export type ClockTone = "normal" | "warning" | "zero" | "break";
 
 // Tom de aviso do Relógio, usado pelo painel principal e pela barra fixa do
@@ -218,6 +278,17 @@ export interface ClockRawRow {
   level_remaining_secs: number | null;
   break_total_secs: number | null;
 }
+
+// Colunas cruas do Relógio, na ordem do tipo acima, para o select do realtime.
+export const CLOCK_RAW_COLUMNS = [
+  "current_blind_level",
+  "timer_running",
+  "timer_remaining_secs",
+  "timer_started_at",
+  "break_active",
+  "level_remaining_secs",
+  "break_total_secs",
+] as const satisfies readonly (keyof ClockRawRow)[];
 
 // Converte uma linha crua (parcial: nem todo select ou payload traz todas as
 // colunas) para o tipo único do Relógio, preservando os campos ausentes do

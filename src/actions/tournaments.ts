@@ -9,6 +9,7 @@ import { countKnockoutsByEliminator } from "@/db/ledger/knockout-ledger";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
+import { clockStateColumns, getClockLevels } from "@/db/queries/tournaments";
 import { DEFAULT_BLIND_STRUCTURE, DEFAULT_PRIZE_STRUCTURE } from "@/lib/tournament-defaults";
 import {
   startTimer as startClockTimer,
@@ -18,6 +19,7 @@ import {
   expireLevel as expireLevelClock,
   startBreak as startBreakClock,
   endBreak as endBreakClock,
+  reanchorLevel,
 } from "@/lib/tournament-clock";
 
 const tournamentSchema = z.object({
@@ -292,19 +294,19 @@ export async function updateBlindStructure(
 
   try {
     await db.transaction(async (tx) => {
+      // Trava a linha: o estado do Relógio lido aqui é regravado inteiro
+      // depois, e um clique no Relógio no meio não pode ser sobrescrito.
       const [tournament] = await tx
-        .select({ currentBlindLevel: tournaments.currentBlindLevel })
+        .select(clockStateColumns)
         .from(tournaments)
-        .where(eq(tournaments.id, tournamentId));
+        .where(eq(tournaments.id, tournamentId))
+        .for("update");
 
-      // O editor renumera TODOS os niveis sequencialmente a cada
-      // reorder/remove/add/troca de template, entao o currentBlindLevel
-      // salvo no torneio pode passar a apontar pra um nivel diferente do
-      // que ele realmente estava jogando assim que a pagina for recarregada
-      // (o valor persistido nao muda, so o conteudo por tras do numero).
+      // Conteudo do Nivel atual antes da edicao, pra reancorar (reanchorLevel).
       const [oldCurrent] = tournament
         ? await tx
             .select({
+              level: blindStructures.level,
               smallBlind: blindStructures.smallBlind,
               bigBlind: blindStructures.bigBlind,
               ante: blindStructures.ante,
@@ -348,47 +350,16 @@ export async function updateBlindStructure(
         );
       }
 
-      if (tournament && oldCurrent) {
-        // Reancora pelo conteudo do nivel antigo (achando pra onde ele foi
-        // renumerado). Se nao achar — o proprio nivel atual foi editado ou
-        // removido — preserva o mesmo numero quando ele ainda existir, ou
-        // usa o mais proximo valido como ultimo recurso.
-        const matched = levels.find(
-          (l) =>
-            l.smallBlind === oldCurrent.smallBlind &&
-            l.bigBlind === oldCurrent.bigBlind &&
-            l.ante === oldCurrent.ante &&
-            l.durationMinutes === oldCurrent.durationMinutes &&
-            l.isBreak === oldCurrent.isBreak &&
-            l.isAddonLevel === oldCurrent.isAddonLevel &&
-            l.isBigAnte === oldCurrent.isBigAnte
-        );
-
-        if (matched) {
-          if (matched.level !== tournament.currentBlindLevel) {
-            await tx
-              .update(tournaments)
-              .set({ currentBlindLevel: matched.level, updatedAt: new Date() })
-              .where(eq(tournaments.id, tournamentId));
-          }
-        } else {
-          const stillExists = levels.some((l) => l.level === tournament.currentBlindLevel);
-          const newLevel = stillExists
-            ? tournament.currentBlindLevel
-            : Math.max(1, Math.min(tournament.currentBlindLevel, levels.length));
-          const newLevelRow = levels.find((l) => l.level === newLevel);
-
+      if (tournament) {
+        const result = reanchorLevel(tournament, oldCurrent ?? null, levels);
+        if (result.ok && result.changed) {
           await tx
             .update(tournaments)
             .set({
-              currentBlindLevel: newLevel,
-              // O nivel mudou de identidade (valores alterados ou removido):
-              // nao ha como saber quanto tempo ja tinha passado nele, entao
-              // pausa e reseta pra duracao cheia em vez de continuar contando
-              // um tempo que nao corresponde a esse nivel.
-              timerRunning: false,
-              timerStartedAt: null,
-              timerRemainingSecs: newLevelRow ? newLevelRow.durationMinutes * 60 : null,
+              currentBlindLevel: result.state.currentBlindLevel,
+              timerRunning: result.state.timerRunning,
+              timerStartedAt: result.state.timerStartedAt,
+              timerRemainingSecs: result.state.timerRemainingSecs,
               updatedAt: new Date(),
             })
             .where(eq(tournaments.id, tournamentId));
@@ -416,35 +387,18 @@ export async function deletePrizeStructure(tournamentId: number) {
   return { success: true };
 }
 
-const CLOCK_STATE_COLUMNS = {
-  currentBlindLevel: tournaments.currentBlindLevel,
-  timerRunning: tournaments.timerRunning,
-  timerRemainingSecs: tournaments.timerRemainingSecs,
-  timerStartedAt: tournaments.timerStartedAt,
-  breakActive: tournaments.breakActive,
-  levelRemainingSecs: tournaments.levelRemainingSecs,
-  breakTotalSecs: tournaments.breakTotalSecs,
-} as const;
-
-async function loadClockLevels(tournamentId: number) {
-  return db
-    .select({ level: blindStructures.level, durationMinutes: blindStructures.durationMinutes, isBreak: blindStructures.isBreak })
-    .from(blindStructures)
-    .where(eq(blindStructures.tournamentId, tournamentId));
-}
-
 export async function startTimer(tournamentId: number) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
   const [tournament] = await db
-    .select(CLOCK_STATE_COLUMNS)
+    .select(clockStateColumns)
     .from(tournaments)
     .where(eq(tournaments.id, tournamentId));
 
   if (!tournament) return { error: "Torneio nao encontrado" };
 
-  const levels = await loadClockLevels(tournamentId);
+  const levels = await getClockLevels(tournamentId);
   const result = startClockTimer(tournament, levels, new Date());
   if (!result.ok) return { error: result.error };
 
@@ -470,7 +424,7 @@ export async function pauseTimer(tournamentId: number) {
   if ("error" in auth) return auth;
 
   const [tournament] = await db
-    .select(CLOCK_STATE_COLUMNS)
+    .select(clockStateColumns)
     .from(tournaments)
     .where(eq(tournaments.id, tournamentId));
 
@@ -501,13 +455,13 @@ export async function advanceBlindLevel(tournamentId: number) {
   if ("error" in auth) return auth;
 
   const [tournament] = await db
-    .select(CLOCK_STATE_COLUMNS)
+    .select(clockStateColumns)
     .from(tournaments)
     .where(eq(tournaments.id, tournamentId));
 
   if (!tournament) return { error: "Torneio nao encontrado" };
 
-  const levels = await loadClockLevels(tournamentId);
+  const levels = await getClockLevels(tournamentId);
   const result = advanceLevel(tournament, levels, new Date());
   if (!result.ok) return { error: result.error };
 
@@ -533,13 +487,13 @@ export async function goBackBlindLevel(tournamentId: number) {
   if ("error" in auth) return auth;
 
   const [tournament] = await db
-    .select(CLOCK_STATE_COLUMNS)
+    .select(clockStateColumns)
     .from(tournaments)
     .where(eq(tournaments.id, tournamentId));
 
   if (!tournament) return { error: "Torneio nao encontrado" };
 
-  const levels = await loadClockLevels(tournamentId);
+  const levels = await getClockLevels(tournamentId);
   const result = goBackLevel(tournament, levels);
   if (!result.ok) return { error: result.error };
 
@@ -569,13 +523,13 @@ export async function expireLevel(tournamentId: number, observedTimerStartedAt: 
   if ("error" in auth) return auth;
 
   const [tournament] = await db
-    .select(CLOCK_STATE_COLUMNS)
+    .select(clockStateColumns)
     .from(tournaments)
     .where(eq(tournaments.id, tournamentId));
 
   if (!tournament) return { error: "Torneio nao encontrado" };
 
-  const levels = await loadClockLevels(tournamentId);
+  const levels = await getClockLevels(tournamentId);
   const result = expireLevelClock(tournament, levels, observedTimerStartedAt, new Date());
   if (!result.ok) return { error: result.error };
   if (!result.changed) return { success: true };
@@ -608,7 +562,7 @@ export async function startBreak(tournamentId: number, durationMinutes: number) 
   if ("error" in auth) return auth;
 
   const [tournament] = await db
-    .select(CLOCK_STATE_COLUMNS)
+    .select(clockStateColumns)
     .from(tournaments)
     .where(eq(tournaments.id, tournamentId));
 
@@ -627,7 +581,10 @@ export async function startBreak(tournamentId: number, durationMinutes: number) 
       timerStartedAt: nextState.timerStartedAt,
       updatedAt: new Date(),
     })
-    .where(and(eq(tournaments.id, tournamentId), eq(tournaments.breakActive, tournament.breakActive)))
+    // Condiciona em "sem intervalo ativo", não no valor lido: uma tela
+    // defasada que lê o intervalo já ativo sobrescreveria levelRemainingSecs
+    // com o tempo do próprio intervalo e o Nível perderia o tempo guardado.
+    .where(and(eq(tournaments.id, tournamentId), eq(tournaments.breakActive, false)))
     .returning({ id: tournaments.id });
 
   if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
@@ -641,7 +598,7 @@ export async function endBreak(tournamentId: number) {
   if ("error" in auth) return auth;
 
   const [tournament] = await db
-    .select(CLOCK_STATE_COLUMNS)
+    .select(clockStateColumns)
     .from(tournaments)
     .where(eq(tournaments.id, tournamentId));
 

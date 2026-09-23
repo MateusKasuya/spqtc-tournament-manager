@@ -5,6 +5,7 @@ import { participants, transactions, tournaments } from "@/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/require-admin";
+import { clockStateColumns } from "@/db/queries/tournaments";
 import { getParticipantById, getParticipantByPlayerAndTournament } from "@/db/queries/participants";
 import { checkKnockout, checkUndo, initialBounty, KnockoutLedgerError, type KnockoutEvent, type UndoRequest } from "@/lib/knockout-ledger";
 import { applyKnockout, undoKnockout, loadKnockoutSnapshot } from "@/db/ledger/knockout-ledger";
@@ -347,15 +348,7 @@ export async function undoBonusChip(participantId: number) {
 // já protegida pelo lock do torneio, sem update condicional aqui.
 async function pauseTimerAtEnd(tx: Tx, tournamentId: number) {
   const [t] = await tx
-    .select({
-      currentBlindLevel: tournaments.currentBlindLevel,
-      timerRunning: tournaments.timerRunning,
-      timerRemainingSecs: tournaments.timerRemainingSecs,
-      timerStartedAt: tournaments.timerStartedAt,
-      breakActive: tournaments.breakActive,
-      levelRemainingSecs: tournaments.levelRemainingSecs,
-      breakTotalSecs: tournaments.breakTotalSecs,
-    })
+    .select(clockStateColumns)
     .from(tournaments)
     .where(eq(tournaments.id, tournamentId));
 
