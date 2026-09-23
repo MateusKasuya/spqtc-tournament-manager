@@ -34,6 +34,26 @@ export async function getTournamentById(id: number) {
   return tournament ?? null;
 }
 
+// Projeção das sete colunas do Relógio do torneio: o `ClockState` do núcleo
+// mapeia um-para-um nelas. Única declaração do shape no lado do banco.
+export const clockStateColumns = {
+  currentBlindLevel: tournaments.currentBlindLevel,
+  timerRunning: tournaments.timerRunning,
+  timerRemainingSecs: tournaments.timerRemainingSecs,
+  timerStartedAt: tournaments.timerStartedAt,
+  breakActive: tournaments.breakActive,
+  levelRemainingSecs: tournaments.levelRemainingSecs,
+  breakTotalSecs: tournaments.breakTotalSecs,
+} as const;
+
+// Níveis como o núcleo do Relógio os recebe (`ClockLevel`).
+export async function getClockLevels(tournamentId: number) {
+  return db
+    .select({ level: blindStructures.level, durationMinutes: blindStructures.durationMinutes, isBreak: blindStructures.isBreak })
+    .from(blindStructures)
+    .where(eq(blindStructures.tournamentId, tournamentId));
+}
+
 export async function getBlindStructure(tournamentId: number) {
   return db
     .select()
