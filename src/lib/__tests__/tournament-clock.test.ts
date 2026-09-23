@@ -75,6 +75,22 @@ describe("Relógio do torneio: Iniciar", () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.state.timerRemainingSecs).toBe(42);
   });
+
+  it("sem Nível correspondente a currentBlindLevel, usa a duração do primeiro Nível (não 15 minutos fixos)", () => {
+    const levels: ClockLevel[] = [
+      { level: 1, durationMinutes: 20, isBreak: false },
+      { level: 2, durationMinutes: 25, isBreak: false },
+    ];
+    const result = startTimer({ ...BASE, currentBlindLevel: 0 }, levels, NOW);
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.state.timerRemainingSecs).toBe(20 * 60);
+  });
+
+  it("chamado com o Relógio já rodando é idempotente (não reinicia o instante nem o Tempo restante)", () => {
+    const startedAt = new Date(NOW.getTime() - 5_000);
+    const state: ClockState = { ...BASE, timerRunning: true, timerStartedAt: startedAt, timerRemainingSecs: 100 };
+    expect(startTimer(state, LEVELS, NOW)).toEqual({ ok: true, state });
+  });
 });
 
 describe("Relógio do torneio: Pausar", () => {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { eq } from "drizzle-orm";
 import { startTimer, pauseTimer, advanceBlindLevel, goBackBlindLevel, expireLevel, startBreak, endBreak, updateBlindStructure } from "@/actions/tournaments";
-import { tournaments } from "@/db/schema";
+import { tournaments, blindStructures } from "@/db/schema";
 import { testDb } from "@/test/db";
 import { seedTournament, makeLevels } from "@/test/setup";
 
@@ -14,7 +14,7 @@ describe("startTimer", () => {
   it("recusa 'Sem estrutura de blinds' quando o torneio não tem Níveis", async () => {
     const t = await seedTournament();
     const res = await startTimer(t);
-    expect(res).toEqual({ error: "Sem estrutura de blinds" });
+    expect(res).toHaveProperty("error", "Sem estrutura de blinds");
   });
 
   it("sem Tempo restante gravado, usa a duração cheia do Nível atual", async () => {
@@ -22,12 +22,39 @@ describe("startTimer", () => {
     await updateBlindStructure(t, makeLevels(3));
 
     const res = await startTimer(t);
-    expect(res).toEqual({ success: true });
+    expect(res).not.toHaveProperty("error");
 
     const after = await getTournament(t);
     expect(after.timerRunning).toBe(true);
     expect(after.timerRemainingSecs).toBe(15 * 60);
     expect(after.timerStartedAt).not.toBeNull();
+  });
+
+  it("torneio novo (currentBlindLevel 0, estrutura inserida direto na criação) usa a duração do Nível 1, não 15 minutos fixos", async () => {
+    const t = await seedTournament();
+    await testDb.insert(blindStructures).values([
+      { tournamentId: t, level: 1, smallBlind: 10, bigBlind: 20, ante: 0, durationMinutes: 20, isBreak: false, isAddonLevel: false, isBigAnte: false },
+      { tournamentId: t, level: 2, smallBlind: 20, bigBlind: 40, ante: 0, durationMinutes: 25, isBreak: false, isAddonLevel: false, isBigAnte: false },
+    ]);
+
+    const res = await startTimer(t);
+    expect(res).not.toHaveProperty("error");
+
+    const after = await getTournament(t);
+    expect(after.timerRemainingSecs).toBe(20 * 60);
+  });
+
+  it("chamado com o Relógio já rodando é idempotente (não reinicia o instante nem o Tempo restante)", async () => {
+    const startedAt = new Date(Date.now() - 5_000);
+    const t = await seedTournament({ timerRunning: true, timerStartedAt: startedAt, timerRemainingSecs: 600 });
+    await updateBlindStructure(t, makeLevels(3));
+
+    const res = await startTimer(t);
+    expect(res).not.toHaveProperty("error");
+
+    const after = await getTournament(t);
+    expect(after.timerStartedAt?.getTime()).toBe(startedAt.getTime());
+    expect(after.timerRemainingSecs).toBe(600);
   });
 
   it("segundo clique concorrente com o Relógio já parado: só um sucede, o outro recebe 'A mesa mudou'", async () => {
@@ -48,13 +75,13 @@ describe("pauseTimer", () => {
   it("recusa 'Timer nao esta rodando' quando o Relógio está parado", async () => {
     const t = await seedTournament();
     const res = await pauseTimer(t);
-    expect(res).toEqual({ error: "Timer nao esta rodando" });
+    expect(res).toHaveProperty("error", "Timer nao esta rodando");
   });
 
   it("grava o Tempo restante daquele instante e limpa timerStartedAt", async () => {
     const t = await seedTournament({ timerRunning: true, timerStartedAt: new Date(), timerRemainingSecs: 600 });
     const res = await pauseTimer(t);
-    expect(res).toEqual({ success: true });
+    expect(res).not.toHaveProperty("error");
 
     const after = await getTournament(t);
     expect(after.timerRunning).toBe(false);

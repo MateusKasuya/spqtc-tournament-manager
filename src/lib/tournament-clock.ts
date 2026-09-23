@@ -39,11 +39,13 @@ export function remainingSecs(
 
 export function startTimer(state: ClockState, levels: ClockLevel[], now: Date): ClockResult {
   if (levels.length === 0) return { ok: false, error: "Sem estrutura de blinds" };
+  if (state.timerRunning) return { ok: true, state };
 
   let remaining = state.timerRemainingSecs;
   if (remaining === null || remaining === undefined) {
-    const level = levels.find((l) => l.level === state.currentBlindLevel);
-    remaining = (level?.durationMinutes ?? 15) * 60;
+    const sorted = sortedLevels(levels);
+    const level = sorted.find((l) => l.level === state.currentBlindLevel) ?? sorted[0];
+    remaining = level.durationMinutes * 60;
   }
 
   return {
