@@ -182,7 +182,7 @@ export function expireLevel(
 
 // Nível com o conteúdo completo da estrutura de blinds: Reancorar identifica
 // o Nível pelo conteúdo, não pelo número.
-export interface ReanchorLevel extends ClockLevel {
+export interface StructureLevel extends ClockLevel {
   smallBlind: number;
   bigBlind: number;
   ante: number;
@@ -190,7 +190,7 @@ export interface ReanchorLevel extends ClockLevel {
   isBigAnte: boolean;
 }
 
-function sameContent(a: ReanchorLevel, b: ReanchorLevel): boolean {
+function sameContent(a: StructureLevel, b: StructureLevel): boolean {
   return (
     a.smallBlind === b.smallBlind &&
     a.bigBlind === b.bigBlind &&
@@ -210,8 +210,8 @@ function sameContent(a: ReanchorLevel, b: ReanchorLevel): boolean {
 // quanto tempo já tinha passado nesse Nível, pausa e reseta pra duração cheia.
 export function reanchorLevel(
   state: ClockState,
-  oldLevel: ReanchorLevel | null,
-  newLevels: ReanchorLevel[]
+  oldLevel: StructureLevel | null,
+  newLevels: StructureLevel[]
 ): ClockChangeResult {
   if (!oldLevel) return { ok: true, changed: false };
 
@@ -240,7 +240,7 @@ export function reanchorLevel(
   };
 }
 
-export type ClockTone ="normal" | "warning" | "zero" | "break";
+export type ClockTone = "normal" | "warning" | "zero" | "break";
 
 // Tom de aviso do Relógio, usado pelo painel principal e pela barra fixa do
 // topo para que nunca discordem (CONTEXT.md). Intervalo tem precedência;

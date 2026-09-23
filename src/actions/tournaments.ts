@@ -301,11 +301,7 @@ export async function updateBlindStructure(
         .where(eq(tournaments.id, tournamentId))
         .for("update");
 
-      // O editor renumera TODOS os niveis sequencialmente a cada
-      // reorder/remove/add/troca de template, entao o currentBlindLevel
-      // salvo no torneio pode passar a apontar pra um nivel diferente do
-      // que ele realmente estava jogando assim que a pagina for recarregada
-      // (o valor persistido nao muda, so o conteudo por tras do numero).
+      // Conteudo do Nivel atual antes da edicao, pra reancorar (reanchorLevel).
       const [oldCurrent] = tournament
         ? await tx
             .select({

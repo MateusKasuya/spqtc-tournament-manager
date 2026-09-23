@@ -14,7 +14,7 @@ import {
   fromRawRow,
   reanchorLevel,
   type ClockState,
-  type ReanchorLevel,
+  type StructureLevel,
   type ClockLevel,
   type ClockRawRow,
 } from "@/lib/tournament-clock";
@@ -391,7 +391,7 @@ describe("Relógio do torneio: conversão da linha crua do realtime", () => {
 });
 
 describe("Relógio do torneio: Reancorar ao editar a estrutura", () => {
-  const level = (n: number, sb: number, durationMinutes = 15): ReanchorLevel => ({
+  const level = (n: number, sb: number, durationMinutes = 15): StructureLevel => ({
     level: n,
     smallBlind: sb,
     bigBlind: sb * 2,
