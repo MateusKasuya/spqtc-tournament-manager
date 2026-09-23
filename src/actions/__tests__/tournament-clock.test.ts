@@ -262,6 +262,18 @@ describe("startBreak", () => {
     expect(results.filter((r) => "success" in r)).toHaveLength(1);
     expect(results.filter((r) => "error" in r && r.error === "A mesa mudou, recarregue e tente de novo")).toHaveLength(1);
   });
+
+  it("segundo clique de uma tela defasada, com o intervalo já ativo: recebe 'A mesa mudou' e não perde o Tempo restante guardado do Nível", async () => {
+    const t = await seedTournament({ timerRunning: false, timerRemainingSecs: 500 });
+
+    expect(await startBreak(t, 10)).toEqual({ success: true });
+    const second = await startBreak(t, 5);
+    expect(second).toEqual({ error: "A mesa mudou, recarregue e tente de novo" });
+
+    const after = await getTournament(t);
+    expect(after.levelRemainingSecs).toBe(500);
+    expect(after.breakTotalSecs).toBe(10 * 60);
+  });
 });
 
 describe("endBreak", () => {

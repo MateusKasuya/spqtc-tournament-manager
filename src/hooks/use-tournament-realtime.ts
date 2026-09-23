@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { fromRawRow, type ClockState, type ClockRawRow } from "@/lib/tournament-clock";
+import { CLOCK_RAW_COLUMNS, fromRawRow, type ClockState, type ClockRawRow } from "@/lib/tournament-clock";
 
 type TournamentTimerFields = ClockState & {
   id: number;
@@ -19,8 +19,7 @@ function mapRow<T extends TournamentTimerFields>(prev: T, row: Partial<Tournamen
   };
 }
 
-const TIMER_COLUMNS =
-  "id, current_blind_level, timer_running, timer_remaining_secs, timer_started_at, status, break_active, level_remaining_secs, break_total_secs";
+const TIMER_COLUMNS = ["id", "status", ...CLOCK_RAW_COLUMNS].join(", ");
 
 export function useTournamentRealtime<T extends TournamentTimerFields>(
   tournamentId: number,

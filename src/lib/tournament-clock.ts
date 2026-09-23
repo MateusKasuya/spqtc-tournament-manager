@@ -279,6 +279,17 @@ export interface ClockRawRow {
   break_total_secs: number | null;
 }
 
+// Colunas cruas do Relógio, na ordem do tipo acima, para o select do realtime.
+export const CLOCK_RAW_COLUMNS = [
+  "current_blind_level",
+  "timer_running",
+  "timer_remaining_secs",
+  "timer_started_at",
+  "break_active",
+  "level_remaining_secs",
+  "break_total_secs",
+] as const satisfies readonly (keyof ClockRawRow)[];
+
 // Converte uma linha crua (parcial: nem todo select ou payload traz todas as
 // colunas) para o tipo único do Relógio, preservando os campos ausentes do
 // estado anterior.

@@ -581,7 +581,10 @@ export async function startBreak(tournamentId: number, durationMinutes: number) 
       timerStartedAt: nextState.timerStartedAt,
       updatedAt: new Date(),
     })
-    .where(and(eq(tournaments.id, tournamentId), eq(tournaments.breakActive, tournament.breakActive)))
+    // Condiciona em "sem intervalo ativo", não no valor lido: uma tela
+    // defasada que lê o intervalo já ativo sobrescreveria levelRemainingSecs
+    // com o tempo do próprio intervalo e o Nível perderia o tempo guardado.
+    .where(and(eq(tournaments.id, tournamentId), eq(tournaments.breakActive, false)))
     .returning({ id: tournaments.id });
 
   if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
