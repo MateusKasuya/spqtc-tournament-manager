@@ -363,6 +363,28 @@ describe("transições concorrentes que mudam colunas diferentes do Relógio", (
     const t = await seedTournament({ currentBlindLevel: 1, timerRunning: true, timerStartedAt: new Date(), timerRemainingSecs: 500 });
 
     expectOneWins(await Promise.all([pauseTimer(t), startBreak(t, 10)]));
+
+    const after = await getTournament(t);
+    if (after.breakActive) {
+      expect(after.timerRunning).toBe(true);
+      expect(after.timerRemainingSecs).toBe(10 * 60);
+    } else {
+      expect(after.timerRunning).toBe(false);
+      expect(after.levelRemainingSecs).toBeNull();
+    }
+  });
+
+  it("endBreak e pauseTimer durante o Intervalo avulso: só um grava", async () => {
+    const t = await seedTournament({
+      timerRunning: true,
+      timerStartedAt: new Date(),
+      timerRemainingSecs: 300,
+      breakActive: true,
+      levelRemainingSecs: 777,
+      breakTotalSecs: 600,
+    });
+
+    expectOneWins(await Promise.all([endBreak(t), pauseTimer(t)]));
   });
 
   it("timerStartedAt gravado com microssegundos fora do app não trava o Relógio em 'A mesa mudou'", async () => {

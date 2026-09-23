@@ -581,7 +581,7 @@ export async function startBreak(tournamentId: number, durationMinutes: number) 
       timerStartedAt: nextState.timerStartedAt,
       updatedAt: new Date(),
     })
-    // Condiciona em "sem intervalo ativo", não no valor lido: uma tela
+    // Além do estado lido, exige "sem intervalo ativo": uma tela
     // defasada que lê o intervalo já ativo sobrescreveria levelRemainingSecs
     // com o tempo do próprio intervalo e o Nível perderia o tempo guardado.
     .where(and(clockStateUnchanged(tournamentId, tournament), eq(tournaments.breakActive, false)))
