@@ -10,13 +10,6 @@ interface TimerDisplayProps {
   totalSeconds: number;
 }
 
-const RING_COLOR_CLASS: Record<ClockTone, string> = {
-  break: "text-amber-400",
-  zero: "text-red-400",
-  warning: "text-red-400",
-  normal: "text-primary",
-};
-
 export function TimerDisplay({ remainingSeconds, tone, totalSeconds }: TimerDisplayProps) {
   const colorClass = TIMER_TEXT_COLOR_CLASS[tone];
 
@@ -53,7 +46,7 @@ export function TimerDisplay({ remainingSeconds, tone, totalSeconds }: TimerDisp
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
-            className={RING_COLOR_CLASS[tone]}
+            className={colorClass}
             style={{ transition: "stroke-dashoffset 1s linear" }}
             suppressHydrationWarning
           />

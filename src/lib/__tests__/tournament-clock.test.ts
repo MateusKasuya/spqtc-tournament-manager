@@ -337,8 +337,12 @@ describe("Relógio do torneio: denominador do anel de progresso", () => {
     ).toBe(600);
   });
 
-  it("sem Nível correspondente, devolve zero", () => {
-    expect(ringTotalSecs({ ...BASE, currentBlindLevel: 99 }, LEVELS)).toBe(0);
+  it("sem Nível correspondente a currentBlindLevel, usa o primeiro Nível como fallback (torneio novo, currentBlindLevel 0)", () => {
+    expect(ringTotalSecs({ ...BASE, currentBlindLevel: 0 }, LEVELS)).toBe(15 * 60);
+  });
+
+  it("sem Níveis configurados, devolve zero", () => {
+    expect(ringTotalSecs({ ...BASE, currentBlindLevel: 1 }, [])).toBe(0);
   });
 });
 

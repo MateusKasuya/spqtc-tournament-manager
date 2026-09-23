@@ -193,14 +193,18 @@ export function clockTone(remainingSeconds: number, isRunning: boolean, isBreak:
 }
 
 // Denominador do anel de progresso: a duração total do Intervalo avulso
-// enquanto ele está ativo, senão a duração cheia do Nível atual.
+// enquanto ele está ativo, senão a duração cheia do Nível atual. Sem Nível
+// correspondente a currentBlindLevel (torneio novo, currentBlindLevel 0),
+// usa o primeiro Nível — mesmo fallback do Iniciar.
 export function ringTotalSecs(
   state: Pick<ClockState, "currentBlindLevel" | "breakActive" | "breakTotalSecs">,
   levels: ClockLevel[]
 ): number {
   if (state.breakActive && state.breakTotalSecs) return state.breakTotalSecs;
-  const level = levels.find((l) => l.level === state.currentBlindLevel);
-  return level ? level.durationMinutes * 60 : 0;
+  if (levels.length === 0) return 0;
+  const sorted = sortedLevels(levels);
+  const level = sorted.find((l) => l.level === state.currentBlindLevel) ?? sorted[0];
+  return level.durationMinutes * 60;
 }
 
 // Linha crua do realtime (nomes snake_case das colunas). Espelha o shape do
