@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { tournaments, seasons, blindStructures, prizeStructures } from "@/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { eq, desc, and, isNull, sql } from "drizzle-orm";
+import type { ClockState } from "@/lib/tournament-clock";
 
 export async function getTournaments() {
   return db
@@ -45,6 +46,23 @@ export const clockStateColumns = {
   levelRemainingSecs: tournaments.levelRemainingSecs,
   breakTotalSecs: tournaments.breakTotalSecs,
 } as const;
+
+// Guarda de update das transições do Relógio: casa só se as sete colunas ainda
+// valem o que a action leu. Todas, porque transições diferentes mudam colunas
+// diferentes (pausar não mexe no Nível, avançar não mexe em "correndo").
+// timerStartedAt compara em milissegundos: é o que sobrevive à leitura em Date.
+export function clockStateUnchanged(tournamentId: number, read: ClockState) {
+  const guards = (Object.keys(clockStateColumns) as (keyof ClockState)[]).map((key) => {
+    const column = clockStateColumns[key];
+    const value = read[key];
+    if (value === null) return isNull(column);
+    if (value instanceof Date) {
+      return sql`date_trunc('milliseconds', ${column}) = ${value.toISOString()}::timestamptz`;
+    }
+    return eq(column, value);
+  });
+  return and(eq(tournaments.id, tournamentId), ...guards);
+}
 
 // Níveis como o núcleo do Relógio os recebe (`ClockLevel`).
 export async function getClockLevels(tournamentId: number) {

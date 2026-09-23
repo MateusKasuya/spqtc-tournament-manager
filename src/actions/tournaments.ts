@@ -9,7 +9,7 @@ import { countKnockoutsByEliminator } from "@/db/ledger/knockout-ledger";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { clockStateColumns, getClockLevels } from "@/db/queries/tournaments";
+import { clockStateColumns, clockStateUnchanged, getClockLevels } from "@/db/queries/tournaments";
 import { DEFAULT_BLIND_STRUCTURE, DEFAULT_PRIZE_STRUCTURE } from "@/lib/tournament-defaults";
 import {
   startTimer as startClockTimer,
@@ -410,7 +410,7 @@ export async function startTimer(tournamentId: number) {
       timerRemainingSecs: result.state.timerRemainingSecs,
       updatedAt: new Date(),
     })
-    .where(and(eq(tournaments.id, tournamentId), eq(tournaments.timerRunning, tournament.timerRunning)))
+    .where(clockStateUnchanged(tournamentId, tournament))
     .returning({ id: tournaments.id });
 
   if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
@@ -441,7 +441,7 @@ export async function pauseTimer(tournamentId: number) {
       timerRemainingSecs: result.state.timerRemainingSecs,
       updatedAt: new Date(),
     })
-    .where(and(eq(tournaments.id, tournamentId), eq(tournaments.timerRunning, tournament.timerRunning)))
+    .where(clockStateUnchanged(tournamentId, tournament))
     .returning({ id: tournaments.id });
 
   if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
@@ -473,7 +473,7 @@ export async function advanceBlindLevel(tournamentId: number) {
       timerStartedAt: result.state.timerStartedAt,
       updatedAt: new Date(),
     })
-    .where(and(eq(tournaments.id, tournamentId), eq(tournaments.currentBlindLevel, tournament.currentBlindLevel)))
+    .where(clockStateUnchanged(tournamentId, tournament))
     .returning({ id: tournaments.id });
 
   if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
@@ -506,7 +506,7 @@ export async function goBackBlindLevel(tournamentId: number) {
       timerStartedAt: result.state.timerStartedAt,
       updatedAt: new Date(),
     })
-    .where(and(eq(tournaments.id, tournamentId), eq(tournaments.currentBlindLevel, tournament.currentBlindLevel)))
+    .where(clockStateUnchanged(tournamentId, tournament))
     .returning({ id: tournaments.id });
 
   if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
@@ -546,7 +546,7 @@ export async function expireLevel(tournamentId: number, observedTimerStartedAt: 
       breakTotalSecs: result.state.breakTotalSecs,
       updatedAt: new Date(),
     })
-    .where(and(eq(tournaments.id, tournamentId), eq(tournaments.currentBlindLevel, tournament.currentBlindLevel)))
+    .where(clockStateUnchanged(tournamentId, tournament))
     .returning({ id: tournaments.id });
 
   // Conflito aqui é a mesma corrida de duas telas, mas o Fim do nível dispara
@@ -584,7 +584,7 @@ export async function startBreak(tournamentId: number, durationMinutes: number) 
     // Condiciona em "sem intervalo ativo", não no valor lido: uma tela
     // defasada que lê o intervalo já ativo sobrescreveria levelRemainingSecs
     // com o tempo do próprio intervalo e o Nível perderia o tempo guardado.
-    .where(and(eq(tournaments.id, tournamentId), eq(tournaments.breakActive, false)))
+    .where(and(clockStateUnchanged(tournamentId, tournament), eq(tournaments.breakActive, false)))
     .returning({ id: tournaments.id });
 
   if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
@@ -622,7 +622,7 @@ export async function endBreak(tournamentId: number) {
       timerStartedAt: result.state.timerStartedAt,
       updatedAt: new Date(),
     })
-    .where(and(eq(tournaments.id, tournamentId), eq(tournaments.breakActive, tournament.breakActive)))
+    .where(clockStateUnchanged(tournamentId, tournament))
     .returning({ id: tournaments.id });
 
   if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
