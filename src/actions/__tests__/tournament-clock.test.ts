@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { startTimer, pauseTimer, advanceBlindLevel, goBackBlindLevel, expireLevel, startBreak, endBreak, updateBlindStructure } from "@/actions/tournaments";
 import { tournaments, blindStructures } from "@/db/schema";
 import { testDb } from "@/test/db";
@@ -312,5 +312,86 @@ describe("endBreak", () => {
     const second = await endBreak(t);
     expect(first).toEqual({ success: true });
     expect(second).toEqual({ success: true });
+  });
+});
+
+describe("transições concorrentes que mudam colunas diferentes do Relógio", () => {
+  const MESA_MUDOU = "A mesa mudou, recarregue e tente de novo";
+
+  function expectOneWins(results: Record<string, unknown>[]) {
+    expect(results.filter((r) => "success" in r)).toHaveLength(1);
+    expect(results.filter((r) => r.error === MESA_MUDOU)).toHaveLength(1);
+  }
+
+  it("pauseTimer e advanceBlindLevel ao mesmo tempo: só um grava, e o Nível avançado não recebe o tempo do Nível anterior", async () => {
+    const t = await seedTournament({ currentBlindLevel: 1, timerRunning: true, timerStartedAt: new Date(), timerRemainingSecs: 5 });
+    await updateBlindStructure(t, makeLevels(3));
+
+    expectOneWins(await Promise.all([pauseTimer(t), advanceBlindLevel(t)]));
+
+    const after = await getTournament(t);
+    if (after.currentBlindLevel === 2) {
+      expect(after.timerRunning).toBe(true);
+      expect(after.timerStartedAt).not.toBeNull();
+      expect(after.timerRemainingSecs).toBe(15 * 60);
+    } else {
+      expect(after.currentBlindLevel).toBe(1);
+      expect(after.timerRunning).toBe(false);
+      expect(after.timerStartedAt).toBeNull();
+      expect(after.timerRemainingSecs).toBeLessThanOrEqual(5);
+    }
+  });
+
+  it("startTimer e goBackBlindLevel com o Relógio parado: só um grava", async () => {
+    const t = await seedTournament({ currentBlindLevel: 2, timerRunning: false, timerRemainingSecs: 42 });
+    await updateBlindStructure(t, makeLevels(3));
+
+    expectOneWins(await Promise.all([startTimer(t), goBackBlindLevel(t)]));
+
+    const after = await getTournament(t);
+    if (after.currentBlindLevel === 1) {
+      expect(after.timerRunning).toBe(false);
+      expect(after.timerRemainingSecs).toBe(15 * 60);
+    } else {
+      expect(after.currentBlindLevel).toBe(2);
+      expect(after.timerRunning).toBe(true);
+      expect(after.timerRemainingSecs).toBe(42);
+    }
+  });
+
+  it("pauseTimer e startBreak ao mesmo tempo: só um grava", async () => {
+    const t = await seedTournament({ currentBlindLevel: 1, timerRunning: true, timerStartedAt: new Date(), timerRemainingSecs: 500 });
+
+    expectOneWins(await Promise.all([pauseTimer(t), startBreak(t, 10)]));
+
+    const after = await getTournament(t);
+    if (after.breakActive) {
+      expect(after.timerRunning).toBe(true);
+      expect(after.timerRemainingSecs).toBe(10 * 60);
+    } else {
+      expect(after.timerRunning).toBe(false);
+      expect(after.levelRemainingSecs).toBeNull();
+    }
+  });
+
+  it("endBreak e pauseTimer durante o Intervalo avulso: só um grava", async () => {
+    const t = await seedTournament({
+      timerRunning: true,
+      timerStartedAt: new Date(),
+      timerRemainingSecs: 300,
+      breakActive: true,
+      levelRemainingSecs: 777,
+      breakTotalSecs: 600,
+    });
+
+    expectOneWins(await Promise.all([endBreak(t), pauseTimer(t)]));
+  });
+
+  it("timerStartedAt gravado com microssegundos fora do app não trava o Relógio em 'A mesa mudou'", async () => {
+    const t = await seedTournament({ currentBlindLevel: 1, timerRunning: true, timerRemainingSecs: 600 });
+    await testDb.execute(sql`update tournaments set timer_started_at = now() - interval '1.234567 seconds' where id = ${t}`);
+
+    const res = await pauseTimer(t);
+    expect(res).toEqual({ success: true });
   });
 });
