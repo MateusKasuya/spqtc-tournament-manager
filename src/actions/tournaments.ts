@@ -18,6 +18,7 @@ import {
   expireLevel as expireLevelClock,
   startBreak as startBreakClock,
   endBreak as endBreakClock,
+  reanchorLevel,
 } from "@/lib/tournament-clock";
 
 const tournamentSchema = z.object({
@@ -292,10 +293,13 @@ export async function updateBlindStructure(
 
   try {
     await db.transaction(async (tx) => {
+      // Trava a linha: o estado do Relógio lido aqui é regravado inteiro
+      // depois, e um clique no Relógio no meio não pode ser sobrescrito.
       const [tournament] = await tx
-        .select({ currentBlindLevel: tournaments.currentBlindLevel })
+        .select(CLOCK_STATE_COLUMNS)
         .from(tournaments)
-        .where(eq(tournaments.id, tournamentId));
+        .where(eq(tournaments.id, tournamentId))
+        .for("update");
 
       // O editor renumera TODOS os niveis sequencialmente a cada
       // reorder/remove/add/troca de template, entao o currentBlindLevel
@@ -305,6 +309,7 @@ export async function updateBlindStructure(
       const [oldCurrent] = tournament
         ? await tx
             .select({
+              level: blindStructures.level,
               smallBlind: blindStructures.smallBlind,
               bigBlind: blindStructures.bigBlind,
               ante: blindStructures.ante,
@@ -348,47 +353,16 @@ export async function updateBlindStructure(
         );
       }
 
-      if (tournament && oldCurrent) {
-        // Reancora pelo conteudo do nivel antigo (achando pra onde ele foi
-        // renumerado). Se nao achar — o proprio nivel atual foi editado ou
-        // removido — preserva o mesmo numero quando ele ainda existir, ou
-        // usa o mais proximo valido como ultimo recurso.
-        const matched = levels.find(
-          (l) =>
-            l.smallBlind === oldCurrent.smallBlind &&
-            l.bigBlind === oldCurrent.bigBlind &&
-            l.ante === oldCurrent.ante &&
-            l.durationMinutes === oldCurrent.durationMinutes &&
-            l.isBreak === oldCurrent.isBreak &&
-            l.isAddonLevel === oldCurrent.isAddonLevel &&
-            l.isBigAnte === oldCurrent.isBigAnte
-        );
-
-        if (matched) {
-          if (matched.level !== tournament.currentBlindLevel) {
-            await tx
-              .update(tournaments)
-              .set({ currentBlindLevel: matched.level, updatedAt: new Date() })
-              .where(eq(tournaments.id, tournamentId));
-          }
-        } else {
-          const stillExists = levels.some((l) => l.level === tournament.currentBlindLevel);
-          const newLevel = stillExists
-            ? tournament.currentBlindLevel
-            : Math.max(1, Math.min(tournament.currentBlindLevel, levels.length));
-          const newLevelRow = levels.find((l) => l.level === newLevel);
-
+      if (tournament) {
+        const result = reanchorLevel(tournament, oldCurrent ?? null, levels);
+        if (result.ok && result.changed) {
           await tx
             .update(tournaments)
             .set({
-              currentBlindLevel: newLevel,
-              // O nivel mudou de identidade (valores alterados ou removido):
-              // nao ha como saber quanto tempo ja tinha passado nele, entao
-              // pausa e reseta pra duracao cheia em vez de continuar contando
-              // um tempo que nao corresponde a esse nivel.
-              timerRunning: false,
-              timerStartedAt: null,
-              timerRemainingSecs: newLevelRow ? newLevelRow.durationMinutes * 60 : null,
+              currentBlindLevel: result.state.currentBlindLevel,
+              timerRunning: result.state.timerRunning,
+              timerStartedAt: result.state.timerStartedAt,
+              timerRemainingSecs: result.state.timerRemainingSecs,
               updatedAt: new Date(),
             })
             .where(eq(tournaments.id, tournamentId));

@@ -12,7 +12,9 @@ import {
   clockTone,
   ringTotalSecs,
   fromRawRow,
+  reanchorLevel,
   type ClockState,
+  type ReanchorLevel,
   type ClockLevel,
   type ClockRawRow,
 } from "@/lib/tournament-clock";
@@ -385,5 +387,70 @@ describe("Relógio do torneio: conversão da linha crua do realtime", () => {
     const result = fromRawRow(prevWithBreak, { level_remaining_secs: null, break_total_secs: null });
     expect(result.levelRemainingSecs).toBeNull();
     expect(result.breakTotalSecs).toBeNull();
+  });
+});
+
+describe("Relógio do torneio: Reancorar ao editar a estrutura", () => {
+  const level = (n: number, sb: number, durationMinutes = 15): ReanchorLevel => ({
+    level: n,
+    smallBlind: sb,
+    bigBlind: sb * 2,
+    ante: 0,
+    durationMinutes,
+    isBreak: false,
+    isAddonLevel: false,
+    isBigAnte: false,
+  });
+  const OLD = [level(1, 10), level(2, 20), level(3, 30), level(4, 40), level(5, 50)];
+  const RUNNING: ClockState = {
+    ...BASE,
+    currentBlindLevel: 3,
+    timerRunning: true,
+    timerStartedAt: NOW,
+    timerRemainingSecs: 777,
+  };
+
+  it("sem Nível antigo (torneio sem estrutura ou Nível 0), nada a fazer", () => {
+    expect(reanchorLevel(RUNNING, null, OLD)).toEqual({ ok: true, changed: false });
+  });
+
+  it("Nível no mesmo número com o mesmo conteúdo, nada a fazer", () => {
+    expect(reanchorLevel(RUNNING, OLD[2], OLD)).toEqual({ ok: true, changed: false });
+  });
+
+  it("reancora pelo conteúdo quando o Nível foi renumerado, sem mexer no Relógio", () => {
+    const reordered = [OLD[2], OLD[0], OLD[1], OLD[3], OLD[4]].map((l, i) => ({ ...l, level: i + 1 }));
+    const result = reanchorLevel(RUNNING, OLD[2], reordered);
+    expect(result).toEqual({ ok: true, changed: true, state: { ...RUNNING, currentBlindLevel: 1 } });
+  });
+
+  it("Nível atual editado: preserva o número, pausa e reseta para a duração cheia", () => {
+    const edited = OLD.map((l) => (l.level === 3 ? { ...l, durationMinutes: 20 } : l));
+    const result = reanchorLevel(RUNNING, OLD[2], edited);
+    expect(result).toEqual({
+      ok: true,
+      changed: true,
+      state: { ...RUNNING, currentBlindLevel: 3, timerRunning: false, timerStartedAt: null, timerRemainingSecs: 20 * 60 },
+    });
+  });
+
+  it("Nível atual removido: clampeia para o último Nível válido, pausado e resetado", () => {
+    const state: ClockState = { ...RUNNING, currentBlindLevel: 5 };
+    const shortened = [level(1, 10), level(2, 20), level(3, 30, 25)];
+    const result = reanchorLevel(state, OLD[4], shortened);
+    expect(result).toEqual({
+      ok: true,
+      changed: true,
+      state: { ...state, currentBlindLevel: 3, timerRunning: false, timerStartedAt: null, timerRemainingSecs: 25 * 60 },
+    });
+  });
+
+  it("estrutura esvaziada: Nível 1, pausado e sem Tempo restante gravado", () => {
+    const result = reanchorLevel(RUNNING, OLD[2], []);
+    expect(result).toEqual({
+      ok: true,
+      changed: true,
+      state: { ...RUNNING, currentBlindLevel: 1, timerRunning: false, timerStartedAt: null, timerRemainingSecs: null },
+    });
   });
 });
