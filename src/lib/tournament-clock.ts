@@ -25,7 +25,10 @@ export type ClockResult =
 
 // Tempo restante em qualquer instante: corrida decrescida do que já passou
 // desde timerStartedAt, com piso em zero; parado, é o valor gravado.
-export function remainingSecs(state: ClockState, now: Date): number {
+export function remainingSecs(
+  state: Pick<ClockState, "timerRunning" | "timerRemainingSecs" | "timerStartedAt">,
+  now: Date
+): number {
   const stored = state.timerRemainingSecs ?? 0;
   if (!state.timerRunning || !state.timerStartedAt) {
     return Math.max(0, stored);
@@ -173,4 +176,62 @@ export function expireLevel(
   if (!advanced.ok) return { ok: true, changed: false };
 
   return { ok: true, changed: true, state: advanced.state };
+}
+
+export type ClockTone = "normal" | "warning" | "zero" | "break";
+
+// Tom de aviso do Relógio, usado pelo painel principal e pela barra fixa do
+// topo para que nunca discordem (CONTEXT.md). Intervalo tem precedência;
+// depois o zero com o Relógio correndo; depois o último minuto do Nível.
+export function clockTone(remainingSeconds: number, isRunning: boolean, isBreak: boolean): ClockTone {
+  if (isBreak) return "break";
+  if (remainingSeconds === 0 && isRunning) return "zero";
+  if (remainingSeconds > 0 && remainingSeconds <= 60) return "warning";
+  return "normal";
+}
+
+// Denominador do anel de progresso: a duração total do Intervalo avulso
+// enquanto ele está ativo, senão a duração cheia do Nível atual.
+export function ringTotalSecs(
+  state: Pick<ClockState, "currentBlindLevel" | "breakActive" | "breakTotalSecs">,
+  levels: ClockLevel[]
+): number {
+  if (state.breakActive && state.breakTotalSecs) return state.breakTotalSecs;
+  const level = levels.find((l) => l.level === state.currentBlindLevel);
+  return level ? level.durationMinutes * 60 : 0;
+}
+
+// Linha crua do realtime (nomes snake_case das colunas). Espelha o shape do
+// payload postgres_changes e do select direto na tabela de torneios.
+export interface ClockRawRow {
+  current_blind_level: number;
+  timer_running: boolean;
+  timer_remaining_secs: number | null;
+  timer_started_at: string | null;
+  break_active: boolean;
+  level_remaining_secs: number | null;
+  break_total_secs: number | null;
+}
+
+// Converte uma linha crua (parcial: nem todo select ou payload traz todas as
+// colunas) para o tipo único do Relógio, preservando os campos ausentes do
+// estado anterior.
+export function fromRawRow(prev: ClockState, row: Partial<ClockRawRow>): ClockState {
+  return {
+    currentBlindLevel: row.current_blind_level ?? prev.currentBlindLevel,
+    timerRunning: row.timer_running ?? prev.timerRunning,
+    timerRemainingSecs:
+      row.timer_remaining_secs !== undefined ? row.timer_remaining_secs : prev.timerRemainingSecs,
+    timerStartedAt:
+      row.timer_started_at !== undefined
+        ? row.timer_started_at === null
+          ? null
+          : new Date(row.timer_started_at)
+        : prev.timerStartedAt,
+    breakActive: row.break_active !== undefined ? row.break_active : prev.breakActive,
+    levelRemainingSecs:
+      row.level_remaining_secs !== undefined ? row.level_remaining_secs : prev.levelRemainingSecs,
+    breakTotalSecs:
+      row.break_total_secs !== undefined ? row.break_total_secs : prev.breakTotalSecs,
+  };
 }

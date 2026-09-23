@@ -1,25 +1,24 @@
 "use client";
 
 import { formatTime } from "@/lib/format";
+import type { ClockTone } from "@/lib/tournament-clock";
+import { TIMER_TEXT_COLOR_CLASS } from "./timer-tone-classes";
 
 interface TimerDisplayProps {
   remainingSeconds: number;
-  isRunning: boolean;
-  isBreak: boolean;
+  tone: ClockTone;
   totalSeconds: number;
 }
 
-export function TimerDisplay({ remainingSeconds, isRunning, isBreak, totalSeconds }: TimerDisplayProps) {
-  const isWarning = !isBreak && remainingSeconds > 0 && remainingSeconds <= 60;
-  const isEmpty = remainingSeconds === 0 && isRunning;
+const RING_COLOR_CLASS: Record<ClockTone, string> = {
+  break: "text-amber-400",
+  zero: "text-red-400",
+  warning: "text-red-400",
+  normal: "text-primary",
+};
 
-  const colorClass = isBreak
-    ? "text-amber-400"
-    : isEmpty
-    ? "text-red-500 animate-pulse"
-    : isWarning
-    ? "text-red-400 animate-pulse"
-    : "text-foreground";
+export function TimerDisplay({ remainingSeconds, tone, totalSeconds }: TimerDisplayProps) {
+  const colorClass = TIMER_TEXT_COLOR_CLASS[tone];
 
   const progress = totalSeconds > 0 ? Math.min(1, Math.max(0, remainingSeconds / totalSeconds)) : 0;
   const r = 88;
@@ -54,7 +53,7 @@ export function TimerDisplay({ remainingSeconds, isRunning, isBreak, totalSecond
             strokeLinecap="round"
             strokeDasharray={circumference}
             strokeDashoffset={strokeDashoffset}
-            className={isBreak ? "text-amber-400" : isWarning || isEmpty ? "text-red-400" : "text-primary"}
+            className={RING_COLOR_CLASS[tone]}
             style={{ transition: "stroke-dashoffset 1s linear" }}
             suppressHydrationWarning
           />

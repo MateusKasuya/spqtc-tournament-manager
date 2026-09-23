@@ -35,7 +35,6 @@ export default async function MesaPage({ params }: PageProps) {
     <MesaAoVivo
       tournament={{
         ...tournament,
-        timerStartedAt: tournament.timerStartedAt?.toISOString() ?? null,
         breakActive: tournament.breakActive ?? false,
         tournamentType: tournament.tournamentType ?? "normal",
         bountyPercentage: tournament.bountyPercentage ?? 50,

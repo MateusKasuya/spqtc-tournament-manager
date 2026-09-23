@@ -9,8 +9,12 @@ import {
   startBreak,
   endBreak,
   toIsoOrNull,
+  clockTone,
+  ringTotalSecs,
+  fromRawRow,
   type ClockState,
   type ClockLevel,
+  type ClockRawRow,
 } from "@/lib/tournament-clock";
 
 const NOW = new Date("2026-09-22T12:00:00.000Z");
@@ -279,5 +283,87 @@ describe("Relógio do torneio: Intervalo avulso", () => {
     const ended = endBreak(started);
     expect(ended.ok).toBe(true);
     if (ended.ok && ended.changed) expect(ended.state.timerRemainingSecs).toBe(543);
+  });
+});
+
+describe("Relógio do torneio: Tom de cor", () => {
+  it("intervalo tem precedência sobre qualquer outra faixa", () => {
+    expect(clockTone(0, true, true)).toBe("break");
+    expect(clockTone(30, false, true)).toBe("break");
+  });
+
+  it("zero: correndo e chegou a zero (fora de intervalo)", () => {
+    expect(clockTone(0, true, false)).toBe("zero");
+  });
+
+  it("zero gravado mas parado não é 'zero' (Relógio pausado no zero)", () => {
+    expect(clockTone(0, false, false)).toBe("normal");
+  });
+
+  it("aviso: último minuto (1 a 60s), fora de intervalo", () => {
+    expect(clockTone(60, true, false)).toBe("warning");
+    expect(clockTone(1, false, false)).toBe("warning");
+  });
+
+  it("normal: mais de 60s restantes, fora de intervalo", () => {
+    expect(clockTone(61, true, false)).toBe("normal");
+  });
+});
+
+describe("Relógio do torneio: denominador do anel de progresso", () => {
+  it("fora de intervalo, usa a duração cheia do Nível atual", () => {
+    expect(ringTotalSecs({ ...BASE, currentBlindLevel: 2 }, LEVELS)).toBe(20 * 60);
+  });
+
+  it("com Intervalo avulso ativo, usa a duração total do intervalo", () => {
+    expect(
+      ringTotalSecs({ ...BASE, currentBlindLevel: 1, breakActive: true, breakTotalSecs: 600 }, LEVELS)
+    ).toBe(600);
+  });
+
+  it("sem Nível correspondente, devolve zero", () => {
+    expect(ringTotalSecs({ ...BASE, currentBlindLevel: 99 }, LEVELS)).toBe(0);
+  });
+});
+
+describe("Relógio do torneio: conversão da linha crua do realtime", () => {
+  const PREV: ClockState = { ...BASE, currentBlindLevel: 1, timerRemainingSecs: 500 };
+
+  it("linha completa substitui todos os campos e converte o instante para Date", () => {
+    const row: ClockRawRow = {
+      current_blind_level: 2,
+      timer_running: true,
+      timer_remaining_secs: 1200,
+      timer_started_at: NOW.toISOString(),
+      break_active: false,
+      level_remaining_secs: null,
+      break_total_secs: null,
+    };
+    const result = fromRawRow(PREV, row);
+    expect(result.currentBlindLevel).toBe(2);
+    expect(result.timerRunning).toBe(true);
+    expect(result.timerRemainingSecs).toBe(1200);
+    expect(result.timerStartedAt).toEqual(NOW);
+    expect(result.timerStartedAt).toBeInstanceOf(Date);
+  });
+
+  it("timer_started_at nulo vira null, não uma Date inválida", () => {
+    const result = fromRawRow(PREV, { timer_started_at: null });
+    expect(result.timerStartedAt).toBeNull();
+  });
+
+  it("linha parcial preserva os campos ausentes do estado anterior", () => {
+    const result = fromRawRow(PREV, { timer_running: true });
+    expect(result.timerRunning).toBe(true);
+    expect(result.currentBlindLevel).toBe(PREV.currentBlindLevel);
+    expect(result.timerRemainingSecs).toBe(PREV.timerRemainingSecs);
+    expect(result.breakActive).toBe(PREV.breakActive);
+  });
+
+  it("campos nuláveis chegando como null (não undefined) sobrescrevem o anterior", () => {
+    const prevWithBreak: ClockState = { ...PREV, levelRemainingSecs: 42, breakTotalSecs: 600 };
+    const result = fromRawRow(prevWithBreak, { level_remaining_secs: null, break_total_secs: null });
+    expect(result.levelRemainingSecs).toBeNull();
+    expect(result.breakTotalSecs).toBeNull();
   });
 });

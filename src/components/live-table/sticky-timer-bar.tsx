@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Play, Pause } from "lucide-react";
 import { formatTime, formatChips } from "@/lib/format";
 import { startTimer, pauseTimer } from "@/actions/tournaments";
+import type { ClockTone } from "@/lib/tournament-clock";
+import { TIMER_TEXT_COLOR_CLASS } from "./timer-tone-classes";
 import { toast } from "sonner";
 
 interface BlindLevel {
@@ -18,7 +20,7 @@ interface BlindLevel {
 interface StickyTimerBarProps {
   remainingSeconds: number;
   isRunning: boolean;
-  isBreak: boolean;
+  tone: ClockTone;
   currentLevel: BlindLevel;
   isAdmin: boolean;
   tournamentId: number;
@@ -28,7 +30,7 @@ interface StickyTimerBarProps {
 export function StickyTimerBar({
   remainingSeconds,
   isRunning,
-  isBreak,
+  tone,
   currentLevel,
   isAdmin,
   tournamentId,
@@ -37,16 +39,8 @@ export function StickyTimerBar({
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
-  const isWarning = !isBreak && remainingSeconds > 0 && remainingSeconds <= 60;
-  const isEmpty = remainingSeconds === 0 && isRunning;
-
-  const timeColorClass = isBreak
-    ? "text-amber-400"
-    : isEmpty
-    ? "text-red-500 animate-pulse"
-    : isWarning
-    ? "text-red-400 animate-pulse"
-    : "text-foreground";
+  const isBreak = tone === "break";
+  const timeColorClass = TIMER_TEXT_COLOR_CLASS[tone];
 
   function handlePlayPause(e: React.MouseEvent) {
     e.stopPropagation();
