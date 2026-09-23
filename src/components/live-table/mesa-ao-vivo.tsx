@@ -12,9 +12,10 @@ import { BlindInfo } from "./blind-info";
 import { TournamentStats } from "./tournament-stats";
 import { QuickActions } from "./quick-actions";
 import { StickyTimerBar } from "./sticky-timer-bar";
-import { advanceBlindLevel, updateTournamentStatus, endBreak } from "@/actions/tournaments";
+import { expireLevel, updateTournamentStatus } from "@/actions/tournaments";
 import { getMesaLiveData } from "@/actions/mesa";
 import { playLevelSound } from "@/lib/play-level-sound";
+import { clockTone, ringTotalSecs, toIsoOrNull, type ClockState } from "@/lib/tournament-clock";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
@@ -51,12 +52,8 @@ interface FinancialSummary {
   prize: number;
 }
 
-interface Tournament {
+interface Tournament extends ClockState {
   id: number;
-  currentBlindLevel: number;
-  timerRunning: boolean;
-  timerRemainingSecs: number | null;
-  timerStartedAt: Date | string | null;
   status: string;
   initialChips: number;
   rebuyChips: number;
@@ -69,8 +66,6 @@ interface Tournament {
   prizePoolOverride: number | null;
   rankingFeeAmount: number;
   name: string;
-  breakActive: boolean;
-  breakTotalSecs: number | null;
   tournamentType: string;
   bountyPercentage: number;
 }
@@ -108,13 +103,9 @@ export function MesaAoVivo({
   const currentLevel = blindLevels[currentIndex] ?? blindLevels[0];
   const nextLevel = blindLevels[currentIndex + 1] ?? null;
 
-  const levelTotalSeconds = currentLevel ? currentLevel.durationMinutes * 60 : 0;
-  // Durante um intervalo dinamico (startBreak), o denominador do anel e a
-  // duracao total do intervalo persistida, nao a do nivel de blind.
-  const totalSeconds =
-    liveTournament.breakActive && liveTournament.breakTotalSecs
-      ? liveTournament.breakTotalSecs
-      : levelTotalSeconds;
+  const totalSeconds = ringTotalSecs(liveTournament, blindLevels);
+  const isBreak = liveTournament.breakActive || (currentLevel?.isBreak ?? false);
+  const tone = clockTone(remainingSeconds, isRunning, isBreak);
 
   const autoAdvancedRef = useRef(false);
   const timerPanelRef = useRef<HTMLDivElement>(null);
@@ -137,29 +128,24 @@ export function MesaAoVivo({
   useEffect(() => {
     if (remainingSeconds === 0 && isRunning && isAdmin && !autoAdvancedRef.current) {
       autoAdvancedRef.current = true;
-      // Passa o timerStartedAt observado como trava de idempotencia: se outra
-      // aba/dispositivo admin ja processou este mesmo fim de nivel, o servidor
-      // reconhece que o estado mudou e ignora esta chamada em vez de avancar
-      // (ou encerrar o intervalo) de novo — evita pular um nivel de blind.
-      const expectedTimerStartedAt = liveTournament.timerStartedAt
-        ? new Date(liveTournament.timerStartedAt).toISOString()
-        : null;
-      if (liveTournament.breakActive) {
-        playLevelSound();
-        startTransition(async () => {
-          await endBreak(tournament.id);
-        });
-      } else {
-        playLevelSound();
-        startTransition(async () => {
-          await advanceBlindLevel(tournament.id, expectedTimerStartedAt);
-        });
-      }
+      // Passa o timerStartedAt observado como trava de idempotencia: o
+      // servidor decide entre avancar e encerrar o Intervalo avulso, e
+      // reconhece quando outra aba/dispositivo admin ja processou este mesmo
+      // Fim do nivel (o gravado mudou) para nao pular um nivel de blind.
+      const expectedTimerStartedAt = toIsoOrNull(liveTournament.timerStartedAt);
+      playLevelSound();
+      startTransition(async () => {
+        await expireLevel(tournament.id, expectedTimerStartedAt);
+      });
     }
     if (remainingSeconds > 0) {
       autoAdvancedRef.current = false;
     }
-  }, [remainingSeconds, isRunning, isAdmin, tournament.id, liveTournament.breakActive, liveTournament.timerStartedAt]);
+  // timerStartedAt vira uma nova instância de Date a cada linha crua do
+  // realtime; comparar pelo ISO evita re-rodar o efeito quando o instante
+  // gravado na verdade não mudou (mesmo ajuste do use-countdown).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remainingSeconds, isRunning, isAdmin, tournament.id, toIsoOrNull(liveTournament.timerStartedAt)]);
 
   if (!currentLevel) {
     return (
@@ -178,7 +164,7 @@ export function MesaAoVivo({
         <StickyTimerBar
           remainingSeconds={remainingSeconds}
           isRunning={isRunning}
-          isBreak={liveTournament.breakActive || currentLevel.isBreak}
+          tone={tone}
           currentLevel={currentLevel}
           isAdmin={isAdmin}
           tournamentId={tournament.id}
@@ -205,8 +191,7 @@ export function MesaAoVivo({
       <div ref={timerPanelRef} className="flex flex-col items-center gap-6 rounded-lg border p-8">
         <TimerDisplay
           remainingSeconds={remainingSeconds}
-          isRunning={isRunning}
-          isBreak={liveTournament.breakActive || currentLevel.isBreak}
+          tone={tone}
           totalSeconds={totalSeconds}
         />
 

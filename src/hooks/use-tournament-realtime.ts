@@ -2,46 +2,25 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { fromRawRow, type ClockState, type ClockRawRow } from "@/lib/tournament-clock";
 
-type TournamentTimerFields = {
+type TournamentTimerFields = ClockState & {
   id: number;
-  currentBlindLevel: number;
-  timerRunning: boolean;
-  timerRemainingSecs: number | null;
-  timerStartedAt: Date | string | null;
   status: string;
-  breakActive: boolean;
-  breakTotalSecs: number | null;
 };
 
-type TournamentRow = {
-  current_blind_level: number;
-  timer_running: boolean;
-  timer_remaining_secs: number | null;
-  timer_started_at: string | null;
-  status: string;
-  break_active: boolean;
-  break_total_secs: number | null;
-};
+type TournamentRow = ClockRawRow & { status: string };
 
 function mapRow<T extends TournamentTimerFields>(prev: T, row: Partial<TournamentRow>): T {
   return {
     ...prev,
-    currentBlindLevel: row.current_blind_level ?? prev.currentBlindLevel,
-    timerRunning: row.timer_running ?? prev.timerRunning,
-    timerRemainingSecs:
-      row.timer_remaining_secs !== undefined ? row.timer_remaining_secs : prev.timerRemainingSecs,
-    timerStartedAt:
-      row.timer_started_at !== undefined ? row.timer_started_at : prev.timerStartedAt,
+    ...fromRawRow(prev, row),
     status: row.status ?? prev.status,
-    breakActive: row.break_active !== undefined ? row.break_active : prev.breakActive,
-    breakTotalSecs:
-      row.break_total_secs !== undefined ? row.break_total_secs : prev.breakTotalSecs,
   };
 }
 
 const TIMER_COLUMNS =
-  "id, current_blind_level, timer_running, timer_remaining_secs, timer_started_at, status, break_active, break_total_secs";
+  "id, current_blind_level, timer_running, timer_remaining_secs, timer_started_at, status, break_active, level_remaining_secs, break_total_secs";
 
 export function useTournamentRealtime<T extends TournamentTimerFields>(
   tournamentId: number,
