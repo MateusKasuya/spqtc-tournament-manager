@@ -24,6 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { buttonVariants } from "@/components/ui/button-variants";
 import { formatCurrency, formatChips } from "@/lib/format";
 import { calculateRoundedPrizeAmounts } from "@/lib/prize";
+import { computePrizePool } from "@/lib/prize-pool";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ArrowLeft, Pencil, Monitor } from "lucide-react";
@@ -67,19 +68,14 @@ export default async function TorneioPage({ params }: PageProps) {
   const participantPlayerIds = new Set(participantsList.map((p) => p.playerId));
   const availablePlayers = allPlayers.filter((p) => !participantPlayerIds.has(p.id));
 
-  const rawPot = financialSummary.buy_in + financialSummary.rebuy + financialSummary.addon;
-  const buyInCount = tournament.buyInAmount > 0
-    ? Math.round(financialSummary.buy_in / tournament.buyInAmount)
-    : 0;
-  const rankingFund = buyInCount * tournament.rankingFeeAmount;
   const isBountyTournament = tournament.tournamentType === "bounty_builder";
-  const rawNet = rawPot - rankingFund;
-  const totalBountyAllocated = isBountyTournament
-    ? participantsList.reduce((sum, p) => sum + (p.currentBounty ?? 0) + (p.bountiesCollected ?? 0), 0)
-    : 0;
-  const prizePool = tournament.prizePoolOverride ?? (isBountyTournament ? rawNet - totalBountyAllocated : rawNet);
+  const pool = computePrizePool({
+    rules: tournament,
+    collected: financialSummary,
+    participants: participantsList,
+  });
   const roundedPrizeAmounts = calculateRoundedPrizeAmounts(
-    prizePool,
+    pool.prizePool,
     prizeData.map((p) => p.percentage)
   );
 
@@ -207,10 +203,9 @@ export default async function TorneioPage({ params }: PageProps) {
 
           <FinancialSummary
             summary={financialSummary}
-            prizePoolOverride={tournament.prizePoolOverride}
-            rankingFund={rankingFund}
-            tournamentType={tournament.tournamentType}
-            totalBountyAllocated={isBountyTournament ? totalBountyAllocated : undefined}
+            pool={pool}
+            balance={pool.prizePool - financialSummary.prize}
+            isBounty={isBountyTournament}
           />
         </TabsContent>
 
@@ -309,7 +304,7 @@ export default async function TorneioPage({ params }: PageProps) {
                 <h3 className="text-sm font-semibold">Distribuicao de premios</h3>
                 <PayoutDialog
                   tournamentId={tournamentId}
-                  prizePool={prizePool}
+                  prizePool={pool.prizePool}
                   prizePositions={prizeData}
                   participants={participantsList.map((p) => ({
                     playerId: p.playerId,

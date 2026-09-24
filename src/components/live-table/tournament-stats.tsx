@@ -1,4 +1,6 @@
 import { formatChips, formatCurrency } from "@/lib/format";
+import { computePrizePool } from "@/lib/prize-pool";
+import type { TournamentType } from "@/lib/knockout-ledger";
 import { Users, BarChart2, Layers, Trophy, Target } from "lucide-react";
 
 interface Participant {
@@ -7,7 +9,8 @@ interface Participant {
   rebuyCount: number;
   addonCount: number;
   bonusChipUsed: boolean;
-  currentBounty?: number;
+  currentBounty: number;
+  bountiesCollected: number;
 }
 
 interface Tournament {
@@ -15,18 +18,14 @@ interface Tournament {
   rebuyChips: number;
   addonChips: number;
   bonusChipAmount: number;
-  prizePoolOverride: number | null;
   rankingFeeAmount: number;
-  tournamentType?: string;
-  bountyPercentage?: number;
+  tournamentType: TournamentType;
 }
 
 interface FinancialSummary {
   buy_in: number;
   rebuy: number;
   addon: number;
-  prize: number;
-  bounty_earned?: number;
 }
 
 interface TournamentStatsProps {
@@ -70,18 +69,11 @@ export function TournamentStats({ participants, tournament, financialSummary }: 
 
   const avgStack = playingCount > 0 ? Math.round(totalChips / playingCount) : 0;
 
-  const rankingFund = paidCount * tournament.rankingFeeAmount;
   const isBounty = tournament.tournamentType === "bounty_builder";
-  const rawNet = financialSummary.buy_in + financialSummary.rebuy + financialSummary.addon - rankingFund;
-  const totalBountyAllocated = isBounty
-    ? participants.reduce((sum, p) => sum + (p.currentBounty ?? 0), 0) + (financialSummary.bounty_earned ?? 0)
-    : 0;
-  const prizePool =
-    tournament.prizePoolOverride ??
-    (isBounty ? rawNet - totalBountyAllocated : rawNet);
+  const { prizePool } = computePrizePool({ rules: tournament, collected: financialSummary, participants });
 
   const activeBountyPool = isBounty
-    ? participants.reduce((sum, p) => sum + (p.currentBounty ?? 0), 0)
+    ? participants.reduce((sum, p) => sum + p.currentBounty, 0)
     : 0;
 
   const cols = isBounty ? "sm:grid-cols-5" : "sm:grid-cols-4";
@@ -108,7 +100,6 @@ export function TournamentStats({ participants, tournament, financialSummary }: 
         icon={<Trophy className="h-3.5 w-3.5" />}
         label="Prize pool"
         value={formatCurrency(prizePool)}
-        sub={tournament.prizePoolOverride ? "override" : undefined}
       />
       {isBounty && (
         <StatCard

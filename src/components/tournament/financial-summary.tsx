@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/format";
+import type { PrizePool } from "@/lib/prize-pool";
 
 interface FinancialSummaryProps {
   summary: {
@@ -9,21 +10,13 @@ interface FinancialSummaryProps {
     prize: number;
     bounty_earned?: number;
   };
-  prizePoolOverride: number | null;
-  rankingFund: number;
-  tournamentType?: string;
-  totalBountyAllocated?: number;
+  pool: PrizePool;
+  balance: number;
+  isBounty: boolean;
 }
 
-export function FinancialSummary({ summary, prizePoolOverride, rankingFund, tournamentType, totalBountyAllocated }: FinancialSummaryProps) {
-  const isBounty = tournamentType === "bounty_builder";
-  const rawPot = summary.buy_in + summary.rebuy + summary.addon;
-  const rawNet = rawPot - rankingFund;
-  const prizePool = prizePoolOverride ?? (isBounty && totalBountyAllocated != null
-    ? rawNet - totalBountyAllocated
-    : rawNet);
+export function FinancialSummary({ summary, pool, balance, isBounty }: FinancialSummaryProps) {
   const bountiesPaid = summary.bounty_earned ?? 0;
-  const balance = prizePool - summary.prize;
 
   return (
     <Card>
@@ -43,20 +36,25 @@ export function FinancialSummary({ summary, prizePoolOverride, rankingFund, tour
           <span className="text-muted-foreground">Add-ons</span>
           <span>{formatCurrency(summary.addon)}</span>
         </div>
-        {rankingFund > 0 && (
+        <div className="flex justify-between border-t pt-1 mt-1">
+          <span className="text-muted-foreground">Arrecadado</span>
+          <span>{formatCurrency(pool.collected)}</span>
+        </div>
+        {pool.rankingFund > 0 && (
           <div className="flex justify-between text-muted-foreground">
             <span>Fundo de ranking</span>
-            <span>- {formatCurrency(rankingFund)}</span>
+            <span>- {formatCurrency(pool.rankingFund)}</span>
+          </div>
+        )}
+        {pool.bountyAllocated > 0 && (
+          <div className="flex justify-between text-muted-foreground">
+            <span>Bounty armado</span>
+            <span>- {formatCurrency(pool.bountyAllocated)}</span>
           </div>
         )}
         <div className="flex justify-between font-semibold border-t pt-1 mt-1">
-          <span>
-            Prize pool
-            {prizePoolOverride !== null && (
-              <span className="text-xs font-normal text-muted-foreground ml-1">(override)</span>
-            )}
-          </span>
-          <span>{formatCurrency(prizePool)}</span>
+          <span>Prize pool</span>
+          <span>{formatCurrency(pool.prizePool)}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Premios pagos</span>
