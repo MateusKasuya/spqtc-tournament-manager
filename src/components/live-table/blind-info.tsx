@@ -1,16 +1,11 @@
 import { formatChips } from "@/lib/format";
 import { Badge } from "@/components/ui/badge";
+import type { MesaLevel } from "@/db/queries/mesa";
 
-interface BlindLevel {
-  level: number;
-  smallBlind: number;
-  bigBlind: number;
-  ante: number;
-  durationMinutes: number;
-  isBreak: boolean;
-  isAddonLevel: boolean;
-  isBigAnte: boolean;
-}
+type BlindLevel = Pick<
+  MesaLevel,
+  "level" | "smallBlind" | "bigBlind" | "ante" | "durationMinutes" | "isBreak" | "isAddonLevel" | "isBigAnte"
+>;
 
 interface BlindInfoProps {
   currentLevel: BlindLevel;

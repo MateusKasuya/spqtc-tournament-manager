@@ -1,37 +1,18 @@
 import { formatChips, formatCurrency } from "@/lib/format";
 import { computePrizePool } from "@/lib/prize-pool";
-import type { TournamentType } from "@/lib/knockout-ledger";
+import type { MesaFinancialSummary, MesaParticipant, MesaTournament } from "@/db/queries/mesa";
 import { Users, BarChart2, Layers, Trophy, Target } from "lucide-react";
 
-interface Participant {
-  status: string;
-  buyInPaid: boolean;
-  rebuyCount: number;
-  addonCount: number;
-  bonusChipUsed: boolean;
-  currentBounty: number;
-  bountiesCollected: number;
-}
-
-interface Tournament {
-  initialChips: number;
-  rebuyChips: number;
-  addonChips: number;
-  bonusChipAmount: number;
-  rankingFeeAmount: number;
-  tournamentType: TournamentType;
-}
-
-interface FinancialSummary {
-  buy_in: number;
-  rebuy: number;
-  addon: number;
-}
-
 interface TournamentStatsProps {
-  participants: Participant[];
-  tournament: Tournament;
-  financialSummary: FinancialSummary;
+  participants: Pick<
+    MesaParticipant,
+    "status" | "buyInPaid" | "rebuyCount" | "addonCount" | "bonusChipUsed" | "currentBounty" | "bountiesCollected"
+  >[];
+  tournament: Pick<
+    MesaTournament,
+    "initialChips" | "rebuyChips" | "addonChips" | "bonusChipAmount" | "rankingFeeAmount" | "tournamentType"
+  >;
+  financialSummary: Pick<MesaFinancialSummary, "buy_in" | "rebuy" | "addon">;
 }
 
 interface StatCardProps {

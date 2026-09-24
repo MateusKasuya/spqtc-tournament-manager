@@ -64,6 +64,52 @@ export function clockStateUnchanged(tournamentId: number, read: ClockState) {
   return and(eq(tournaments.id, tournamentId), ...guards);
 }
 
+// Projeção da configuração do torneio que a mesa ao vivo usa (o Relógio fica em
+// `clockStateColumns`). Única declaração do shape no lado do banco.
+export const mesaTournamentColumns = {
+  id: tournaments.id,
+  name: tournaments.name,
+  status: tournaments.status,
+  tournamentType: tournaments.tournamentType,
+  buyInAmount: tournaments.buyInAmount,
+  rebuyAmount: tournaments.rebuyAmount,
+  addonAmount: tournaments.addonAmount,
+  initialChips: tournaments.initialChips,
+  rebuyChips: tournaments.rebuyChips,
+  addonChips: tournaments.addonChips,
+  bonusChipAmount: tournaments.bonusChipAmount,
+  allowAddon: tournaments.allowAddon,
+  rankingFeeAmount: tournaments.rankingFeeAmount,
+} as const;
+
+export async function getMesaTournament(tournamentId: number) {
+  const [tournament] = await db
+    .select({ ...mesaTournamentColumns, ...clockStateColumns })
+    .from(tournaments)
+    .where(eq(tournaments.id, tournamentId));
+  return tournament ?? null;
+}
+
+// Níveis com os campos que a mesa ao vivo mostra.
+export const mesaLevelColumns = {
+  level: blindStructures.level,
+  smallBlind: blindStructures.smallBlind,
+  bigBlind: blindStructures.bigBlind,
+  ante: blindStructures.ante,
+  durationMinutes: blindStructures.durationMinutes,
+  isBreak: blindStructures.isBreak,
+  isAddonLevel: blindStructures.isAddonLevel,
+  isBigAnte: blindStructures.isBigAnte,
+} as const;
+
+export async function getMesaLevels(tournamentId: number) {
+  return db
+    .select(mesaLevelColumns)
+    .from(blindStructures)
+    .where(eq(blindStructures.tournamentId, tournamentId))
+    .orderBy(blindStructures.level);
+}
+
 // Níveis como o núcleo do Relógio os recebe (`ClockLevel`).
 export async function getClockLevels(tournamentId: number) {
   return db

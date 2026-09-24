@@ -6,22 +6,15 @@ import { Play, Pause } from "lucide-react";
 import { formatTime, formatChips } from "@/lib/format";
 import { startTimer, pauseTimer } from "@/actions/tournaments";
 import type { ClockTone } from "@/lib/tournament-clock";
+import type { MesaLevel } from "@/db/queries/mesa";
 import { TIMER_TEXT_COLOR_CLASS } from "./timer-tone-classes";
 import { toast } from "sonner";
-
-interface BlindLevel {
-  level: number;
-  smallBlind: number;
-  bigBlind: number;
-  ante: number;
-  isBreak: boolean;
-}
 
 interface StickyTimerBarProps {
   remainingSeconds: number;
   isRunning: boolean;
   tone: ClockTone;
-  currentLevel: BlindLevel;
+  currentLevel: Pick<MesaLevel, "level" | "smallBlind" | "bigBlind" | "ante">;
   isAdmin: boolean;
   tournamentId: number;
   onScrollBack: () => void;

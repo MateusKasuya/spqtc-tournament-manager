@@ -13,30 +13,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import type { MesaParticipant, MesaTournament } from "@/db/queries/mesa";
 
-interface Participant {
-  id: number;
-  playerId: number;
-  name: string;
-  nickname: string | null;
-  status: string;
-  finishPosition: number | null;
-  buyInPaid: boolean;
-  rebuyCount: number;
-  addonCount: number;
-  bonusChipUsed: boolean;
-  currentBounty?: number;
-  bountiesCollected?: number;
-}
+type Participant = MesaParticipant;
 
-interface Tournament {
-  rebuyAmount: number;
-  addonAmount: number;
-  allowAddon: boolean;
-  bonusChipAmount: number;
-  buyInAmount: number;
-  tournamentType?: string;
-}
+type Tournament = Pick<
+  MesaTournament,
+  "rebuyAmount" | "addonAmount" | "allowAddon" | "bonusChipAmount" | "buyInAmount" | "tournamentType"
+>;
 
 interface QuickActionsProps {
   participants: Participant[];
@@ -53,10 +37,10 @@ function buildSummary(p: Participant, totalPaid: number, isBounty: boolean): str
   if (p.rebuyCount > 0) parts.push(`${p.rebuyCount}R`);
   if (p.addonCount > 0) parts.push(p.addonCount === 1 ? "A" : `${p.addonCount}A`);
   if (p.bonusChipUsed) parts.push("B");
-  if (isBounty && p.currentBounty != null && p.currentBounty > 0) {
+  if (isBounty && p.currentBounty > 0) {
     parts.push(`Bounty: ${formatCurrency(p.currentBounty)}`);
   }
-  if (isBounty && p.bountiesCollected != null && p.bountiesCollected > 0) {
+  if (isBounty && p.bountiesCollected > 0) {
     parts.push(`Fat: ${formatCurrency(p.bountiesCollected)}`);
   }
   return parts.join(" · ");
@@ -118,7 +102,7 @@ function EliminatorDialog({
                   className="h-4 w-4 accent-primary"
                 />
                 <span className="text-sm font-medium">{displayName(p)}</span>
-                {p.currentBounty != null && p.currentBounty > 0 && (
+                {p.currentBounty > 0 && (
                   <span className="ml-auto text-xs text-muted-foreground">
                     Bounty: {formatCurrency(p.currentBounty)}
                   </span>
@@ -256,7 +240,7 @@ function ParticipantMobileCard({
     participant.rebuyCount === 0 &&
     participant.addonCount === 0 &&
     !participant.bonusChipUsed &&
-    (participant.bountiesCollected ?? 0) === 0;
+    participant.bountiesCollected === 0;
 
   const statusBadge = isFinished ? (
     <span className="inline-flex items-center text-sm font-medium">🏆 1º</span>
@@ -478,7 +462,7 @@ function ParticipantRowFiltered({
     participant.rebuyCount === 0 &&
     participant.addonCount === 0 &&
     !participant.bonusChipUsed &&
-    (participant.bountiesCollected ?? 0) === 0;
+    participant.bountiesCollected === 0;
 
   return (
     <>
@@ -513,14 +497,14 @@ function ParticipantRowFiltered({
         {isBounty && (
           <td className="py-2.5 pr-3 text-base text-right text-muted-foreground whitespace-nowrap">
             {isPlaying || isRegistered
-              ? formatCurrency(participant.currentBounty ?? 0)
+              ? formatCurrency(participant.currentBounty)
               : "—"}
           </td>
         )}
 
         {isBounty && (
           <td className="py-2.5 pr-3 text-base text-right text-muted-foreground whitespace-nowrap">
-            {formatCurrency(participant.bountiesCollected ?? 0)}
+            {formatCurrency(participant.bountiesCollected)}
           </td>
         )}
 

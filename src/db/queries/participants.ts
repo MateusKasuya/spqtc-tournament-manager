@@ -30,6 +30,32 @@ export async function getParticipants(tournamentId: number) {
     .orderBy(participants.createdAt);
 }
 
+// Projeção dos campos de participante que a mesa ao vivo usa. Única declaração
+// do shape: os componentes da mesa recortam dela via `MesaSnapshot`.
+export const mesaParticipantColumns = {
+  id: participants.id,
+  playerId: participants.playerId,
+  name: players.name,
+  nickname: players.nickname,
+  status: participants.status,
+  finishPosition: participants.finishPosition,
+  buyInPaid: participants.buyInPaid,
+  rebuyCount: participants.rebuyCount,
+  addonCount: participants.addonCount,
+  bonusChipUsed: participants.bonusChipUsed,
+  currentBounty: participants.currentBounty,
+  bountiesCollected: participants.bountiesCollected,
+} as const;
+
+export async function getMesaParticipants(tournamentId: number) {
+  return db
+    .select(mesaParticipantColumns)
+    .from(participants)
+    .innerJoin(players, eq(participants.playerId, players.id))
+    .where(eq(participants.tournamentId, tournamentId))
+    .orderBy(participants.createdAt);
+}
+
 export async function getParticipantById(id: number) {
   const [participant] = await db
     .select()

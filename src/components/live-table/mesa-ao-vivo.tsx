@@ -15,85 +15,27 @@ import { StickyTimerBar } from "./sticky-timer-bar";
 import { expireLevel, updateTournamentStatus } from "@/actions/tournaments";
 import { getMesaLiveData } from "@/actions/mesa";
 import { playLevelSound } from "@/lib/play-level-sound";
-import type { TournamentType } from "@/lib/knockout-ledger";
-import { clockTone, ringTotalSecs, toIsoOrNull, type ClockState } from "@/lib/tournament-clock";
+import { clockTone, ringTotalSecs, toIsoOrNull } from "@/lib/tournament-clock";
+import type { MesaSnapshot } from "@/db/queries/mesa";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
-interface BlindLevel {
-  level: number;
-  smallBlind: number;
-  bigBlind: number;
-  ante: number;
-  durationMinutes: number;
-  isBreak: boolean;
-  isAddonLevel: boolean;
-  isBigAnte: boolean;
-}
-
-interface Participant {
-  id: number;
-  playerId: number;
-  name: string;
-  nickname: string | null;
-  status: string;
-  finishPosition: number | null;
-  buyInPaid: boolean;
-  rebuyCount: number;
-  addonCount: number;
-  bonusChipUsed: boolean;
-  currentBounty: number;
-  bountiesCollected: number;
-}
-
-interface FinancialSummary {
-  buy_in: number;
-  rebuy: number;
-  addon: number;
-  prize: number;
-}
-
-interface Tournament extends ClockState {
-  id: number;
-  status: string;
-  initialChips: number;
-  rebuyChips: number;
-  addonChips: number;
-  buyInAmount: number;
-  rebuyAmount: number;
-  addonAmount: number;
-  allowAddon: boolean;
-  bonusChipAmount: number;
-  rankingFeeAmount: number;
-  name: string;
-  tournamentType: TournamentType;
-  bountyPercentage: number;
-}
-
 interface MesaAoVivoProps {
-  tournament: Tournament;
-  blindLevels: BlindLevel[];
-  participants: Participant[];
-  financialSummary: FinancialSummary;
+  snapshot: MesaSnapshot;
   isAdmin: boolean;
 }
 
-export function MesaAoVivo({
-  tournament,
-  blindLevels,
-  participants,
-  financialSummary,
-  isAdmin,
-}: MesaAoVivoProps) {
+export function MesaAoVivo({ snapshot, isAdmin }: MesaAoVivoProps) {
+  const { tournament, blindLevels } = snapshot;
   const liveTournament = useTournamentRealtime(tournament.id, tournament);
   const {
     participants: liveParticipants,
     financialSummary: liveFinancial,
     refetch: refetchMesa,
-  } = useMesaData<Participant, FinancialSummary>(
+  } = useMesaData(
     tournament.id,
-    participants,
-    financialSummary,
+    snapshot.participants,
+    snapshot.financialSummary,
     () => getMesaLiveData(tournament.id)
   );
   const { remainingSeconds, isRunning } = useCountdown(liveTournament);

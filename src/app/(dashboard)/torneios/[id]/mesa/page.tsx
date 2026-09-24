@@ -1,8 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { getProfile } from "@/lib/get-profile";
-import { getTournamentById, getBlindStructure } from "@/db/queries/tournaments";
-import { getParticipants } from "@/db/queries/participants";
-import { getTournamentFinancialSummary } from "@/db/queries/transactions";
+import { loadMesaSnapshot } from "@/db/queries/mesa";
 import { MesaAoVivo } from "@/components/live-table/mesa-ao-vivo";
 
 export const dynamic = "force-dynamic";
@@ -19,35 +17,9 @@ export default async function MesaPage({ params }: PageProps) {
   const profile = await getProfile();
   if (!profile) redirect("/login");
 
-  const tournament = await getTournamentById(tournamentId);
-  if (!tournament) notFound();
-  if (tournament.status !== "running") redirect(`/torneios/${tournamentId}`);
+  const snapshot = await loadMesaSnapshot(tournamentId);
+  if (!snapshot) notFound();
+  if (snapshot.tournament.status !== "running") redirect(`/torneios/${tournamentId}`);
 
-  const [blindLevels, participants, financialSummary] = await Promise.all([
-    getBlindStructure(tournamentId),
-    getParticipants(tournamentId),
-    getTournamentFinancialSummary(tournamentId),
-  ]);
-
-  const isAdmin = profile?.role === "admin";
-
-  return (
-    <MesaAoVivo
-      tournament={{
-        ...tournament,
-        breakActive: tournament.breakActive ?? false,
-        tournamentType: tournament.tournamentType ?? "normal",
-        bountyPercentage: tournament.bountyPercentage ?? 50,
-      }}
-      blindLevels={blindLevels}
-      participants={participants.map((p) => ({
-        ...p,
-        finishPosition: p.finishPosition ?? null,
-        currentBounty: p.currentBounty ?? 0,
-        bountiesCollected: p.bountiesCollected ?? 0,
-      }))}
-      financialSummary={financialSummary}
-      isAdmin={isAdmin}
-    />
-  );
+  return <MesaAoVivo snapshot={snapshot} isAdmin={profile.role === "admin"} />;
 }

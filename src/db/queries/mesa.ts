@@ -1,0 +1,31 @@
+import { getMesaTournament, getMesaLevels } from "@/db/queries/tournaments";
+import { getMesaParticipants } from "@/db/queries/participants";
+import { getTournamentFinancialSummary } from "@/db/queries/transactions";
+
+// Parte ao vivo do snapshot da mesa: o que muda a cada ação da mesa. A página
+// a carrega dentro do snapshot e a action `getMesaLiveData` a devolve sozinha.
+export async function loadMesaLive(tournamentId: number) {
+  const [participants, financialSummary] = await Promise.all([
+    getMesaParticipants(tournamentId),
+    getTournamentFinancialSummary(tournamentId),
+  ]);
+  return { participants, financialSummary };
+}
+
+// Snapshot da mesa ao vivo: configuração + Relógio, Níveis e a parte ao vivo.
+export async function loadMesaSnapshot(tournamentId: number) {
+  const tournament = await getMesaTournament(tournamentId);
+  if (!tournament) return null;
+  const [blindLevels, live] = await Promise.all([
+    getMesaLevels(tournamentId),
+    loadMesaLive(tournamentId),
+  ]);
+  return { tournament, blindLevels, ...live };
+}
+
+export type MesaSnapshot = NonNullable<Awaited<ReturnType<typeof loadMesaSnapshot>>>;
+export type MesaLive = Awaited<ReturnType<typeof loadMesaLive>>;
+export type MesaTournament = MesaSnapshot["tournament"];
+export type MesaParticipant = MesaSnapshot["participants"][number];
+export type MesaLevel = MesaSnapshot["blindLevels"][number];
+export type MesaFinancialSummary = MesaSnapshot["financialSummary"];
