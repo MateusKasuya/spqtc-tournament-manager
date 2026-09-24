@@ -3,7 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { loadMesaLive } from "@/db/queries/mesa";
 
-// Leitura leve usada pelo hook useMesaData para re-sincronizar a mesa ao vivo
+// Leitura leve usada pelo hook useMesaSnapshot para re-sincronizar a mesa ao vivo
 // sem re-renderizar toda a árvore RSC (como faria router.refresh()).
 // Mesmo caminho de carga da página da mesa (loadMesaSnapshot compõe loadMesaLive).
 export async function getMesaLiveData(tournamentId: number) {

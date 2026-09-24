@@ -2,8 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useTransition } from "react";
-import { useTournamentRealtime } from "@/hooks/use-tournament-realtime";
-import { useMesaData } from "@/hooks/use-mesa-data";
+import { useMesaSnapshot } from "@/hooks/use-mesa-snapshot";
 import { useCountdown } from "@/hooks/use-countdown";
 import { useWakeLock } from "@/hooks/use-wake-lock";
 import { TimerDisplay } from "./timer-display";
@@ -13,7 +12,6 @@ import { TournamentStats } from "./tournament-stats";
 import { QuickActions } from "./quick-actions";
 import { StickyTimerBar } from "./sticky-timer-bar";
 import { expireLevel, updateTournamentStatus } from "@/actions/tournaments";
-import { getMesaLiveData } from "@/actions/mesa";
 import { playLevelSound } from "@/lib/play-level-sound";
 import { clockTone, ringTotalSecs, toIsoOrNull } from "@/lib/tournament-clock";
 import type { MesaSnapshot } from "@/db/queries/mesa";
@@ -25,28 +23,23 @@ interface MesaAoVivoProps {
   isAdmin: boolean;
 }
 
-export function MesaAoVivo({ snapshot, isAdmin }: MesaAoVivoProps) {
-  const { tournament, blindLevels } = snapshot;
-  const liveTournament = useTournamentRealtime(tournament.id, tournament);
+export function MesaAoVivo({ snapshot: initialSnapshot, isAdmin }: MesaAoVivoProps) {
+  const { snapshot, refetch: refetchMesa } = useMesaSnapshot(initialSnapshot);
   const {
+    tournament,
+    blindLevels,
     participants: liveParticipants,
     financialSummary: liveFinancial,
-    refetch: refetchMesa,
-  } = useMesaData(
-    tournament.id,
-    snapshot.participants,
-    snapshot.financialSummary,
-    () => getMesaLiveData(tournament.id)
-  );
-  const { remainingSeconds, isRunning } = useCountdown(liveTournament);
+  } = snapshot;
+  const { remainingSeconds, isRunning } = useCountdown(tournament);
   useWakeLock(isRunning);
 
-  const currentIndex = blindLevels.findIndex((b) => b.level === liveTournament.currentBlindLevel);
+  const currentIndex = blindLevels.findIndex((b) => b.level === tournament.currentBlindLevel);
   const currentLevel = blindLevels[currentIndex] ?? blindLevels[0];
   const nextLevel = blindLevels[currentIndex + 1] ?? null;
 
-  const totalSeconds = ringTotalSecs(liveTournament, blindLevels);
-  const isBreak = liveTournament.breakActive || (currentLevel?.isBreak ?? false);
+  const totalSeconds = ringTotalSecs(tournament, blindLevels);
+  const isBreak = tournament.breakActive || (currentLevel?.isBreak ?? false);
   const tone = clockTone(remainingSeconds, isRunning, isBreak);
 
   const autoAdvancedRef = useRef(false);
@@ -74,7 +67,7 @@ export function MesaAoVivo({ snapshot, isAdmin }: MesaAoVivoProps) {
       // servidor decide entre avancar e encerrar o Intervalo avulso, e
       // reconhece quando outra aba/dispositivo admin ja processou este mesmo
       // Fim do nivel (o gravado mudou) para nao pular um nivel de blind.
-      const expectedTimerStartedAt = toIsoOrNull(liveTournament.timerStartedAt);
+      const expectedTimerStartedAt = toIsoOrNull(tournament.timerStartedAt);
       playLevelSound();
       startTransition(async () => {
         await expireLevel(tournament.id, expectedTimerStartedAt);
@@ -87,7 +80,7 @@ export function MesaAoVivo({ snapshot, isAdmin }: MesaAoVivoProps) {
   // realtime; comparar pelo ISO evita re-rodar o efeito quando o instante
   // gravado na verdade não mudou (mesmo ajuste do use-countdown).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [remainingSeconds, isRunning, isAdmin, tournament.id, toIsoOrNull(liveTournament.timerStartedAt)]);
+  }, [remainingSeconds, isRunning, isAdmin, tournament.id, toIsoOrNull(tournament.timerStartedAt)]);
 
   if (!currentLevel) {
     return (
@@ -140,7 +133,7 @@ export function MesaAoVivo({ snapshot, isAdmin }: MesaAoVivoProps) {
         <BlindInfo
           currentLevel={currentLevel}
           nextLevel={nextLevel}
-          breakActive={liveTournament.breakActive}
+          breakActive={tournament.breakActive}
         />
 
         {isAdmin && (
@@ -149,7 +142,7 @@ export function MesaAoVivo({ snapshot, isAdmin }: MesaAoVivoProps) {
             isRunning={isRunning}
             currentLevelIndex={currentIndex}
             totalLevels={blindLevels.length}
-            breakActive={liveTournament.breakActive}
+            breakActive={tournament.breakActive}
           />
         )}
       </div>
@@ -157,7 +150,7 @@ export function MesaAoVivo({ snapshot, isAdmin }: MesaAoVivoProps) {
       {/* Stats */}
       <TournamentStats
         participants={liveParticipants}
-        tournament={liveTournament}
+        tournament={tournament}
         financialSummary={liveFinancial}
       />
 
@@ -165,7 +158,7 @@ export function MesaAoVivo({ snapshot, isAdmin }: MesaAoVivoProps) {
       {isAdmin && (
         <QuickActions
           participants={liveParticipants}
-          tournament={liveTournament}
+          tournament={tournament}
           onMutated={refetchMesa}
         />
       )}

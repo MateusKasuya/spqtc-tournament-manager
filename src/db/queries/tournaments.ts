@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { tournaments, seasons, blindStructures, prizeStructures } from "@/db/schema";
 import { eq, desc, and, isNull, sql } from "drizzle-orm";
 import type { ClockState } from "@/lib/tournament-clock";
+import { MESA_CONFIG_COLUMNS, type MesaConfigKey } from "@/lib/mesa-snapshot";
 
 export async function getTournaments() {
   return db
@@ -64,23 +65,15 @@ export function clockStateUnchanged(tournamentId: number, read: ClockState) {
   return and(eq(tournaments.id, tournamentId), ...guards);
 }
 
-// Projeção da configuração do torneio que a mesa ao vivo usa (o Relógio fica em
-// `clockStateColumns`). Única declaração do shape no lado do banco.
+// Projeção da configuração do torneio que a mesa ao vivo usa, derivada de
+// `MESA_CONFIG_COLUMNS` (o realtime aplica as mesmas colunas). O Relógio fica
+// em `clockStateColumns`.
 export const mesaTournamentColumns = {
   id: tournaments.id,
-  name: tournaments.name,
-  status: tournaments.status,
-  tournamentType: tournaments.tournamentType,
-  buyInAmount: tournaments.buyInAmount,
-  rebuyAmount: tournaments.rebuyAmount,
-  addonAmount: tournaments.addonAmount,
-  initialChips: tournaments.initialChips,
-  rebuyChips: tournaments.rebuyChips,
-  addonChips: tournaments.addonChips,
-  bonusChipAmount: tournaments.bonusChipAmount,
-  allowAddon: tournaments.allowAddon,
-  rankingFeeAmount: tournaments.rankingFeeAmount,
-} as const;
+  ...(Object.fromEntries(
+    (Object.keys(MESA_CONFIG_COLUMNS) as MesaConfigKey[]).map((key) => [key, tournaments[key]])
+  ) as { [K in MesaConfigKey]: (typeof tournaments)[K] }),
+};
 
 export async function getMesaTournament(tournamentId: number) {
   const [tournament] = await db
