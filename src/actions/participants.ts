@@ -5,8 +5,11 @@ import { participants, transactions, tournaments } from "@/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/require-admin";
-import { clockStateColumns } from "@/db/queries/tournaments";
-import { getParticipantById, getParticipantByPlayerAndTournament } from "@/db/queries/participants";
+import { clockStateColumns, getTournamentById } from "@/db/queries/tournaments";
+import { getParticipantById, getParticipantByPlayerAndTournament, getParticipants } from "@/db/queries/participants";
+import { getTournamentFinancialSummary } from "@/db/queries/transactions";
+import { computePrizePool } from "@/lib/prize-pool";
+import { formatCurrency } from "@/lib/format";
 import { checkKnockout, checkUndo, initialBounty, KnockoutLedgerError, type KnockoutEvent, type UndoRequest } from "@/lib/knockout-ledger";
 import { applyKnockout, undoKnockout, loadKnockoutSnapshot } from "@/db/ledger/knockout-ledger";
 import { pauseTimer } from "@/lib/tournament-clock";
@@ -436,6 +439,25 @@ export async function distributePayouts(
     : [];
   const valid = new Set(existing.map((r) => r.playerId));
   const allowed = items.filter((p) => valid.has(p.playerId));
+
+  const [tournament, collected, tournamentParticipants] = await Promise.all([
+    getTournamentById(tournamentId),
+    getTournamentFinancialSummary(tournamentId),
+    getParticipants(tournamentId),
+  ]);
+  if (!tournament) return { error: "Torneio nao encontrado" };
+  // Acordo na mesa final (Rodando) ou acerto no fim (Encerrado); Pendente e Cancelado não pagam.
+  if (tournament.status !== "running" && tournament.status !== "finished") {
+    return { error: "Premios so podem ser distribuidos com o torneio rodando ou encerrado" };
+  }
+
+  const { prizePool } = computePrizePool({ rules: tournament, collected, participants: tournamentParticipants });
+  const total = allowed.reduce((sum, p) => sum + p.amount, 0);
+  if (total > prizePool) {
+    return {
+      error: `Premios somam ${formatCurrency(total)}, acima do Prize pool de ${formatCurrency(prizePool)}`,
+    };
+  }
 
   await db.transaction(async (tx) => {
     await tx
