@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { eq } from "drizzle-orm";
 import { updatePrizeStructure, updateTournamentStatus } from "@/actions/tournaments";
-import { distributePayouts } from "@/actions/participants";
+import { confirmBuyIn, distributePayouts } from "@/actions/participants";
 import { getPrizeStructure } from "@/db/queries/tournaments";
 import { getParticipantById, getParticipantByPlayerAndTournament } from "@/db/queries/participants";
 import { getTournamentFinancialSummary } from "@/db/queries/transactions";
@@ -51,11 +51,11 @@ describe("premios / pontos / ranking", () => {
 
   // B) distributePayouts
   it("4. distribui prêmios e registra transação", async () => {
-    const t = await seedTournament();
+    const t = await seedTournament({ status: "running", buyInAmount: 200 });
     const A = await seedPlayer("A");
     const B = await seedPlayer("B");
-    await seedParticipant(t, A, { status: "finished" });
-    await seedParticipant(t, B, { status: "eliminated" });
+    await confirmBuyIn(await seedParticipant(t, A));
+    await confirmBuyIn(await seedParticipant(t, B));
 
     const res = await distributePayouts(t, [
       { playerId: A, amount: 300, position: 1 },
@@ -72,9 +72,9 @@ describe("premios / pontos / ranking", () => {
   });
 
   it("5. re-executar substitui (não soma) os prêmios", async () => {
-    const t = await seedTournament();
+    const t = await seedTournament({ status: "running", buyInAmount: 300 });
     const A = await seedPlayer("A");
-    await seedParticipant(t, A, { status: "finished" });
+    await confirmBuyIn(await seedParticipant(t, A));
 
     await distributePayouts(t, [{ playerId: A, amount: 300, position: 1 }]);
     await distributePayouts(t, [{ playerId: A, amount: 200, position: 1 }]);
