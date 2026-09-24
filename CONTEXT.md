@@ -14,6 +14,44 @@ _Avoid_: torneio bounty, modo bounty
 Recompra de fichas por um participante que caiu; em Bounty Builder o participante volta com um Bounty novo.
 _Avoid_: recompra
 
+**Status do torneio**:
+Pendente (inscrições, antes de começar), Rodando, Encerrado ou Cancelado. Encerrado e Cancelado são finais. O status decide o que pode ser feito:
+- inscrever/remover participante e confirmar/desfazer buy-in: Pendente ou Rodando;
+- Relógio, Knockout, Rebuy, add-on, bônus e Desfazer: só Rodando;
+- Distribuir prêmios: Rodando ou Encerrado;
+- editar estruturas de blinds e de prêmios: Pendente ou Rodando.
+_Avoid_: finalizado, ativo
+
+### Prêmios
+
+**Arrecadado**:
+Todo o dinheiro que entrou no torneio por buy-ins, Rebuys e add-ons.
+
+**Fundo de ranking**:
+Parte do Arrecadado reservada ao ranking da temporada: a taxa de ranking vezes o número de participantes com buy-in confirmado. Rebuys e add-ons não contribuem.
+_Avoid_: taxa, rake
+
+**Bounty armado**:
+Total de Bounty criado por buy-ins e Rebuys em Bounty Builder. Pela Conservação, é igual à soma dos Bounties em jogo com os Bounties coletados.
+
+**Prize pool**:
+O que sobra para os Prêmios: Arrecadado menos Fundo de ranking menos Bounty armado. É sempre derivado, nunca digitado.
+_Avoid_: pote, premiação
+
+**Estrutura de prêmios**:
+Percentual do Prize pool que cabe a cada posição (padrão 45/25/15/10/5), ajustável por torneio.
+_Avoid_: distribuição de prêmios (quando se refere aos percentuais)
+
+**Prêmio**:
+Valor pago a um participante por sua posição final. A soma dos Prêmios nunca passa do Prize pool.
+
+**Distribuir prêmios**:
+Registrar os Prêmios pagos a cada posição. Pode ser feito com o torneio rodando (acordo na mesa final) ou encerrado, nunca em torneio cancelado; refazer substitui a distribuição anterior.
+_Avoid_: pagar payouts
+
+**Saldo**:
+Prize pool menos os Prêmios já pagos. Pode sobrar, por acordo de mesa ou arredondamento; não pode ficar negativo.
+
 ### Knockout
 
 **Knockout**:
