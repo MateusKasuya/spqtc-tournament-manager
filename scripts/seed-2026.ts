@@ -36,7 +36,6 @@ interface EtapaParticipant {
 interface Etapa {
   name: string;
   date: Date;
-  prizePoolOverride: number; // em centavos
   participants: EtapaParticipant[];
 }
 
@@ -44,7 +43,6 @@ const ETAPAS: Etapa[] = [
   {
     name: "1ª Etapa 2026",
     date: new Date("2026-01-13T19:00:00-03:00"),
-    prizePoolOverride: 204100,
     participants: [
       { nickname: "RUY",         position: 1,  rebuys: 0,  addonCount: 1, prize: 80000 },
       { nickname: "KREL",        position: 2,  rebuys: 2,  addonCount: 1, prize: 55000 },
@@ -66,7 +64,6 @@ const ETAPAS: Etapa[] = [
   {
     name: "2ª Etapa 2026",
     date: new Date("2026-02-03T19:00:00-03:00"),
-    prizePoolOverride: 210000,
     participants: [
       { nickname: "GAGO",   position: 1,  rebuys: 2,  addonCount: 1, prize: 90000 },
       { nickname: "KREL",   position: 2,  rebuys: 4,  addonCount: 2, prize: 55000 },
@@ -86,7 +83,6 @@ const ETAPAS: Etapa[] = [
   {
     name: "3ª Etapa 2026",
     date: new Date("2026-02-17T19:00:00-03:00"),
-    prizePoolOverride: 180000,
     participants: [
       { nickname: "GUIDO",   position: 1,  rebuys: 3,  addonCount: 2, prize: 85000 },
       { nickname: "HEITOR",  position: 2,  rebuys: 3,  addonCount: 2, prize: 50000 },
@@ -105,7 +101,6 @@ const ETAPAS: Etapa[] = [
   {
     name: "4ª Etapa 2026",
     date: new Date("2026-03-10T19:00:00-03:00"),
-    prizePoolOverride: 228000,
     participants: [
       { nickname: "GAGO",    position: 1,  rebuys: 3,  addonCount: 1, prize: 100000 },
       { nickname: "DIGO",    position: 2,  rebuys: 1,  addonCount: 1, prize:  60000 },
@@ -222,7 +217,6 @@ async function main() {
           maxRebuys: 0,
           allowAddon: true,
           rankingFeeAmount: 2000,
-          prizePoolOverride: etapa.prizePoolOverride,
           createdBy: adminId,
         })
         .returning({ id: schema.tournaments.id });

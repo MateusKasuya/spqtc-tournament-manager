@@ -21,7 +21,6 @@ export const tournaments = pgTable("tournaments", {
   bonusChipAmount: integer("bonus_chip_amount").notNull().default(0),
   maxRebuys: integer("max_rebuys").notNull().default(0),
   allowAddon: boolean("allow_addon").notNull().default(false),
-  prizePoolOverride: integer("prize_pool_override"),
   rankingFeeAmount: integer("ranking_fee_amount").notNull().default(0),
   currentBlindLevel: integer("current_blind_level").notNull().default(0),
   timerRunning: boolean("timer_running").notNull().default(false),
