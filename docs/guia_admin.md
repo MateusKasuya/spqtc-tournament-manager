@@ -143,6 +143,5 @@ Para ver o ranking de outra temporada, use o seletor no topo da página.
 ## Dicas
 
 - **Templates de blinds e prêmios** poupam tempo — salve suas estruturas mais usadas
-- O **pote override** permite definir um prize pool manual (ignora o cálculo automático)
 - A taxa de ranking é descontada automaticamente do pote antes de calcular os prêmios
 - Torneios finalizados não aparecem mais como editáveis — confira tudo antes de encerrar

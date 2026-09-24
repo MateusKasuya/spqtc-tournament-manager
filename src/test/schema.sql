@@ -91,7 +91,6 @@ CREATE TABLE "tournaments" (
 	"bonus_chip_amount" integer DEFAULT 0 NOT NULL,
 	"max_rebuys" integer DEFAULT 0 NOT NULL,
 	"allow_addon" boolean DEFAULT false NOT NULL,
-	"prize_pool_override" integer,
 	"ranking_fee_amount" integer DEFAULT 0 NOT NULL,
 	"current_blind_level" integer DEFAULT 0 NOT NULL,
 	"timer_running" boolean DEFAULT false NOT NULL,

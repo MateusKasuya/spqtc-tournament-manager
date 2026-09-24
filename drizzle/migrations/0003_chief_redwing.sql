@@ -1,0 +1,1 @@
+ALTER TABLE "tournaments" DROP COLUMN "prize_pool_override";
