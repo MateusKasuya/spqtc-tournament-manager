@@ -258,18 +258,21 @@ export default async function TorneioPage({ params }: PageProps) {
         {/* Premios */}
         <TabsContent value="prizes" className="mt-4 space-y-6">
           <div className="space-y-3">
-            {isAdmin && tournament.status !== "finished" && (
-              <div className="flex justify-end gap-2">
-                {prizeData.length > 0 && (
-                  <DeletePrizeStructureButton tournamentId={tournamentId} />
-                )}
-                <PrizeStructureEditor
-                  tournamentId={tournamentId}
-                  initialPositions={prizeData}
-                  savedTemplates={prizeTemplatesList}
-                />
-              </div>
-            )}
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">Estrutura de premios</h3>
+              {isAdmin && tournament.status !== "finished" && (
+                <div className="flex gap-2">
+                  {prizeData.length > 0 && (
+                    <DeletePrizeStructureButton tournamentId={tournamentId} />
+                  )}
+                  <PrizeStructureEditor
+                    tournamentId={tournamentId}
+                    initialPositions={prizeData}
+                    savedTemplates={prizeTemplatesList}
+                  />
+                </div>
+              )}
+            </div>
             {prizeData.length > 0 ? (
               <Table>
                 <TableHeader>
@@ -301,7 +304,7 @@ export default async function TorneioPage({ params }: PageProps) {
           {["running", "finished"].includes(tournament.status) && isAdmin && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Distribuicao de premios</h3>
+                <h3 className="text-sm font-semibold">Premios pagos</h3>
                 <PayoutDialog
                   tournamentId={tournamentId}
                   prizePool={pool.prizePool}
