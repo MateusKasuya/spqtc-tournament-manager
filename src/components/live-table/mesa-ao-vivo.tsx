@@ -15,6 +15,7 @@ import { StickyTimerBar } from "./sticky-timer-bar";
 import { expireLevel, updateTournamentStatus } from "@/actions/tournaments";
 import { getMesaLiveData } from "@/actions/mesa";
 import { playLevelSound } from "@/lib/play-level-sound";
+import type { TournamentType } from "@/lib/knockout-ledger";
 import { clockTone, ringTotalSecs, toIsoOrNull, type ClockState } from "@/lib/tournament-clock";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -63,10 +64,9 @@ interface Tournament extends ClockState {
   addonAmount: number;
   allowAddon: boolean;
   bonusChipAmount: number;
-  prizePoolOverride: number | null;
   rankingFeeAmount: number;
   name: string;
-  tournamentType: string;
+  tournamentType: TournamentType;
   bountyPercentage: number;
 }
 
