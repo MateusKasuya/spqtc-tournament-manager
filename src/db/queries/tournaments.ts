@@ -90,7 +90,6 @@ export async function getMesaTournament(tournamentId: number) {
   return tournament ?? null;
 }
 
-// Níveis com os campos que a mesa ao vivo mostra.
 export const mesaLevelColumns = {
   level: blindStructures.level,
   smallBlind: blindStructures.smallBlind,

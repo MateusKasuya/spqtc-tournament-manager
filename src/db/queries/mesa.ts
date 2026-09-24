@@ -12,7 +12,6 @@ export async function loadMesaLive(tournamentId: number) {
   return { participants, financialSummary };
 }
 
-// Snapshot da mesa ao vivo: configuração + Relógio, Níveis e a parte ao vivo.
 export async function loadMesaSnapshot(tournamentId: number) {
   const tournament = await getMesaTournament(tournamentId);
   if (!tournament) return null;
@@ -24,7 +23,6 @@ export async function loadMesaSnapshot(tournamentId: number) {
 }
 
 export type MesaSnapshot = NonNullable<Awaited<ReturnType<typeof loadMesaSnapshot>>>;
-export type MesaLive = Awaited<ReturnType<typeof loadMesaLive>>;
 export type MesaTournament = MesaSnapshot["tournament"];
 export type MesaParticipant = MesaSnapshot["participants"][number];
 export type MesaLevel = MesaSnapshot["blindLevels"][number];
