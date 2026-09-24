@@ -21,5 +21,6 @@ export default async function MesaPage({ params }: PageProps) {
   if (!snapshot) notFound();
   if (snapshot.tournament.status !== "running") redirect(`/torneios/${tournamentId}`);
 
-  return <MesaAoVivo snapshot={snapshot} isAdmin={profile.role === "admin"} />;
+  // key: trocar de torneio remonta a mesa, sem herdar busca em voo do anterior.
+  return <MesaAoVivo key={tournamentId} snapshot={snapshot} isAdmin={profile.role === "admin"} />;
 }

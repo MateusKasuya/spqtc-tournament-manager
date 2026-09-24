@@ -12,8 +12,6 @@ const TOURNAMENT_SELECT = TOURNAMENT_RAW_COLUMNS.join(", ");
 // - UPDATE do torneio (Relógio, Status, configuração) aplicado direto do evento,
 //   sem nova busca, para o Relógio não engasgar;
 // - mudança em participantes dispara nova busca da parte ao vivo, coalescida.
-// Substitui o antigo router.refresh() por ação, que re-renderizava toda a página
-// (force-dynamic) e empilhava transitions, congelando a UI em ações rápidas.
 export function useMesaSnapshot(initial: MesaSnapshot) {
   const tournamentId = initial.tournament.id;
   const [tournament, setTournament] = useState(initial.tournament);
@@ -35,6 +33,9 @@ export function useMesaSnapshot(initial: MesaSnapshot) {
   const inFlightRef = useRef<Promise<void> | null>(null);
   const pendingRef = useRef(false);
   const cancelledRef = useRef(false);
+  // Conta os eventos do torneio aplicados: uma ressincronização que termina depois
+  // de um evento mais novo é descartada, para não voltar o Relógio.
+  const tournamentEventsRef = useRef(0);
 
   const refetch = useCallback((): Promise<void> => {
     if (inFlightRef.current) {
@@ -65,12 +66,15 @@ export function useMesaSnapshot(initial: MesaSnapshot) {
     const supabase = createClient();
 
     const resyncTournament = async () => {
+      const eventsAtStart = tournamentEventsRef.current;
       const { data, error } = await supabase
         .from("tournaments")
         .select(TOURNAMENT_SELECT)
         .eq("id", tournamentId)
         .single();
       if (cancelledRef.current || error || !data) return;
+      if (tournamentEventsRef.current !== eventsAtStart) return;
+      tournamentEventsRef.current++;
       setTournament((prev) => applyTournamentEvent(prev, data as unknown as Record<string, unknown>));
     };
 
@@ -91,6 +95,7 @@ export function useMesaSnapshot(initial: MesaSnapshot) {
         },
         (payload) => {
           if (cancelledRef.current) return;
+          tournamentEventsRef.current++;
           setTournament((prev) => applyTournamentEvent(prev, payload.new));
         }
       )
