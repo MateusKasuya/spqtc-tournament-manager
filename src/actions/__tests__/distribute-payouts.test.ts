@@ -10,7 +10,9 @@ import {
 import { getParticipantByPlayerAndTournament } from "@/db/queries/participants";
 import { getTournamentFinancialSummary } from "@/db/queries/transactions";
 import { seedTournament, seedPlayer, seedParticipant } from "@/test/setup";
-import type { tournaments } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { testDb } from "@/test/db";
+import { tournaments } from "@/db/schema";
 
 type TournamentOverrides = Partial<typeof tournaments.$inferInsert>;
 
@@ -38,11 +40,13 @@ const NORMAL: TournamentOverrides = {
 };
 
 // Arrecadado 300 + 100 + 50 = 450; Fundo de ranking 3 × 10 = 30 → Prize pool 420.
-async function setupNormal(overrides: TournamentOverrides = {}) {
+// Montado Rodando (buy-in, Rebuy e add-on exigem) e só então levado ao status pedido.
+async function setupNormal({ status, ...overrides }: TournamentOverrides = {}) {
   const t = await seedTournament({ ...NORMAL, ...overrides });
   const { players, parts } = await setupPlayers(t, 3);
   await addRebuy(parts[0]);
   await addAddon(parts[1]);
+  if (status) await testDb.update(tournaments).set({ status }).where(eq(tournaments.id, t));
   return { t, players };
 }
 

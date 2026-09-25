@@ -3,6 +3,7 @@ import { tournaments, seasons, blindStructures, prizeStructures } from "@/db/sch
 import { eq, desc, and, isNull, sql } from "drizzle-orm";
 import type { ClockState } from "@/lib/tournament-clock";
 import { MESA_CONFIG_COLUMNS, type MesaConfigKey } from "@/lib/mesa-snapshot";
+import type { StatusRule } from "@/lib/tournament-status";
 
 export async function getTournaments() {
   return db
@@ -34,6 +35,18 @@ export async function getTournamentById(id: number) {
     .from(tournaments)
     .where(eq(tournaments.id, id));
   return tournament ?? null;
+}
+
+// Torneio para uma action que exige um Status do torneio (regra em
+// `STATUS_RULES`): devolve o torneio ou a recusa em pt-BR para a action repassar.
+export async function getTournamentRequiringStatus(
+  id: number,
+  rule: StatusRule
+): Promise<{ tournament: typeof tournaments.$inferSelect } | { error: string }> {
+  const tournament = await getTournamentById(id);
+  if (!tournament) return { error: "Torneio nao encontrado" };
+  if (!rule.allowed.includes(tournament.status)) return { error: rule.error };
+  return { tournament };
 }
 
 // Projeção das sete colunas do Relógio do torneio: o `ClockState` do núcleo

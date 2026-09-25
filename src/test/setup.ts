@@ -41,11 +41,13 @@ export async function seedUser() {
   }).onConflictDoNothing();
 }
 
+// Rodando por padrão: é o único status em que toda ação da mesa (Relógio,
+// Knockout, Rebuy, add-on, bônus, Desfazer) é aceita pela regra do Status do torneio.
 export async function seedTournament(overrides: Partial<typeof tournaments.$inferInsert> = {}) {
   await seedUser();
   const [t] = await testDb.insert(tournaments).values({
     name: "T", date: new Date(), buyInAmount: 100, initialChips: 10000,
-    createdBy: TEST_USER_ID, ...overrides,
+    status: "running", createdBy: TEST_USER_ID, ...overrides,
   }).returning();
   return t.id;
 }
