@@ -68,7 +68,7 @@ export function clockStateUnchanged(tournamentId: number, read: ClockState) {
 // Projeção da configuração do torneio que a mesa ao vivo usa, derivada de
 // `MESA_CONFIG_COLUMNS` (o realtime aplica as mesmas colunas). O Relógio fica
 // em `clockStateColumns`.
-export const mesaTournamentColumns = {
+const mesaTournamentColumns = {
   id: tournaments.id,
   ...(Object.fromEntries(
     (Object.keys(MESA_CONFIG_COLUMNS) as MesaConfigKey[]).map((key) => [key, tournaments[key]])
@@ -83,7 +83,7 @@ export async function getMesaTournament(tournamentId: number) {
   return tournament ?? null;
 }
 
-export const mesaLevelColumns = {
+const mesaLevelColumns = {
   level: blindStructures.level,
   smallBlind: blindStructures.smallBlind,
   bigBlind: blindStructures.bigBlind,

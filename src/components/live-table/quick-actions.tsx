@@ -15,15 +15,13 @@ import {
 import { Button } from "@/components/ui/button";
 import type { MesaParticipant, MesaTournament } from "@/db/queries/mesa";
 
-type Participant = MesaParticipant;
-
 type Tournament = Pick<
   MesaTournament,
   "rebuyAmount" | "addonAmount" | "allowAddon" | "bonusChipAmount" | "buyInAmount" | "tournamentType"
 >;
 
 interface QuickActionsProps {
-  participants: Participant[];
+  participants: MesaParticipant[];
   tournament: Tournament;
   onMutated: () => Promise<void>;
 }
@@ -32,7 +30,7 @@ function displayName(p: { name: string; nickname: string | null }) {
   return p.nickname ?? p.name;
 }
 
-function buildSummary(p: Participant, totalPaid: number, isBounty: boolean): string {
+function buildSummary(p: MesaParticipant, totalPaid: number, isBounty: boolean): string {
   const parts: string[] = [formatCurrency(totalPaid)];
   if (p.rebuyCount > 0) parts.push(`${p.rebuyCount}R`);
   if (p.addonCount > 0) parts.push(p.addonCount === 1 ? "A" : `${p.addonCount}A`);
@@ -59,7 +57,7 @@ function EliminatorDialog({
   open: boolean;
   onClose: () => void;
   onConfirm: (eliminatorIds: number[]) => void;
-  allParticipants: Participant[];
+  allParticipants: MesaParticipant[];
   victimId: number;
   actionLabel: string;
   isPending: boolean;
@@ -213,9 +211,9 @@ function ParticipantMobileCard({
   isBounty,
   onMutated,
 }: {
-  participant: Participant;
+  participant: MesaParticipant;
   tournament: Tournament;
-  allParticipants: Participant[];
+  allParticipants: MesaParticipant[];
   showBonus: boolean;
   isBounty: boolean;
   onMutated: () => Promise<void>;
@@ -436,13 +434,13 @@ function ParticipantRowFiltered({
   allParticipants,
   onMutated,
 }: {
-  participant: Participant;
+  participant: MesaParticipant;
   tournament: Tournament;
   showRebuy: boolean;
   showAddon: boolean;
   showBonus: boolean;
   isBounty: boolean;
-  allParticipants: Participant[];
+  allParticipants: MesaParticipant[];
   onMutated: () => Promise<void>;
 }) {
   const { run, isPending, dialogAction, setDialogAction, handleBountyAction } = useQuickActionRunner(participant.id, onMutated);

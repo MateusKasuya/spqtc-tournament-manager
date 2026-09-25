@@ -18,7 +18,7 @@ async function setupPlaying(t: number, n: number) {
   for (let i = 0; i < n; i++) {
     const pl = await seedPlayer(`P${i}`);
     const p = await seedParticipant(t, pl);
-    await confirmBuyIn(p);
+    expect(await confirmBuyIn(p)).not.toHaveProperty("error");
     players.push(pl);
     parts.push(p);
   }
@@ -63,7 +63,7 @@ describe("getMesaLiveData", () => {
   it("reflete um Knockout feito por eliminatePlayer", async () => {
     const t = await seedTournament(BOUNTY_CONFIG);
     const { players, parts } = await setupPlaying(t, 3);
-    await eliminatePlayer(parts[0], [players[1]]);
+    expect(await eliminatePlayer(parts[0], [players[1]])).not.toHaveProperty("error");
 
     const { participants, financialSummary } = await getMesaLiveData(t);
 
@@ -77,7 +77,7 @@ describe("getMesaLiveData", () => {
   it("reflete um Rebuy feito por addRebuy", async () => {
     const t = await seedTournament(BOUNTY_CONFIG);
     const { players, parts } = await setupPlaying(t, 3);
-    await addRebuy(parts[0], [players[1]]);
+    expect(await addRebuy(parts[0], [players[1]])).not.toHaveProperty("error");
 
     const { participants, financialSummary } = await getMesaLiveData(t);
 

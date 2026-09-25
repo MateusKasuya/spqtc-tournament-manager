@@ -32,7 +32,7 @@ export async function getParticipants(tournamentId: number) {
 
 // Projeção dos campos de participante que a mesa ao vivo usa. Única declaração
 // do shape: os componentes da mesa recortam dela via `MesaSnapshot`.
-export const mesaParticipantColumns = {
+const mesaParticipantColumns = {
   id: participants.id,
   playerId: participants.playerId,
   name: players.name,
