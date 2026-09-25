@@ -4,6 +4,28 @@ Gestão dos torneios de poker do grupo SPQC: cadastro, mesa ao vivo (timer, blin
 
 ## Language
 
+### Participantes
+
+**Jogador**:
+Pessoa do cadastro do grupo SPQC; é quem pontua no ranking da temporada.
+_Avoid_: player, membro
+
+**Participante**:
+Jogador inscrito em um torneio.
+_Avoid_: inscrito, jogador (quando se refere à inscrição)
+
+**Aguardando buy-in**:
+Participante inscrito cujo buy-in ainda não foi confirmado.
+_Avoid_: pendente, registrado
+
+**Em jogo**:
+Participante com buy-in confirmado que ainda disputa o torneio: nem teve Eliminação, nem foi coroado campeão.
+_Avoid_: ativo, vivo, jogando
+
+**Posição final**:
+Colocação do Participante no torneio: o número de Participantes em jogo imediatamente antes da sua Eliminação, ou 1 para o campeão. Um acordo pode fixá-la para quem ainda está em jogo.
+_Avoid_: colocação, finish position
+
 ### Torneio
 
 **Bounty Builder**:
@@ -22,6 +44,16 @@ Pendente (inscrições, antes de começar), Rodando, Encerrado ou Cancelado. Enc
 - editar estruturas de blinds e de prêmios: Pendente ou Rodando.
 _Avoid_: finalizado, ativo
 
+### Fichas
+
+**Fichas em jogo**:
+Todas as fichas que entraram no torneio por buy-ins, Rebuys, add-ons e bônus. Nenhuma ficha sai do jogo, então é o total que está na mesa.
+_Avoid_: total de fichas, chips
+
+**Stack médio**:
+Fichas em jogo divididas pelos Participantes em jogo.
+_Avoid_: média de fichas
+
 ### Prêmios
 
 **Arrecadado**:
@@ -32,7 +64,8 @@ Parte do Arrecadado reservada ao ranking da temporada: a taxa de ranking vezes o
 _Avoid_: taxa, rake
 
 **Bounty armado**:
-Total de Bounty criado por buy-ins e Rebuys em Bounty Builder. Pela Conservação, é igual à soma dos Bounties em jogo com os Bounties coletados.
+Total de Bounty criado por buy-ins e Rebuys em Bounty Builder. Pela Conservação, é igual ao Bounty em jogo mais os Bounties coletados.
+_Avoid_: bounty pool
 
 **Prize pool**:
 O que sobra para os Prêmios: Arrecadado menos Fundo de ranking menos Bounty armado. É sempre derivado, nunca digitado.
@@ -45,6 +78,22 @@ _Avoid_: distribuição de prêmios (quando se refere aos percentuais)
 **Prêmio**:
 Valor pago a um participante por sua posição final. A soma dos Prêmios nunca passa do Prize pool.
 
+**Prêmio estimado**:
+O que a Estrutura de prêmios daria a uma posição com o Prize pool atual. Muda a cada buy-in, Rebuy ou add-on e só vira Prêmio quando é distribuído.
+_Avoid_: prêmio previsto, projeção
+
+**Posições premiadas**:
+Posições da Estrutura de prêmios com percentual maior que zero.
+_Avoid_: posições pagas
+
+**No dinheiro**:
+Momento em que todos os Participantes em jogo já têm Prêmio garantido: Em jogo não passa das Posições premiadas.
+_Avoid_: ITM, zona de prêmio
+
+**Bolha**:
+Momento em que falta uma Eliminação para o dinheiro (Em jogo é uma a mais que as Posições premiadas); quem cai ali não leva Prêmio.
+_Avoid_: bubble
+
 **Distribuir prêmios**:
 Registrar os Prêmios pagos a cada posição. Pode ser feito com o torneio rodando (acordo na mesa final) ou encerrado, nunca em torneio cancelado; refazer substitui a distribuição anterior.
 _Avoid_: pagar payouts
@@ -55,7 +104,7 @@ Prize pool menos os Prêmios já pagos. Pode sobrar, por acordo de mesa ou arred
 ### Knockout
 
 **Knockout**:
-Evento em que um participante cai para um ou mais Eliminadores. Termina em Eliminação ou em Rebuy. É o mesmo evento em torneio normal e em Bounty Builder; só a redistribuição de Bounty muda.
+Evento em que um participante cai para um ou mais Eliminadores. Termina em Eliminação ou em Rebuy. É o mesmo evento em torneio normal e em Bounty Builder, mas só em Bounty Builder os Eliminadores são registrados e o Bounty é redistribuído.
 _Avoid_: KO, eliminação (quando se refere ao evento e não ao desfecho)
 
 **Eliminação**:
@@ -66,12 +115,16 @@ O participante que caiu em um Knockout.
 _Avoid_: eliminado
 
 **Eliminador**:
-Participante que derrubou a Vítima em um Knockout e recebe parte do Bounty dela.
+Participante que derrubou a Vítima em um Knockout e recebe parte do Bounty dela. Só é registrado em Bounty Builder; é dele que sai o bônus de ranking por Knockout.
 _Avoid_: killer
 
 **Bounty**:
 Valor sobre a cabeça de um participante em Bounty Builder. Em um Knockout, metade vai em dinheiro para os Eliminadores e metade se soma ao Bounty deles.
 _Avoid_: prêmio, recompensa
+
+**Bounty em jogo**:
+Soma dos Bounties dos Participantes em jogo. Cai a cada Knockout e zera na Coroação; com os Bounties coletados, fecha o Bounty armado.
+_Avoid_: bounty pool
 
 **Bounty coletado**:
 Dinheiro que um participante já ganhou como Eliminador ao longo do torneio.
@@ -107,6 +160,10 @@ _Avoid_: break estrutural, nível de break
 **Intervalo avulso**:
 Pausa cronometrada que o admin inicia fora da estrutura (por exemplo 5, 10 ou 15 minutos). Ao terminar, o Nível volta com o Tempo restante que tinha quando o Intervalo avulso começou.
 _Avoid_: break, intervalo dinâmico
+
+**Nível de retorno**:
+Nível cujos blinds valem quando um Intervalo termina: no Intervalo da estrutura, o próximo Nível; no Intervalo avulso, o Nível que foi interrompido.
+_Avoid_: nível seguinte
 
 **Pausa**:
 Relógio parado com o Tempo restante congelado. Não é um Intervalo: nada conta enquanto dura.
