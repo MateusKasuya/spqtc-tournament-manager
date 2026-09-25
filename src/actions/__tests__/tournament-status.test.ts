@@ -16,7 +16,18 @@ import {
   undoBonusChip,
   undoElimination,
 } from "@/actions/participants";
-import { updateBlindStructure, updatePrizeStructure, deletePrizeStructure } from "@/actions/tournaments";
+import {
+  updateBlindStructure,
+  updatePrizeStructure,
+  deletePrizeStructure,
+  startTimer,
+  pauseTimer,
+  advanceBlindLevel,
+  goBackBlindLevel,
+  expireLevel,
+  startBreak,
+  endBreak,
+} from "@/actions/tournaments";
 import { testDb } from "@/test/db";
 import * as schema from "@/db/schema";
 import { tournaments, participants } from "@/db/schema";
@@ -164,6 +175,40 @@ describeGroup(
     },
   ],
   LIVE_TOURNAMENT
+);
+
+// Relógio correndo no Nível 2 de 3: toda transição tem para onde ir.
+async function clockRunning(t: number) {
+  await testDb.insert(schema.blindStructures).values(makeLevels(3).map((l) => ({ ...l, tournamentId: t })));
+}
+
+describeGroup(
+  "Relogio: so Rodando",
+  STATUS_RULES.live,
+  [
+    { label: "startTimer", prepare: async (t) => { await clockRunning(t); return () => startTimer(t); } },
+    { label: "pauseTimer", prepare: async (t) => { await clockRunning(t); return () => pauseTimer(t); } },
+    { label: "advanceBlindLevel", prepare: async (t) => { await clockRunning(t); return () => advanceBlindLevel(t); } },
+    { label: "goBackBlindLevel", prepare: async (t) => { await clockRunning(t); return () => goBackBlindLevel(t); } },
+    {
+      label: "expireLevel",
+      prepare: async (t) => {
+        await clockRunning(t);
+        const [row] = await testDb.select({ startedAt: tournaments.timerStartedAt }).from(tournaments).where(eq(tournaments.id, t));
+        return () => expireLevel(t, row.startedAt!.toISOString());
+      },
+    },
+    { label: "startBreak", prepare: async (t) => { await clockRunning(t); return () => startBreak(t, 5); } },
+    {
+      label: "endBreak",
+      prepare: async (t) => {
+        await clockRunning(t);
+        expect(await startBreak(t, 5)).not.toHaveProperty("error");
+        return () => endBreak(t);
+      },
+    },
+  ],
+  { currentBlindLevel: 2, timerRunning: true, timerStartedAt: new Date(), timerRemainingSecs: 600 }
 );
 
 describeGroup("estruturas de blinds e de premios: Pendente ou Rodando", STATUS_RULES.structures, [

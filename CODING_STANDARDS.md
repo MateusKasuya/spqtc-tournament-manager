@@ -31,6 +31,13 @@ Persistência de eventos (hoje: o Ledger de Knockout, `knockout-ledger.ts`). Cat
 - Estado esperado nunca lança para fora da action: erros do ledger são classes próprias (`KnockoutLedgerError`) que a action converte para `{ error }`; um resultado negativo é erro de invariante e aborta a transação inteira.
 - A precondição roda fora da transação (mensagem ao usuário) e de novo dentro dela, após o lock do torneio; se o estado mudou, o adapter aborta com "A mesa mudou, recarregue e tente de novo".
 - Leituras derivadas do ledger (ex.: contagem de Knockouts por Eliminador) também moram aqui, não em `queries/`.
+- **Adapter do Relógio** (`tournament-clock.ts`): mesma divisão de papéis, mas sem transação — as 7 ações do Relógio passam por `applyClockTransition`, que carrega o torneio (só Rodando), o Relógio e os Níveis, aplica a transição do núcleo (`src/lib/tournament-clock.ts`) e grava com update condicional ao Relógio inteiro lido; conflito vira "A mesa mudou" (ou sucesso silencioso no Fim do nível, ADR 0002). Ação nova do Relógio entra por ele, nunca com read/update próprio.
+
+## Precondições comuns das actions
+
+- Status do torneio: a regra do `CONTEXT.md` mora em `STATUS_RULES` (`src/lib/tournament-status.ts`), um grupo por linha da regra, com uma mensagem de recusa por grupo. A action carrega o torneio com `getTournamentRequiringStatus(id, STATUS_RULES.<grupo>)`; ação que parte de um participante carrega o participante e depois o torneio dele pela mesma função.
+- Toda action que muda um torneio atualiza as telas com `revalidateTournament(id)` (detalhe, edição e mesa ao vivo), além das listagens e do ranking que ela afetar.
+- Toda action de admin entra na tabela de `src/actions/__tests__/authorization.test.ts`; o teste falha se uma action exportada ficar fora.
 
 ## Queries (`src/db/queries`)
 

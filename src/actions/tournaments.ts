@@ -11,7 +11,8 @@ import { countKnockoutsByEliminator } from "@/db/ledger/knockout-ledger";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { clockStateColumns, clockStateUnchanged, getClockLevels, getTournamentRequiringStatus } from "@/db/queries/tournaments";
+import { clockStateColumns, getTournamentRequiringStatus } from "@/db/queries/tournaments";
+import { alwaysChanges, applyClockTransition } from "@/db/ledger/tournament-clock";
 import { DEFAULT_BLIND_STRUCTURE, DEFAULT_PRIZE_STRUCTURE } from "@/lib/tournament-defaults";
 import {
   startTimer as startClockTimer,
@@ -382,29 +383,10 @@ export async function startTimer(tournamentId: number) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const [tournament] = await db
-    .select(clockStateColumns)
-    .from(tournaments)
-    .where(eq(tournaments.id, tournamentId));
-
-  if (!tournament) return { error: "Torneio nao encontrado" };
-
-  const levels = await getClockLevels(tournamentId);
-  const result = startClockTimer(tournament, levels, new Date());
-  if (!result.ok) return { error: result.error };
-
-  const updated = await db
-    .update(tournaments)
-    .set({
-      timerRunning: result.state.timerRunning,
-      timerStartedAt: result.state.timerStartedAt,
-      timerRemainingSecs: result.state.timerRemainingSecs,
-      updatedAt: new Date(),
-    })
-    .where(clockStateUnchanged(tournamentId, tournament))
-    .returning({ id: tournaments.id });
-
-  if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
+  const result = await applyClockTransition(tournamentId, (state, levels, now) =>
+    alwaysChanges(startClockTimer(state, levels, now))
+  );
+  if ("error" in result) return result;
 
   revalidateTournament(tournamentId);
   return { success: true };
@@ -414,28 +396,10 @@ export async function pauseTimer(tournamentId: number) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const [tournament] = await db
-    .select(clockStateColumns)
-    .from(tournaments)
-    .where(eq(tournaments.id, tournamentId));
-
-  if (!tournament) return { error: "Torneio nao encontrado" };
-
-  const result = pauseClockTimer(tournament, new Date());
-  if (!result.ok) return { error: result.error };
-
-  const updated = await db
-    .update(tournaments)
-    .set({
-      timerRunning: result.state.timerRunning,
-      timerStartedAt: result.state.timerStartedAt,
-      timerRemainingSecs: result.state.timerRemainingSecs,
-      updatedAt: new Date(),
-    })
-    .where(clockStateUnchanged(tournamentId, tournament))
-    .returning({ id: tournaments.id });
-
-  if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
+  const result = await applyClockTransition(tournamentId, (state, _levels, now) =>
+    alwaysChanges(pauseClockTimer(state, now))
+  );
+  if ("error" in result) return result;
 
   revalidateTournament(tournamentId);
   return { success: true };
@@ -445,29 +409,10 @@ export async function advanceBlindLevel(tournamentId: number) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const [tournament] = await db
-    .select(clockStateColumns)
-    .from(tournaments)
-    .where(eq(tournaments.id, tournamentId));
-
-  if (!tournament) return { error: "Torneio nao encontrado" };
-
-  const levels = await getClockLevels(tournamentId);
-  const result = advanceLevel(tournament, levels, new Date());
-  if (!result.ok) return { error: result.error };
-
-  const updated = await db
-    .update(tournaments)
-    .set({
-      currentBlindLevel: result.state.currentBlindLevel,
-      timerRemainingSecs: result.state.timerRemainingSecs,
-      timerStartedAt: result.state.timerStartedAt,
-      updatedAt: new Date(),
-    })
-    .where(clockStateUnchanged(tournamentId, tournament))
-    .returning({ id: tournaments.id });
-
-  if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
+  const result = await applyClockTransition(tournamentId, (state, levels, now) =>
+    alwaysChanges(advanceLevel(state, levels, now))
+  );
+  if ("error" in result) return result;
 
   revalidateTournament(tournamentId);
   return { success: true };
@@ -477,74 +422,31 @@ export async function goBackBlindLevel(tournamentId: number) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const [tournament] = await db
-    .select(clockStateColumns)
-    .from(tournaments)
-    .where(eq(tournaments.id, tournamentId));
-
-  if (!tournament) return { error: "Torneio nao encontrado" };
-
-  const levels = await getClockLevels(tournamentId);
-  const result = goBackLevel(tournament, levels);
-  if (!result.ok) return { error: result.error };
-
-  const updated = await db
-    .update(tournaments)
-    .set({
-      currentBlindLevel: result.state.currentBlindLevel,
-      timerRemainingSecs: result.state.timerRemainingSecs,
-      timerRunning: result.state.timerRunning,
-      timerStartedAt: result.state.timerStartedAt,
-      updatedAt: new Date(),
-    })
-    .where(clockStateUnchanged(tournamentId, tournament))
-    .returning({ id: tournaments.id });
-
-  if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
+  const result = await applyClockTransition(tournamentId, (state, levels) =>
+    alwaysChanges(goBackLevel(state, levels))
+  );
+  if ("error" in result) return result;
 
   revalidateTournament(tournamentId);
   return { success: true };
 }
 
 // Fim do nível: a tela informa o timerStartedAt que observou. Se outra
-// aba/dispositivo admin já processou este mesmo zero (o gravado mudou),
-// responde sucesso em silêncio em vez de avançar de novo e pular um Nível.
+// aba/dispositivo admin já processou este mesmo zero (o gravado mudou, ou o
+// update perde a corrida), responde sucesso em silêncio em vez de avançar de
+// novo e pular um Nível.
 export async function expireLevel(tournamentId: number, observedTimerStartedAt: string | null) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const [tournament] = await db
-    .select(clockStateColumns)
-    .from(tournaments)
-    .where(eq(tournaments.id, tournamentId));
+  const result = await applyClockTransition(
+    tournamentId,
+    (state, levels, now) => expireLevelClock(state, levels, observedTimerStartedAt, now),
+    { onConflict: "ignore" }
+  );
+  if ("error" in result) return result;
 
-  if (!tournament) return { error: "Torneio nao encontrado" };
-
-  const levels = await getClockLevels(tournamentId);
-  const result = expireLevelClock(tournament, levels, observedTimerStartedAt, new Date());
-  if (!result.ok) return { error: result.error };
-  if (!result.changed) return { success: true };
-
-  const updated = await db
-    .update(tournaments)
-    .set({
-      currentBlindLevel: result.state.currentBlindLevel,
-      timerRunning: result.state.timerRunning,
-      timerRemainingSecs: result.state.timerRemainingSecs,
-      timerStartedAt: result.state.timerStartedAt,
-      breakActive: result.state.breakActive,
-      levelRemainingSecs: result.state.levelRemainingSecs,
-      breakTotalSecs: result.state.breakTotalSecs,
-      updatedAt: new Date(),
-    })
-    .where(clockStateUnchanged(tournamentId, tournament))
-    .returning({ id: tournaments.id });
-
-  // Conflito aqui é a mesma corrida de duas telas, mas o Fim do nível dispara
-  // por máquina: responde sucesso em silêncio em vez de "A mesa mudou".
-  if (updated.length === 0) return { success: true };
-
-  revalidateTournament(tournamentId);
+  if (result.changed) revalidateTournament(tournamentId);
   return { success: true };
 }
 
@@ -552,73 +454,31 @@ export async function startBreak(tournamentId: number, durationMinutes: number) 
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const [tournament] = await db
-    .select(clockStateColumns)
-    .from(tournaments)
-    .where(eq(tournaments.id, tournamentId));
-
-  if (!tournament) return { error: "Torneio nao encontrado" };
-
-  const nextState = startBreakClock(tournament, durationMinutes, new Date());
-
-  const updated = await db
-    .update(tournaments)
-    .set({
-      breakActive: nextState.breakActive,
-      levelRemainingSecs: nextState.levelRemainingSecs,
-      breakTotalSecs: nextState.breakTotalSecs,
-      timerRemainingSecs: nextState.timerRemainingSecs,
-      timerRunning: nextState.timerRunning,
-      timerStartedAt: nextState.timerStartedAt,
-      updatedAt: new Date(),
-    })
+  const result = await applyClockTransition(
+    tournamentId,
+    (state, _levels, now) => ({ ok: true, changed: true, state: startBreakClock(state, durationMinutes, now) }),
     // Além do estado lido, exige "sem intervalo ativo": uma tela
     // defasada que lê o intervalo já ativo sobrescreveria levelRemainingSecs
     // com o tempo do próprio intervalo e o Nível perderia o tempo guardado.
-    .where(and(clockStateUnchanged(tournamentId, tournament), eq(tournaments.breakActive, false)))
-    .returning({ id: tournaments.id });
-
-  if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
+    { guard: eq(tournaments.breakActive, false) }
+  );
+  if ("error" in result) return result;
 
   revalidateTournament(tournamentId);
   return { success: true };
 }
 
+// Idempotente: se duas abas admin disparam o "Encerrar intervalo" ou o
+// auto-advance no mesmo instante, a segunda chamada acha o intervalo ja
+// encerrado e nao zera timerRemainingSecs de novo.
 export async function endBreak(tournamentId: number) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const [tournament] = await db
-    .select(clockStateColumns)
-    .from(tournaments)
-    .where(eq(tournaments.id, tournamentId));
+  const result = await applyClockTransition(tournamentId, (state) => endBreakClock(state));
+  if ("error" in result) return result;
 
-  if (!tournament) return { error: "Torneio nao encontrado" };
-
-  const result = endBreakClock(tournament);
-  if (!result.ok) return { error: result.error };
-  // Idempotente: se duas abas admin disparam o "Encerrar intervalo" ou o
-  // auto-advance no mesmo instante, a segunda chamada acha o intervalo ja
-  // encerrado e nao deve zerar timerRemainingSecs de novo.
-  if (!result.changed) return { success: true };
-
-  const updated = await db
-    .update(tournaments)
-    .set({
-      breakActive: result.state.breakActive,
-      levelRemainingSecs: result.state.levelRemainingSecs,
-      breakTotalSecs: result.state.breakTotalSecs,
-      timerRemainingSecs: result.state.timerRemainingSecs,
-      timerRunning: result.state.timerRunning,
-      timerStartedAt: result.state.timerStartedAt,
-      updatedAt: new Date(),
-    })
-    .where(clockStateUnchanged(tournamentId, tournament))
-    .returning({ id: tournaments.id });
-
-  if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
-
-  revalidateTournament(tournamentId);
+  if (result.changed) revalidateTournament(tournamentId);
   return { success: true };
 }
 
