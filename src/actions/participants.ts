@@ -45,10 +45,10 @@ export async function addParticipant(tournamentId: number, playerId: number) {
 }
 
 export async function addParticipants(tournamentId: number, playerIds: number[]) {
-  if (playerIds.length === 0) return { error: "Nenhum jogador selecionado" };
-
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
+
+  if (playerIds.length === 0) return { error: "Nenhum jogador selecionado" };
 
   const [tournament] = await db
     .select({ status: tournaments.status })
