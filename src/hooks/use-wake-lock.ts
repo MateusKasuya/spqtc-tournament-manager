@@ -7,7 +7,7 @@ import { useEffect } from "react";
 // No-op em SSR e em navegadores sem suporte (iOS < 16.4). O sentinel é liberado
 // automaticamente pelo navegador quando a aba fica oculta, então re-adquirimos
 // no retorno do background via `visibilitychange` (mesmo padrão de
-// use-tournament-realtime.ts).
+// use-mesa-snapshot.ts).
 export function useWakeLock(enabled: boolean) {
   useEffect(() => {
     if (!enabled) return;

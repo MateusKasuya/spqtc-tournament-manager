@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { tournaments, seasons, blindStructures, prizeStructures } from "@/db/schema";
 import { eq, desc, and, isNull, sql } from "drizzle-orm";
 import type { ClockState } from "@/lib/tournament-clock";
+import { MESA_CONFIG_COLUMNS, type MesaConfigKey } from "@/lib/mesa-snapshot";
 
 export async function getTournaments() {
   return db
@@ -62,6 +63,43 @@ export function clockStateUnchanged(tournamentId: number, read: ClockState) {
     return eq(column, value);
   });
   return and(eq(tournaments.id, tournamentId), ...guards);
+}
+
+// Projeção da configuração do torneio que a mesa ao vivo usa, derivada de
+// `MESA_CONFIG_COLUMNS` (o realtime aplica as mesmas colunas). O Relógio fica
+// em `clockStateColumns`.
+const mesaTournamentColumns = {
+  id: tournaments.id,
+  ...(Object.fromEntries(
+    (Object.keys(MESA_CONFIG_COLUMNS) as MesaConfigKey[]).map((key) => [key, tournaments[key]])
+  ) as { [K in MesaConfigKey]: (typeof tournaments)[K] }),
+};
+
+export async function getMesaTournament(tournamentId: number) {
+  const [tournament] = await db
+    .select({ ...mesaTournamentColumns, ...clockStateColumns })
+    .from(tournaments)
+    .where(eq(tournaments.id, tournamentId));
+  return tournament ?? null;
+}
+
+const mesaLevelColumns = {
+  level: blindStructures.level,
+  smallBlind: blindStructures.smallBlind,
+  bigBlind: blindStructures.bigBlind,
+  ante: blindStructures.ante,
+  durationMinutes: blindStructures.durationMinutes,
+  isBreak: blindStructures.isBreak,
+  isAddonLevel: blindStructures.isAddonLevel,
+  isBigAnte: blindStructures.isBigAnte,
+} as const;
+
+export async function getMesaLevels(tournamentId: number) {
+  return db
+    .select(mesaLevelColumns)
+    .from(blindStructures)
+    .where(eq(blindStructures.tournamentId, tournamentId))
+    .orderBy(blindStructures.level);
 }
 
 // Níveis como o núcleo do Relógio os recebe (`ClockLevel`).
