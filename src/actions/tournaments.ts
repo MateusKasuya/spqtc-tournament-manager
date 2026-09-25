@@ -1,6 +1,8 @@
 "use server";
 
 import { requireAdmin } from "@/lib/require-admin";
+import { revalidateTournament } from "@/lib/revalidate-tournament";
+import { STATUS_RULES } from "@/lib/tournament-status";
 import { db } from "@/db";
 import { tournaments, blindStructures, prizeStructures, participants } from "@/db/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
@@ -9,7 +11,7 @@ import { countKnockoutsByEliminator } from "@/db/ledger/knockout-ledger";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { clockStateColumns, clockStateUnchanged, getClockLevels } from "@/db/queries/tournaments";
+import { clockStateColumns, clockStateUnchanged, getClockLevels, getTournamentRequiringStatus } from "@/db/queries/tournaments";
 import { DEFAULT_BLIND_STRUCTURE, DEFAULT_PRIZE_STRUCTURE } from "@/lib/tournament-defaults";
 import {
   startTimer as startClockTimer,
@@ -171,7 +173,7 @@ export async function updateTournament(id: number, formData: FormData) {
     })
     .where(eq(tournaments.id, id));
 
-  revalidatePath(`/torneios/${id}`);
+  revalidateTournament(id);
   revalidatePath("/torneios");
   redirect(`/torneios/${id}`);
 }
@@ -240,7 +242,7 @@ export async function updateTournamentStatus(
     revalidateTag("ranking");
   }
 
-  revalidatePath(`/torneios/${id}`);
+  revalidateTournament(id);
   revalidatePath("/torneios");
   revalidatePath("/ranking");
   return { success: true };
@@ -274,6 +276,9 @@ export async function updateBlindStructure(
 
   const parsed = blindLevelsSchema.safeParse(levels);
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+
+  const loaded = await getTournamentRequiringStatus(tournamentId, STATUS_RULES.structures);
+  if ("error" in loaded) return loaded;
 
   try {
     await db.transaction(async (tx) => {
@@ -356,7 +361,7 @@ export async function updateBlindStructure(
     };
   }
 
-  revalidatePath(`/torneios/${tournamentId}`);
+  revalidateTournament(tournamentId);
   return { success: "Estrutura de blinds atualizada!" };
 }
 
@@ -364,9 +369,12 @@ export async function deletePrizeStructure(tournamentId: number) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
+  const loaded = await getTournamentRequiringStatus(tournamentId, STATUS_RULES.structures);
+  if ("error" in loaded) return loaded;
+
   await db.delete(prizeStructures).where(eq(prizeStructures.tournamentId, tournamentId));
 
-  revalidatePath(`/torneios/${tournamentId}`);
+  revalidateTournament(tournamentId);
   return { success: true };
 }
 
@@ -398,7 +406,7 @@ export async function startTimer(tournamentId: number) {
 
   if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
 
-  revalidatePath(`/torneios/${tournamentId}`);
+  revalidateTournament(tournamentId);
   return { success: true };
 }
 
@@ -429,7 +437,7 @@ export async function pauseTimer(tournamentId: number) {
 
   if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
 
-  revalidatePath(`/torneios/${tournamentId}`);
+  revalidateTournament(tournamentId);
   return { success: true };
 }
 
@@ -461,7 +469,7 @@ export async function advanceBlindLevel(tournamentId: number) {
 
   if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
 
-  revalidatePath(`/torneios/${tournamentId}`);
+  revalidateTournament(tournamentId);
   return { success: true };
 }
 
@@ -494,7 +502,7 @@ export async function goBackBlindLevel(tournamentId: number) {
 
   if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
 
-  revalidatePath(`/torneios/${tournamentId}`);
+  revalidateTournament(tournamentId);
   return { success: true };
 }
 
@@ -536,7 +544,7 @@ export async function expireLevel(tournamentId: number, observedTimerStartedAt: 
   // por máquina: responde sucesso em silêncio em vez de "A mesa mudou".
   if (updated.length === 0) return { success: true };
 
-  revalidatePath(`/torneios/${tournamentId}`);
+  revalidateTournament(tournamentId);
   return { success: true };
 }
 
@@ -572,7 +580,7 @@ export async function startBreak(tournamentId: number, durationMinutes: number) 
 
   if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
 
-  revalidatePath(`/torneios/${tournamentId}`);
+  revalidateTournament(tournamentId);
   return { success: true };
 }
 
@@ -610,7 +618,7 @@ export async function endBreak(tournamentId: number) {
 
   if (updated.length === 0) return { error: "A mesa mudou, recarregue e tente de novo" };
 
-  revalidatePath(`/torneios/${tournamentId}`);
+  revalidateTournament(tournamentId);
   return { success: true };
 }
 
@@ -628,6 +636,9 @@ export async function updatePrizeStructure(
   if (Math.abs(total - 100) > 0.01) {
     return { error: `Percentuais devem somar 100% (atual: ${total}%)` };
   }
+
+  const loaded = await getTournamentRequiringStatus(tournamentId, STATUS_RULES.structures);
+  if ("error" in loaded) return loaded;
 
   try {
     await db.transaction(async (tx) => {
@@ -652,6 +663,6 @@ export async function updatePrizeStructure(
     };
   }
 
-  revalidatePath(`/torneios/${tournamentId}`);
+  revalidateTournament(tournamentId);
   return { success: "Estrutura de premios atualizada!" };
 }

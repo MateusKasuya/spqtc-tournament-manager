@@ -16,11 +16,12 @@ import {
   undoBonusChip,
   undoElimination,
 } from "@/actions/participants";
+import { updateBlindStructure, updatePrizeStructure, deletePrizeStructure } from "@/actions/tournaments";
 import { testDb } from "@/test/db";
 import * as schema from "@/db/schema";
 import { tournaments, participants } from "@/db/schema";
 import { STATUS_RULES, type TournamentStatus } from "@/lib/tournament-status";
-import { seedTournament, seedPlayer, seedParticipant, seedPlayingParticipants } from "@/test/setup";
+import { seedTournament, seedPlayer, seedParticipant, seedPlayingParticipants, makeLevels } from "@/test/setup";
 
 const ALL_STATUSES: TournamentStatus[] = ["pending", "running", "finished", "cancelled"];
 
@@ -164,6 +165,18 @@ describeGroup(
   ],
   LIVE_TOURNAMENT
 );
+
+describeGroup("estruturas de blinds e de premios: Pendente ou Rodando", STATUS_RULES.structures, [
+  { label: "updateBlindStructure", prepare: async (t) => () => updateBlindStructure(t, makeLevels(2)) },
+  { label: "updatePrizeStructure", prepare: async (t) => () => updatePrizeStructure(t, [{ position: 1, percentage: 100 }]) },
+  {
+    label: "deletePrizeStructure",
+    prepare: async (t) => {
+      expect(await updatePrizeStructure(t, [{ position: 1, percentage: 100 }])).not.toHaveProperty("error");
+      return () => deletePrizeStructure(t);
+    },
+  },
+]);
 
 describe("torneio inexistente", () => {
   it("addAddon de participante cujo torneio nao existe devolve 'Torneio nao encontrado'", async () => {
