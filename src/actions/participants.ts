@@ -3,9 +3,10 @@
 import { db } from "@/db";
 import { participants, transactions, tournaments } from "@/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/require-admin";
-import { clockStateColumns, getTournamentById } from "@/db/queries/tournaments";
+import { revalidateTournament } from "@/lib/revalidate-tournament";
+import { STATUS_RULES } from "@/lib/tournament-status";
+import { clockStateColumns, getTournamentRequiringStatus } from "@/db/queries/tournaments";
 import { getParticipantById, getParticipantByPlayerAndTournament, getParticipants } from "@/db/queries/participants";
 import { getTournamentFinancialSummary } from "@/db/queries/transactions";
 import { computePrizePool } from "@/lib/prize-pool";
@@ -19,15 +20,8 @@ export async function addParticipant(tournamentId: number, playerId: number) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const [tournament] = await db
-    .select({ status: tournaments.status })
-    .from(tournaments)
-    .where(eq(tournaments.id, tournamentId));
-
-  if (!tournament) return { error: "Torneio nao encontrado" };
-  if (["finished", "cancelled"].includes(tournament.status)) {
-    return { error: "Nao e possivel adicionar jogadores a este torneio" };
-  }
+  const loaded = await getTournamentRequiringStatus(tournamentId, STATUS_RULES.registration);
+  if ("error" in loaded) return loaded;
 
   const existing = await getParticipantByPlayerAndTournament(playerId, tournamentId);
   if (existing) return { error: "Jogador ja inscrito neste torneio" };
@@ -40,25 +34,18 @@ export async function addParticipant(tournamentId: number, playerId: number) {
 
   if (inserted.length === 0) return { error: "Jogador ja inscrito neste torneio" };
 
-  revalidatePath(`/torneios/${tournamentId}`, "layout");
+  revalidateTournament(tournamentId);
   return { success: true };
 }
 
 export async function addParticipants(tournamentId: number, playerIds: number[]) {
-  if (playerIds.length === 0) return { error: "Nenhum jogador selecionado" };
-
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const [tournament] = await db
-    .select({ status: tournaments.status })
-    .from(tournaments)
-    .where(eq(tournaments.id, tournamentId));
+  if (playerIds.length === 0) return { error: "Nenhum jogador selecionado" };
 
-  if (!tournament) return { error: "Torneio nao encontrado" };
-  if (["finished", "cancelled"].includes(tournament.status)) {
-    return { error: "Nao e possivel adicionar jogadores a este torneio" };
-  }
+  const loaded = await getTournamentRequiringStatus(tournamentId, STATUS_RULES.registration);
+  if ("error" in loaded) return loaded;
 
   const existing = await db
     .select({ playerId: participants.playerId })
@@ -71,7 +58,7 @@ export async function addParticipants(tournamentId: number, playerIds: number[])
 
   await db.insert(participants).values(newPlayerIds.map((playerId) => ({ tournamentId, playerId })));
 
-  revalidatePath(`/torneios/${tournamentId}`, "layout");
+  revalidateTournament(tournamentId);
   return { success: true };
 }
 
@@ -81,13 +68,15 @@ export async function removeParticipant(participantId: number) {
 
   const participant = await getParticipantById(participantId);
   if (!participant) return { error: "Participante nao encontrado" };
+  const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.registration);
+  if ("error" in loaded) return loaded;
   if (participant.status !== "registered") {
     return { error: "Apenas jogadores com status 'registrado' podem ser removidos" };
   }
 
   await db.delete(participants).where(eq(participants.id, participantId));
 
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  revalidateTournament(participant.tournamentId);
   return { success: true };
 }
 
@@ -97,17 +86,10 @@ export async function confirmBuyIn(participantId: number) {
 
   const participant = await getParticipantById(participantId);
   if (!participant) return { error: "Participante nao encontrado" };
+  const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.registration);
+  if ("error" in loaded) return loaded;
+  const { tournament } = loaded;
   if (participant.buyInPaid) return { error: "Buy-in ja confirmado" };
-
-  const [tournament] = await db
-    .select({
-      buyInAmount: tournaments.buyInAmount,
-      rankingFeeAmount: tournaments.rankingFeeAmount,
-      tournamentType: tournaments.tournamentType,
-      bountyPercentage: tournaments.bountyPercentage,
-    })
-    .from(tournaments)
-    .where(eq(tournaments.id, participant.tournamentId));
 
   await db.transaction(async (tx) => {
     await tx
@@ -123,7 +105,7 @@ export async function confirmBuyIn(participantId: number) {
     });
   });
 
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  revalidateTournament(participant.tournamentId);
   return { success: true };
 }
 
@@ -133,6 +115,8 @@ export async function undoBuyIn(participantId: number) {
 
   const participant = await getParticipantById(participantId);
   if (!participant) return { error: "Participante nao encontrado" };
+  const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.registration);
+  if ("error" in loaded) return loaded;
   if (!participant.buyInPaid) return { error: "Buy-in nao confirmado" };
   if (participant.status !== "playing") {
     return { error: "Desfaca a eliminacao antes de remover o buy-in" };
@@ -161,17 +145,19 @@ export async function undoBuyIn(participantId: number) {
       .where(eq(participants.id, participantId));
   });
 
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  revalidateTournament(participant.tournamentId);
   return { success: true };
 }
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 // Contexto de um Knockout ou Desfazer: o participante e o snapshot do torneio
-// lido fora da transação, para a precondição responder ao admin.
+// lido fora da transação, para a precondição responder ao admin. Só Rodando.
 async function loadKnockoutContext(participantId: number) {
   const participant = await getParticipantById(participantId);
   if (!participant) return { error: "Participante nao encontrado" };
+  const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.live);
+  if ("error" in loaded) return loaded;
   const snapshot = await loadKnockoutSnapshot(db, participant.tournamentId);
   if (!snapshot) return { error: "Torneio nao encontrado" };
   return { participant, snapshot };
@@ -205,7 +191,7 @@ async function registerRebuy(participantId: number, eliminatedByPlayerIds: numbe
   const failed = await runKnockoutLedger((tx) => applyKnockout(tx, ctx.participant.tournamentId, event));
   if (failed) return failed;
 
-  revalidatePath(`/torneios/${ctx.participant.tournamentId}`, "layout");
+  revalidateTournament(ctx.participant.tournamentId);
   return { success: true };
 }
 
@@ -223,13 +209,10 @@ export async function addAddon(participantId: number) {
 
   const participant = await getParticipantById(participantId);
   if (!participant) return { error: "Participante nao encontrado" };
+  const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.live);
+  if ("error" in loaded) return loaded;
+  const { tournament } = loaded;
   if (!participant.buyInPaid) return { error: "Jogador ainda nao pagou buy-in" };
-
-  const [tournament] = await db
-    .select({ allowAddon: tournaments.allowAddon, addonAmount: tournaments.addonAmount })
-    .from(tournaments)
-    .where(eq(tournaments.id, participant.tournamentId));
-
   if (!tournament.allowAddon) return { error: "Torneio nao permite add-on" };
 
   await db.transaction(async (tx) => {
@@ -246,7 +229,7 @@ export async function addAddon(participantId: number) {
     });
   });
 
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  revalidateTournament(participant.tournamentId);
   return { success: true };
 }
 
@@ -264,7 +247,7 @@ export async function undoRebuy(participantId: number) {
   const failed = await runKnockoutLedger((tx) => undoKnockout(tx, ctx.participant.tournamentId, req));
   if (failed) return failed;
 
-  revalidatePath(`/torneios/${ctx.participant.tournamentId}`, "layout");
+  revalidateTournament(ctx.participant.tournamentId);
   return { success: true };
 }
 
@@ -274,6 +257,8 @@ export async function undoAddon(participantId: number) {
 
   const participant = await getParticipantById(participantId);
   if (!participant) return { error: "Participante nao encontrado" };
+  const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.live);
+  if ("error" in loaded) return loaded;
   if (participant.addonCount <= 0) return { error: "Nenhum add-on para desfazer" };
 
   const [lastAddonTx] = await db
@@ -300,7 +285,7 @@ export async function undoAddon(participantId: number) {
       .where(eq(participants.id, participantId));
   });
 
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  revalidateTournament(participant.tournamentId);
   return { success: true };
 }
 
@@ -310,21 +295,18 @@ export async function addBonusChip(participantId: number) {
 
   const participant = await getParticipantById(participantId);
   if (!participant) return { error: "Participante nao encontrado" };
+  const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.live);
+  if ("error" in loaded) return loaded;
+  const { tournament } = loaded;
   if (participant.bonusChipUsed) return { error: "Bonus chip ja utilizado" };
-
-  const [tournament] = await db
-    .select({ bonusChipAmount: tournaments.bonusChipAmount })
-    .from(tournaments)
-    .where(eq(tournaments.id, participant.tournamentId));
-
-  if (!tournament || tournament.bonusChipAmount === 0) return { error: "Torneio nao permite bonus chip" };
+  if (tournament.bonusChipAmount === 0) return { error: "Torneio nao permite bonus chip" };
 
   await db
     .update(participants)
     .set({ bonusChipUsed: true })
     .where(eq(participants.id, participantId));
 
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  revalidateTournament(participant.tournamentId);
   return { success: true };
 }
 
@@ -334,6 +316,8 @@ export async function undoBonusChip(participantId: number) {
 
   const participant = await getParticipantById(participantId);
   if (!participant) return { error: "Participante nao encontrado" };
+  const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.live);
+  if ("error" in loaded) return loaded;
   if (!participant.bonusChipUsed) return { error: "Bonus chip nao foi utilizado" };
 
   await db
@@ -341,7 +325,7 @@ export async function undoBonusChip(participantId: number) {
     .set({ bonusChipUsed: false })
     .where(eq(participants.id, participantId));
 
-  revalidatePath(`/torneios/${participant.tournamentId}`, "layout");
+  revalidateTournament(participant.tournamentId);
   return { success: true };
 }
 
@@ -387,7 +371,7 @@ export async function eliminatePlayer(participantId: number, eliminatedByPlayerI
   });
   if (failed) return failed;
 
-  revalidatePath(`/torneios/${ctx.participant.tournamentId}`, "layout");
+  revalidateTournament(ctx.participant.tournamentId);
   return { success: true };
 }
 
@@ -405,7 +389,7 @@ export async function undoElimination(participantId: number) {
   const failed = await runKnockoutLedger((tx) => undoKnockout(tx, ctx.participant.tournamentId, req));
   if (failed) return failed;
 
-  revalidatePath(`/torneios/${ctx.participant.tournamentId}`, "layout");
+  revalidateTournament(ctx.participant.tournamentId);
   return { success: true };
 }
 
@@ -440,16 +424,15 @@ export async function distributePayouts(
   const valid = new Set(existing.map((r) => r.playerId));
   const allowed = items.filter((p) => valid.has(p.playerId));
 
-  const [tournament, collected, tournamentParticipants] = await Promise.all([
-    getTournamentById(tournamentId),
+  // Acordo na mesa final (Rodando) ou acerto no fim (Encerrado); Pendente e Cancelado não pagam.
+  const loaded = await getTournamentRequiringStatus(tournamentId, STATUS_RULES.payouts);
+  if ("error" in loaded) return loaded;
+  const { tournament } = loaded;
+
+  const [collected, tournamentParticipants] = await Promise.all([
     getTournamentFinancialSummary(tournamentId),
     getParticipants(tournamentId),
   ]);
-  if (!tournament) return { error: "Torneio nao encontrado" };
-  // Acordo na mesa final (Rodando) ou acerto no fim (Encerrado); Pendente e Cancelado não pagam.
-  if (tournament.status !== "running" && tournament.status !== "finished") {
-    return { error: "Premios so podem ser distribuidos com o torneio rodando ou encerrado" };
-  }
 
   const { prizePool } = computePrizePool({ rules: tournament, collected, participants: tournamentParticipants });
   const total = allowed.reduce((sum, p) => sum + p.amount, 0);
@@ -487,6 +470,6 @@ export async function distributePayouts(
     );
   });
 
-  revalidatePath(`/torneios/${tournamentId}`, "layout");
+  revalidateTournament(tournamentId);
   return { success: true };
 }

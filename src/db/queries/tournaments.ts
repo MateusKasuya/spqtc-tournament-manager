@@ -1,8 +1,8 @@
 import { db } from "@/db";
 import { tournaments, seasons, blindStructures, prizeStructures } from "@/db/schema";
-import { eq, desc, and, isNull, sql } from "drizzle-orm";
-import type { ClockState } from "@/lib/tournament-clock";
+import { eq, desc } from "drizzle-orm";
 import { MESA_CONFIG_COLUMNS, type MesaConfigKey } from "@/lib/mesa-snapshot";
+import type { StatusRule } from "@/lib/tournament-status";
 
 export async function getTournaments() {
   return db
@@ -36,6 +36,18 @@ export async function getTournamentById(id: number) {
   return tournament ?? null;
 }
 
+// Torneio para uma action que exige um Status do torneio (regra em
+// `STATUS_RULES`): devolve o torneio ou a recusa em pt-BR para a action repassar.
+export async function getTournamentRequiringStatus(
+  id: number,
+  rule: StatusRule
+): Promise<{ tournament: typeof tournaments.$inferSelect } | { error: string }> {
+  const tournament = await getTournamentById(id);
+  if (!tournament) return { error: "Torneio nao encontrado" };
+  if (!rule.allowed.includes(tournament.status)) return { error: rule.error };
+  return { tournament };
+}
+
 // Projeção das sete colunas do Relógio do torneio: o `ClockState` do núcleo
 // mapeia um-para-um nelas. Única declaração do shape no lado do banco.
 export const clockStateColumns = {
@@ -47,23 +59,6 @@ export const clockStateColumns = {
   levelRemainingSecs: tournaments.levelRemainingSecs,
   breakTotalSecs: tournaments.breakTotalSecs,
 } as const;
-
-// Guarda de update das transições do Relógio: casa só se as sete colunas ainda
-// valem o que a action leu. Todas, porque transições diferentes mudam colunas
-// diferentes (pausar não mexe no Nível, avançar não mexe em "correndo").
-// timerStartedAt compara em milissegundos: é o que sobrevive à leitura em Date.
-export function clockStateUnchanged(tournamentId: number, read: ClockState) {
-  const guards = (Object.keys(clockStateColumns) as (keyof ClockState)[]).map((key) => {
-    const column = clockStateColumns[key];
-    const value = read[key];
-    if (value === null) return isNull(column);
-    if (value instanceof Date) {
-      return sql`date_trunc('milliseconds', ${column}) = ${value.toISOString()}::timestamptz`;
-    }
-    return eq(column, value);
-  });
-  return and(eq(tournaments.id, tournamentId), ...guards);
-}
 
 // Projeção da configuração do torneio que a mesa ao vivo usa, derivada de
 // `MESA_CONFIG_COLUMNS` (o realtime aplica as mesmas colunas). O Relógio fica
