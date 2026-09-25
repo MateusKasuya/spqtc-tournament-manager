@@ -1,7 +1,9 @@
 // Regra do Status do torneio (CONTEXT.md): em que status cada grupo de ações
 // pode rodar, com uma única mensagem de recusa por grupo.
 
-export type TournamentStatus = "pending" | "running" | "finished" | "cancelled";
+import type { tournaments } from "@/db/schema";
+
+export type TournamentStatus = (typeof tournaments.$inferSelect)["status"];
 
 export interface StatusRule {
   allowed: readonly TournamentStatus[];
@@ -29,5 +31,3 @@ export const STATUS_RULES = {
     error: "Estruturas so podem ser editadas com o torneio pendente ou rodando",
   },
 } as const satisfies Record<string, StatusRule>;
-
-export type StatusRuleName = keyof typeof STATUS_RULES;
