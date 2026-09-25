@@ -8,8 +8,13 @@ import type { MesaSnapshot } from "@/db/queries/mesa";
 
 const TOURNAMENT_SELECT = TOURNAMENT_RAW_COLUMNS.join(", ");
 
-function liveOf({ blindLevels, participants, financialSummary }: MesaSnapshot) {
-  return { blindLevels, participants, financialSummary };
+// Tabelas cuja mudança dispara nova busca da parte ao vivo.
+const LIVE_TABLES = ["participants", "blind_structures"] as const;
+
+function liveOf(snapshot: MesaSnapshot) {
+  const { tournament, ...live } = snapshot;
+  void tournament;
+  return live;
 }
 
 // Mantém o snapshot da mesa em dia no cliente, com duas estratégias:
@@ -100,36 +105,21 @@ export function useMesaSnapshot(initial: MesaSnapshot) {
           tournamentEventsRef.current++;
           setTournament((prev) => applyTournamentEvent(prev, payload.new));
         }
-      )
-      .on(
+      );
+    for (const table of LIVE_TABLES) {
+      channel.on(
         "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "participants",
-          filter: `tournament_id=eq.${tournamentId}`,
-        },
+        { event: "*", schema: "public", table, filter: `tournament_id=eq.${tournamentId}` },
         () => {
           void refetch();
         }
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "blind_structures",
-          filter: `tournament_id=eq.${tournamentId}`,
-        },
-        () => {
-          void refetch();
-        }
-      )
-      .subscribe((status) => {
-        // Fecha a janela entre o SSR e o SUBSCRIBED e cobre reconexão automática
-        // do supabase-js (CHANNEL_ERROR/TIMED_OUT → SUBSCRIBED de novo).
-        if (status === "SUBSCRIBED") resyncAll();
-      });
+      );
+    }
+    channel.subscribe((status) => {
+      // Fecha a janela entre o SSR e o SUBSCRIBED e cobre reconexão automática
+      // do supabase-js (CHANNEL_ERROR/TIMED_OUT → SUBSCRIBED de novo).
+      if (status === "SUBSCRIBED") resyncAll();
+    });
 
     // Catch-all ao voltar do background (aba inativa, tela bloqueada no mobile):
     // o supabase-js pode não notar a queda da conexão.

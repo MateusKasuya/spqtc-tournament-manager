@@ -3,8 +3,8 @@ import { getMesaParticipants } from "@/db/queries/participants";
 import { getTournamentFinancialSummary } from "@/db/queries/transactions";
 
 // Parte ao vivo do snapshot da mesa: o que muda a cada ação da mesa ou edição da
-// estrutura de blinds. A página
-// a carrega dentro do snapshot e a action `getMesaLiveData` a devolve sozinha.
+// estrutura de blinds. A página a carrega dentro do snapshot e a action
+// `getMesaLiveData` a devolve sozinha.
 export async function loadMesaLive(tournamentId: number) {
   const [blindLevels, participants, financialSummary] = await Promise.all([
     getMesaLevels(tournamentId),

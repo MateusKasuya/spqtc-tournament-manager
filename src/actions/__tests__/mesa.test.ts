@@ -88,10 +88,10 @@ describe("getMesaLiveData", () => {
 
   it("depois de editar a estrutura de blinds, a proxima chamada traz os Niveis novos", async () => {
     const t = await seedTournament({ status: "running", currentBlindLevel: 1 });
-    await updateBlindStructure(t, makeLevels(2));
+    expect(await updateBlindStructure(t, makeLevels(2))).not.toHaveProperty("error");
     expect((await getMesaLiveData(t)).blindLevels.map((l) => l.smallBlind)).toEqual([10, 20]);
 
-    const edited = makeLevels(3).map((l) => ({ ...l, smallBlind: l.smallBlind * 5, ante: 5 }));
+    const edited = makeLevels(3).map((l) => ({ ...l, smallBlind: l.smallBlind * 5, bigBlind: l.bigBlind * 5, ante: 5 }));
     expect(await updateBlindStructure(t, edited)).not.toHaveProperty("error");
 
     const { blindLevels } = await getMesaLiveData(t);
@@ -99,7 +99,7 @@ describe("getMesaLiveData", () => {
     expect(blindLevels[0]).toEqual({
       level: 1,
       smallBlind: 50,
-      bigBlind: 20,
+      bigBlind: 100,
       ante: 5,
       durationMinutes: 15,
       isBreak: false,
