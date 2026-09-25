@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { confirmBuyIn, eliminatePlayer, addRebuy } from "@/actions/participants";
+import { updateBlindStructure } from "@/actions/tournaments";
 import { getMesaLiveData } from "@/actions/mesa";
-import { seedTournament, seedPlayer, seedParticipant } from "@/test/setup";
+import { seedTournament, seedPlayer, seedParticipant, makeLevels } from "@/test/setup";
 
 const BOUNTY_CONFIG = {
   tournamentType: "bounty_builder" as const,
@@ -83,5 +84,27 @@ describe("getMesaLiveData", () => {
     const rebought = participants.find((p) => p.id === parts[0]);
     expect(rebought).toMatchObject({ status: "playing", rebuyCount: 1, currentBounty: 30 });
     expect(financialSummary.rebuy).toBe(60);
+  });
+
+  it("depois de editar a estrutura de blinds, a proxima chamada traz os Niveis novos", async () => {
+    const t = await seedTournament({ status: "running", currentBlindLevel: 1 });
+    await updateBlindStructure(t, makeLevels(2));
+    expect((await getMesaLiveData(t)).blindLevels.map((l) => l.smallBlind)).toEqual([10, 20]);
+
+    const edited = makeLevels(3).map((l) => ({ ...l, smallBlind: l.smallBlind * 5, ante: 5 }));
+    expect(await updateBlindStructure(t, edited)).not.toHaveProperty("error");
+
+    const { blindLevels } = await getMesaLiveData(t);
+    expect(blindLevels.map((l) => l.smallBlind)).toEqual([50, 100, 150]);
+    expect(blindLevels[0]).toEqual({
+      level: 1,
+      smallBlind: 50,
+      bigBlind: 20,
+      ante: 5,
+      durationMinutes: 15,
+      isBreak: false,
+      isAddonLevel: false,
+      isBigAnte: false,
+    });
   });
 });

@@ -8,23 +8,25 @@ import type { MesaSnapshot } from "@/db/queries/mesa";
 
 const TOURNAMENT_SELECT = TOURNAMENT_RAW_COLUMNS.join(", ");
 
+function liveOf({ blindLevels, participants, financialSummary }: MesaSnapshot) {
+  return { blindLevels, participants, financialSummary };
+}
+
 // Mantém o snapshot da mesa em dia no cliente, com duas estratégias:
 // - UPDATE do torneio (Relógio, Status, configuração) aplicado direto do evento,
 //   sem nova busca, para o Relógio não engasgar;
-// - mudança em participantes dispara nova busca da parte ao vivo, coalescida.
+// - mudança em participantes ou na estrutura de blinds dispara nova busca da
+//   parte ao vivo, coalescida.
 export function useMesaSnapshot(initial: MesaSnapshot) {
   const tournamentId = initial.tournament.id;
   const [tournament, setTournament] = useState(initial.tournament);
-  const [live, setLive] = useState({
-    participants: initial.participants,
-    financialSummary: initial.financialSummary,
-  });
+  const [live, setLive] = useState(liveOf(initial));
 
   // Re-semeia com o snapshot fresco do servidor sempre que ele mudar (F5,
   // router.refresh() após actions do Relógio). O servidor é a fonte da verdade.
   useEffect(() => {
     setTournament(initial.tournament);
-    setLive({ participants: initial.participants, financialSummary: initial.financialSummary });
+    setLive(liveOf(initial));
   }, [initial]);
 
   // Coalescing: no máximo uma busca em voo. Pedidos que chegam durante o voo marcam
@@ -105,6 +107,18 @@ export function useMesaSnapshot(initial: MesaSnapshot) {
           event: "*",
           schema: "public",
           table: "participants",
+          filter: `tournament_id=eq.${tournamentId}`,
+        },
+        () => {
+          void refetch();
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "blind_structures",
           filter: `tournament_id=eq.${tournamentId}`,
         },
         () => {
