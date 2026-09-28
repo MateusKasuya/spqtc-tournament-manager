@@ -223,7 +223,7 @@ Total arrecadado:        R$500,00
 Destino:
   Fundo de ranking:      R$200,00
   Prize pool:            R$280,00
-  Bounty pool:           R$280,00
+  Bounty armado:         R$280,00
 
 Bounties ja pagos:       R$135,00
 Bounties em jogo:        R$145,00
