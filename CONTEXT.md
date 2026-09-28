@@ -123,7 +123,7 @@ Valor sobre a cabeça de um participante em Bounty Builder. Em um Knockout, meta
 _Avoid_: prêmio, recompensa
 
 **Bounty em jogo**:
-Soma dos Bounties dos Participantes em jogo. Cai a cada Knockout e zera na Coroação; com os Bounties coletados, fecha o Bounty armado.
+Soma dos Bounties dos Participantes em jogo. Cai a cada Eliminação, pode subir num Rebuy (a Vítima volta com Bounty novo) e zera na Coroação; com os Bounties coletados, fecha o Bounty armado.
 _Avoid_: bounty pool
 
 **Bounty coletado**:

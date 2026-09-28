@@ -39,7 +39,7 @@ Decisões do grilling de 2026-09-25 sobre tornar clicáveis os cards de estatís
    - o resumo "Pagam 5 · 7 em jogo · faltam 2";
    - na Bolha, um aviso em destaque;
    - No dinheiro, "o próximo a cair termina em 5º e leva R$ X".
-3. Depois de um acordo (Distribuir prêmios com o torneio Rodando), os Prêmios acordados aparecem no lugar dos estimados e a Bolha some.
+3. Depois de uma distribuição (acordo na mesa final ou acerto depois da Coroação, com o torneio ainda Rodando), os Prêmios pagos aparecem no lugar dos estimados, e a Bolha e o resto da linha de dinheiro somem.
 
 ### Bounty em jogo (só Bounty Builder)
 1. Bounty de cada Participante em jogo, do maior para o menor, com "derrubar sozinho: R$ X em dinheiro + R$ X no seu Bounty".
@@ -61,6 +61,7 @@ Decisões do grilling de 2026-09-25 sobre tornar clicáveis os cards de estatís
 ## Dados que a mesa passa a receber
 
 - **Estrutura de prêmios, atualizada ao vivo.** Hoje ela não está na mesa, e a tabela não está na publicação de realtime; precisa de uma migration no padrão da `drizzle/migrations/0004_realtime_blind_structures.sql`.
+- **Prêmios pagos por Participante**, lidos dos registros de Prêmio (não do valor guardado no participante, que fica velho numa redistribuição). Sustentam o item 3 do Prize pool.
 - **Limite de Rebuys** (`maxRebuys`), junto da configuração do torneio.
 
 ## Armadilhas conhecidas (para a spec)
