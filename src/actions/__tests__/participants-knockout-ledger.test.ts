@@ -260,3 +260,27 @@ describe("Desfazer rebuy via Ledger de Knockout", () => {
     expect((await getTournamentFinancialSummary(t)).rebuy).toBe(60);
   });
 });
+
+describe("Posição final renumerada no Bounty Builder (#71)", () => {
+  const position = async (id: number) => (await getParticipantById(id))?.finishPosition ?? null;
+
+  it("Desfazer fora de ordem renumera quem caiu depois; a recusa por Bounty continua valendo", async () => {
+    const t = await seedTournament(BOUNTY_CONFIG);
+    const { players, parts } = await setupBounty(t, 4);
+    await eliminatePlayer(parts[0], [players[1]]);
+    await eliminatePlayer(parts[2], [players[1]]);
+    expect([await position(parts[0]), await position(parts[2])]).toEqual([4, 3]);
+
+    expect(await undoElimination(parts[0])).toEqual({ success: true });
+    expect(await position(parts[2])).toBe(4);
+
+    await eliminatePlayer(parts[3], [players[1]]);
+    expect([await position(parts[2]), await position(parts[3])]).toEqual([4, 3]);
+
+    // P1 eliminou P2 e agora caiu: Desfazer P2 é recusado e a posição não muda
+    await eliminatePlayer(parts[1], [players[0]]);
+    expect(await undoElimination(parts[2])).toEqual({ error: "Desfaca primeiro as eliminacoes posteriores" });
+    expect(await position(parts[2])).toBe(4);
+  });
+});
+

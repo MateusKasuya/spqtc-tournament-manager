@@ -7,6 +7,7 @@ import { participants, tournaments, transactions } from "@/db/schema";
 import {
   planKnockout,
   planUndo,
+  renumberedFinalPositions,
   LedgerStateChangedError,
   type KnockoutEvent,
   type KnockoutPlan,
@@ -41,6 +42,7 @@ export async function loadKnockoutSnapshot(executor: LedgerExecutor, tournamentI
       currentBounty: participants.currentBounty,
       bountiesCollected: participants.bountiesCollected,
       eliminatedByIds: participants.eliminatedByIds,
+      eliminatedAt: participants.eliminatedAt,
     })
     .from(participants)
     .where(eq(participants.tournamentId, tournamentId))
@@ -67,7 +69,7 @@ export async function loadKnockoutSnapshot(executor: LedgerExecutor, tournamentI
 
 // Serializa os Knockouts de um torneio: dois admins disparando a mesma
 // eliminação entram aqui em fila, e o segundo relê o snapshot já alterado.
-async function lockTournament(tx: LedgerExecutor, tournamentId: number) {
+export async function lockTournament(tx: LedgerExecutor, tournamentId: number) {
   await tx.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.id, tournamentId)).for("update");
 }
 
@@ -113,6 +115,29 @@ export async function undoKnockout(tx: LedgerExecutor, tournamentId: number, req
   const plan = planUndo(snapshot, req);
   await applyPlan(tx, tournamentId, plan, snapshot.now);
   return { uncrowned: plan.uncrowned };
+}
+
+// Buy-in confirmado ou desfeito com o torneio em andamento muda quantos estão
+// em jogo sem passar por um Knockout: quem já caiu precisa descer ou subir uma
+// posição. Trava o torneio para serializar com os Knockouts em andamento; o
+// chamador trava antes de tocar em participante, na mesma ordem dos Knockouts.
+export async function renumberFinalPositions(tx: LedgerExecutor, tournamentId: number) {
+  await lockTournament(tx, tournamentId);
+  const parts = await tx
+    .select({
+      id: participants.id,
+      status: participants.status,
+      finishPosition: participants.finishPosition,
+      eliminatedAt: participants.eliminatedAt,
+    })
+    .from(participants)
+    .where(eq(participants.tournamentId, tournamentId));
+  const current = new Map(parts.map((p) => [p.id, p.finishPosition]));
+  for (const [id, position] of renumberedFinalPositions(parts)) {
+    if (current.get(id) !== position) {
+      await tx.update(participants).set({ finishPosition: position }).where(eq(participants.id, id));
+    }
+  }
 }
 
 // Knockouts por Eliminador para os pontos de ranking, a partir do ledger.

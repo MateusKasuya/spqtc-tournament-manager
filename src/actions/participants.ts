@@ -12,7 +12,7 @@ import { getTournamentFinancialSummary } from "@/db/queries/transactions";
 import { computePrizePool } from "@/lib/prize-pool";
 import { formatCurrency } from "@/lib/format";
 import { checkKnockout, checkUndo, initialBounty, KnockoutLedgerError, type KnockoutEvent, type UndoRequest } from "@/lib/knockout-ledger";
-import { applyKnockout, undoKnockout, loadKnockoutSnapshot } from "@/db/ledger/knockout-ledger";
+import { applyKnockout, undoKnockout, loadKnockoutSnapshot, lockTournament, renumberFinalPositions } from "@/db/ledger/knockout-ledger";
 import { pauseTimer } from "@/lib/tournament-clock";
 import { z } from "zod";
 
@@ -92,6 +92,7 @@ export async function confirmBuyIn(participantId: number) {
   if (participant.buyInPaid) return { error: "Buy-in ja confirmado" };
 
   await db.transaction(async (tx) => {
+    await lockTournament(tx, participant.tournamentId);
     await tx
       .update(participants)
       .set({ buyInPaid: true, status: "playing", currentBounty: initialBounty(tournament) })
@@ -103,6 +104,8 @@ export async function confirmBuyIn(participantId: number) {
       type: "buy_in",
       amount: tournament.buyInAmount,
     });
+
+    await renumberFinalPositions(tx, participant.tournamentId);
   });
 
   revalidateTournament(participant.tournamentId);
@@ -131,6 +134,7 @@ export async function undoBuyIn(participantId: number) {
   }
 
   await db.transaction(async (tx) => {
+    await lockTournament(tx, participant.tournamentId);
     await tx.delete(transactions).where(
       and(
         eq(transactions.playerId, participant.playerId),
@@ -143,6 +147,8 @@ export async function undoBuyIn(participantId: number) {
       .update(participants)
       .set({ buyInPaid: false, status: "registered", currentBounty: 0 })
       .where(eq(participants.id, participantId));
+
+    await renumberFinalPositions(tx, participant.tournamentId);
   });
 
   revalidateTournament(participant.tournamentId);

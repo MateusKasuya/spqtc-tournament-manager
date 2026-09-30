@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { eliminatePlayer, undoElimination } from "@/actions/participants";
+import { eliminatePlayer, undoElimination, confirmBuyIn, undoBuyIn } from "@/actions/participants";
 import { getParticipantById } from "@/db/queries/participants";
 import { getTournamentById } from "@/db/queries/tournaments";
 import {
@@ -78,5 +78,45 @@ describe("eliminatePlayer / undoElimination", () => {
     const t = await seedTournament();
     const [p0] = await seedPlayingParticipants(t, 2);
     expect(await undoElimination(p0)).toHaveProperty("error");
+  });
+});
+
+describe("Posição final renumerada (#71)", () => {
+  const position = async (id: number) => (await getParticipantById(id))?.finishPosition ?? null;
+
+  it("Desfazer uma Eliminação antiga: a próxima queda não repete a posição de quem caiu antes", async () => {
+    const t = await seedTournament();
+    const [a, b, c] = await seedPlayingParticipants(t, 7);
+    await eliminatePlayer(a);
+    await eliminatePlayer(b);
+    await undoElimination(a);
+    await eliminatePlayer(c);
+
+    expect([await position(a), await position(b), await position(c)]).toEqual([null, 7, 6]);
+  });
+
+  it("buy-in confirmado com o torneio Rodando depois de uma Eliminação: quem caiu antes desce uma posição", async () => {
+    const t = await seedTournament();
+    const [a, b] = await seedPlayingParticipants(t, 5);
+    const late = await seedParticipant(t, await seedPlayer("tardio"));
+    await eliminatePlayer(a);
+    expect(await position(a)).toBe(5);
+
+    await confirmBuyIn(late);
+    expect(await position(a)).toBe(6);
+
+    await eliminatePlayer(b);
+    expect([await position(a), await position(b)]).toEqual([6, 5]);
+  });
+
+  it("buy-in desfeito de quem ainda joga: quem já caiu sobe uma posição", async () => {
+    const t = await seedTournament();
+    const [a, , , , wrong] = await seedPlayingParticipants(t, 5);
+    await eliminatePlayer(a);
+    expect(await position(a)).toBe(5);
+
+    await undoBuyIn(wrong);
+
+    expect(await position(a)).toBe(4);
   });
 });

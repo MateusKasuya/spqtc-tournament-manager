@@ -37,6 +37,7 @@ function makeSnapshot(n: number): LedgerSnapshot {
     currentBounty: initialBounty(RULES),
     bountiesCollected: 0,
     eliminatedByIds: [],
+    eliminatedAt: null,
   }));
   return { rules: RULES, participants, rows: [], now: new Date("2026-09-24T12:00:00.000Z") };
 }

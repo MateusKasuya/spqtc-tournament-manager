@@ -23,7 +23,7 @@ Participante com buy-in confirmado que ainda disputa o torneio: nem teve Elimina
 _Avoid_: ativo, vivo, jogando
 
 **Posição final**:
-Colocação do Participante no torneio: o número de Participantes em jogo imediatamente antes da sua Eliminação, ou 1 para o campeão. Um acordo pode fixá-la para quem ainda está em jogo.
+Colocação do Participante no torneio: 1 para o campeão; para quem caiu, a ordem inversa das Eliminações, sem repetir e sem buracos (o último a cair fica logo abaixo de quem ainda está em jogo). É renumerada quando um Desfazer ou um buy-in tardio muda o número de Participantes. Um acordo pode fixá-la para quem ainda está em jogo.
 _Avoid_: colocação, finish position
 
 ### Torneio
@@ -137,7 +137,7 @@ Registro de todos os Knockouts de um torneio e de seus efeitos sobre Bounty e Bo
 _Avoid_: ledger de bounty, histórico de transações
 
 **Desfazer**:
-Reversão do Knockout mais recente de uma Vítima, devolvendo a ela o Bounty e retirando dos Eliminadores exatamente o que receberam. Recusado quando um Eliminador daquele Knockout já foi Vítima depois.
+Reversão do Knockout mais recente de uma Vítima, devolvendo a ela o Bounty e retirando dos Eliminadores exatamente o que receberam. Recusado quando um Eliminador daquele Knockout já foi Vítima depois. Desfazer uma Eliminação renumera a Posição final de quem caiu depois da Vítima.
 _Avoid_: undo, estorno
 
 **Conservação**:
