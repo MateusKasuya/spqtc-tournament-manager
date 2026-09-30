@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   planKnockout,
   planUndo,
+  renumberedFinalPositions,
   checkKnockout,
   checkUndo,
   splitBounty,
@@ -39,6 +40,7 @@ function makeSnapshot(bounties: number[], overrides: Partial<LedgerRules> = {}):
     currentBounty: b,
     bountiesCollected: 0,
     eliminatedByIds: [],
+    eliminatedAt: null,
   }));
   return { rules: { ...RULES, ...overrides }, participants, rows: [], now: NOW };
 }
@@ -441,5 +443,63 @@ describe("Ledger de Knockout: invariantes", () => {
     expect(s1.participants[0].eliminatedByIds).toEqual([7]);
     const s2 = applyPlan(s1, planUndo(s1, { kind: "elimination", victimId: 1 }));
     expect(s2.participants).toEqual(s.participants);
+  });
+});
+
+describe("Ledger de Knockout: Posição final renumerada (#71)", () => {
+  const elim = (victimId: number) => ({ kind: "elimination" as const, victimId, eliminatorPlayerIds: [] });
+  const positions = (s: LedgerSnapshot) => s.participants.map((p) => p.finishPosition);
+
+  it("Desfazer uma Eliminação antiga renumera quem caiu depois: A 7º, B 6º, desfaz A, C cai → B 7º e C 6º", () => {
+    let s = makeSnapshot([0, 0, 0, 0, 0, 0, 0], { tournamentType: "normal" });
+    s = applyPlan(s, planKnockout(s, elim(1)));
+    s = applyPlan(s, planKnockout(s, elim(2)));
+    expect(positions(s)).toEqual([7, 6, null, null, null, null, null]);
+
+    s = applyPlan(s, planUndo(s, { kind: "elimination", victimId: 1 }));
+    s = applyPlan(s, planKnockout(s, elim(3)));
+
+    expect(positions(s)).toEqual([null, 7, 6, null, null, null, null]);
+  });
+  it("Desfazer uma Eliminação antiga com o campeão coroado: descoroa e quem caiu depois passa a 3º", () => {
+    let s = makeSnapshot([0, 0, 0], { tournamentType: "normal" });
+    s = applyPlan(s, planKnockout(s, elim(1)));
+    s = applyPlan(s, planKnockout(s, elim(2)));
+    expect(s.participants.map((p) => [p.status, p.finishPosition])).toEqual([
+      ["eliminated", 3],
+      ["eliminated", 2],
+      ["finished", 1],
+    ]);
+
+    s = applyPlan(s, planUndo(s, { kind: "elimination", victimId: 1 }));
+
+    expect(s.participants.map((p) => [p.status, p.finishPosition])).toEqual([
+      ["playing", null],
+      ["eliminated", 3],
+      ["playing", null],
+    ]);
+  });
+
+  it("rebuy não mexe em posição: os patches só trazem quem mudou", () => {
+    let s = makeSnapshot([0, 0, 0, 0], { tournamentType: "normal", rebuyAmount: 60 });
+    s = applyPlan(s, planKnockout(s, elim(1)));
+
+    const plan = planKnockout(s, { kind: "rebuy", victimId: 2, eliminatorPlayerIds: [], count: 1 });
+
+    expect(plan.patches).toEqual([{ participantId: 2, set: { rebuyCount: 1 } }]);
+  });
+  it("cura posições repetidas já gravadas: a mesma posição desempata por quem caiu depois", () => {
+    const fell = (id: number, at: string): Pick<LedgerParticipant, "id" | "status" | "finishPosition" | "eliminatedAt"> => ({
+      id,
+      status: "eliminated",
+      finishPosition: 6,
+      eliminatedAt: new Date(at),
+    });
+    const playing = [3, 4, 5, 6, 7].map((id) => ({ id, status: "playing" as const, finishPosition: null, eliminatedAt: null }));
+
+    // id 1 caiu às 12:00 e id 2 às 12:05, os dois gravados como 6º
+    const healed = renumberedFinalPositions([fell(1, "2026-09-22T12:00:00Z"), fell(2, "2026-09-22T12:05:00Z"), ...playing]);
+
+    expect(Object.fromEntries(healed)).toEqual({ 1: 7, 2: 6 });
   });
 });

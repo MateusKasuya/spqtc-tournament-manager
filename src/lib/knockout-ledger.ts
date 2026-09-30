@@ -27,6 +27,7 @@ export interface LedgerParticipant {
   currentBounty: number;
   bountiesCollected: number;
   eliminatedByIds: number[];
+  eliminatedAt: Date | null;
 }
 
 export interface LedgerRow {
@@ -139,6 +140,22 @@ function uniqueIds(ids: number[]) {
   return Array.from(new Set(ids));
 }
 
+// Posição final de quem caiu: única e sem buracos, da última Eliminação
+// (logo abaixo de quem ainda joga) para a primeira. Preserva a ordem gravada:
+// quem acabou de cair (sem posição) é o melhor dos que caíram, e posições
+// repetidas por dados antigos se desempatam por quem caiu depois. O campeão é 1
+// e entra na base, então o primeiro colocado abaixo dele é 2.
+export function renumberedFinalPositions(
+  participants: Pick<LedgerParticipant, "id" | "status" | "finishPosition" | "eliminatedAt">[]
+): Map<number, number> {
+  const base = participants.filter((p) => p.status === "playing" || p.status === "finished").length;
+  const eliminatedAtMs = (p: { eliminatedAt: Date | null }) => p.eliminatedAt?.getTime() ?? 0;
+  const fallen = participants
+    .filter((p) => p.status === "eliminated")
+    .sort((a, b) => (a.finishPosition ?? 0) - (b.finishPosition ?? 0) || eliminatedAtMs(b) - eliminatedAtMs(a) || a.id - b.id);
+  return new Map(fallen.map((p, i) => [p.id, base + 1 + i]));
+}
+
 export function checkKnockout(snapshot: LedgerSnapshot, event: KnockoutEvent): { error: string } | null {
   const { rules, participants } = snapshot;
   const victim = participants.find((p) => p.id === event.victimId);
@@ -183,7 +200,6 @@ export function checkUndo(snapshot: LedgerSnapshot, req: UndoRequest): { error: 
 // o patch de cada participante sai do diff com o original (fold automático).
 class WorkingState {
   private readonly work = new Map<number, LedgerParticipant>();
-  private readonly eliminatedAt = new Map<number, Date | null>();
 
   constructor(private readonly original: LedgerParticipant[]) {
     for (const p of original) this.work.set(p.id, { ...p, eliminatedByIds: [...p.eliminatedByIds] });
@@ -204,8 +220,8 @@ class WorkingState {
     return Array.from(this.work.values());
   }
 
-  setEliminatedAt(id: number, value: Date | null) {
-    this.eliminatedAt.set(id, value);
+  renumberEliminated() {
+    for (const [id, position] of renumberedFinalPositions(this.all())) this.byId(id).finishPosition = position;
   }
 
   patches(): ParticipantPatch[] {
@@ -222,7 +238,7 @@ class WorkingState {
       if (after.currentBounty !== before.currentBounty) set.currentBounty = after.currentBounty;
       if (after.bountiesCollected !== before.bountiesCollected) set.bountiesCollected = after.bountiesCollected;
       if (!sameIds(after.eliminatedByIds, before.eliminatedByIds)) set.eliminatedByIds = after.eliminatedByIds;
-      if (this.eliminatedAt.has(before.id)) set.eliminatedAt = this.eliminatedAt.get(before.id);
+      if (after.eliminatedAt?.getTime() !== before.eliminatedAt?.getTime()) set.eliminatedAt = after.eliminatedAt;
       if (Object.keys(set).length > 0) out.push({ participantId: before.id, set });
     }
     return out;
@@ -309,8 +325,9 @@ class UndoBuilder {
     if (latest?.kind === "elimination") this.revertBounty(victim, latest);
     victim.status = "playing";
     victim.finishPosition = null;
-    this.state.setEliminatedAt(victim.id, null);
+    victim.eliminatedAt = null;
     this.restoreEliminators(victim);
+    this.state.renumberEliminated();
   }
 
   // Remove uma linha de rebuy do grupo mais recente; quando o grupo esvazia
@@ -412,8 +429,8 @@ export function planKnockout(snapshot: LedgerSnapshot, event: KnockoutEvent): Kn
 
   if (event.kind === "elimination") {
     victim.status = "eliminated";
-    victim.finishPosition = playingBefore.length;
-    state.setEliminatedAt(victim.id, snapshot.now);
+    victim.finishPosition = null;
+    victim.eliminatedAt = snapshot.now;
 
     if (playingBefore.length === 2) {
       const champion = playingBefore.find((p) => p.id !== victim.id)!;
@@ -440,5 +457,6 @@ export function planKnockout(snapshot: LedgerSnapshot, event: KnockoutEvent): Kn
     }
   }
 
+  if (event.kind === "elimination") state.renumberEliminated();
   return { inserts, deleteIds: [], patches: state.patches(), crowned, uncrowned: false };
 }

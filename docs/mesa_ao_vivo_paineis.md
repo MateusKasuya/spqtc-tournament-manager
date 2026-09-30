@@ -68,7 +68,7 @@ Decisões do grilling de 2026-09-25 sobre tornar clicáveis os cards de estatís
 
 - **Nível de intervalo:** pode ter BB 0. Converter em BB pelo Nível de retorno; sem Nível válido, mostrar "—".
 - **0 Em jogo:** Stack médio vira "—".
-- **Posição final:** não é única (#71). Filtrar Eliminações por status, nunca pela existência de posição, porque um acordo grava posição também em quem ainda está Em jogo (`src/actions/participants.ts:467`).
+- **Posição final:** entre quem caiu ela é única e sem buracos (#71, renumerada pelo Desfazer e pelo buy-in tardio). Mesmo assim, filtrar Eliminações por status, nunca pela existência de posição, porque um acordo grava posição também em quem ainda está Em jogo (`src/actions/participants.ts:467`).
 - **Prêmio estimado:** usar sempre o arredondamento existente (`calculateRoundedPrizeAmounts`), nunca % × Prize pool.
 - **Um cálculo, dois lugares:** o card e o painel precisam usar a mesma derivação de Fichas em jogo e Stack médio.
 - **Campeão reversível:** o Desfazer pode descoroar. O destaque do campeão tem de vir sempre dos dados da mesa.
@@ -92,7 +92,7 @@ Decisões do grilling de 2026-09-25 sobre tornar clicáveis os cards de estatís
 
 ## Bugs encontrados (issues com `needs-triage`)
 
-- #71: Posição final repetida ao desfazer Eliminação fora de ordem.
+- #71: Posição final repetida ao desfazer Eliminação fora de ordem (resolvida: renumeração).
 - #72: o servidor aceita bônus para quem está Aguardando buy-in.
 - #73: Saldo negativo ao desfazer buy-in, Rebuy ou add-on depois de Distribuir prêmios.
 - #74: editar o torneio não respeita o Status do torneio no servidor.
