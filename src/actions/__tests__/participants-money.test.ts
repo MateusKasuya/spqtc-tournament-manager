@@ -204,6 +204,30 @@ describe("add-on / bonus", () => {
     const res = await addBonusChip(part);
     expect(res).toHaveProperty("error");
   });
+
+  it("addBonusChip recusa Participante Aguardando buy-in", async () => {
+    const t = await seedTournament({ bonusChipAmount: 5000 });
+    const part = await seedParticipant(t, await seedPlayer());
+    const res = await addBonusChip(part);
+    expect(res).toHaveProperty("error");
+    expect((await getParticipantById(part))?.bonusChipUsed).toBe(false);
+  });
+
+  it("addBonusChip recusa Participante eliminado; undoBonusChip ainda desfaz o bônus dele", async () => {
+    const t = await seedTournament({ bonusChipAmount: 5000 });
+    const part = await seedParticipant(t, await seedPlayer(), { status: "eliminated", buyInPaid: true });
+    const res = await addBonusChip(part);
+    expect(res).toHaveProperty("error");
+    expect((await getParticipantById(part))?.bonusChipUsed).toBe(false);
+
+    const used = await seedParticipant(t, await seedPlayer(), {
+      status: "eliminated",
+      buyInPaid: true,
+      bonusChipUsed: true,
+    });
+    expect(await undoBonusChip(used)).not.toHaveProperty("error");
+    expect((await getParticipantById(used))?.bonusChipUsed).toBe(false);
+  });
 });
 
 describe("resumo financeiro", () => {
