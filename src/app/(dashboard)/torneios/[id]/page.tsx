@@ -24,7 +24,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { buttonVariants } from "@/components/ui/button-variants";
 import { formatCurrency, formatChips } from "@/lib/format";
 import { calculateRoundedPrizeAmounts } from "@/lib/prize";
-import { computePrizePool } from "@/lib/prize-pool";
+import { computePrizePool, computeSaldo } from "@/lib/prize-pool";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ArrowLeft, Pencil, Monitor } from "lucide-react";
@@ -204,7 +204,7 @@ export default async function TorneioPage({ params }: PageProps) {
           <FinancialSummary
             summary={financialSummary}
             pool={pool}
-            balance={pool.prizePool - financialSummary.prize}
+            balance={computeSaldo(pool.prizePool, financialSummary.prize)}
             isBounty={isBountyTournament}
           />
         </TabsContent>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computePrizePool, type PrizePoolParticipant } from "@/lib/prize-pool";
+import { computePrizePool, computeSaldo, type PrizePoolParticipant } from "@/lib/prize-pool";
 import {
   planKnockout,
   planUndo,
@@ -162,5 +162,15 @@ describe("Prize pool", () => {
       participants: paid(2),
     });
     expect(withFee).toEqual({ collected: 3000, rankingFund: 2000, bountyAllocated: 0, prizePool: 1000 });
+  });
+});
+
+describe("computeSaldo", () => {
+  it("sobra do Prize pool depois dos Premios pagos", () => {
+    expect(computeSaldo(50000, 45000)).toBe(5000);
+  });
+
+  it("Premios acima do Prize pool dao Saldo negativo", () => {
+    expect(computeSaldo(45000, 50000)).toBe(-5000);
   });
 });

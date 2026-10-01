@@ -99,7 +99,7 @@ Registrar os Prêmios pagos a cada posição. Pode ser feito com o torneio rodan
 _Avoid_: pagar payouts
 
 **Saldo**:
-Prize pool menos os Prêmios já pagos. Pode sobrar, por acordo de mesa ou arredondamento; não pode ficar negativo.
+Prize pool menos os Prêmios já pagos. Pode sobrar, por acordo de mesa ou arredondamento; não pode ficar negativo. Distribuir prêmios acima do Prize pool, ou desfazer um buy-in, Rebuy ou add-on que o deixaria negativo, é recusado.
 
 ### Knockout
 

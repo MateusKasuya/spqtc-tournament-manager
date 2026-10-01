@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { transactions, players } from "@/db/schema";
 import { eq, sum } from "drizzle-orm";
+import type { LedgerExecutor } from "@/db/ledger/knockout-ledger";
 
 export async function getTransactions(tournamentId: number) {
   return db
@@ -19,8 +20,9 @@ export async function getTransactions(tournamentId: number) {
     .orderBy(transactions.createdAt);
 }
 
-export async function getTournamentFinancialSummary(tournamentId: number) {
-  const rows = await db
+// executor: a transação do chamador quando precisa ler o estado já alterado dentro dela.
+export async function getTournamentFinancialSummary(tournamentId: number, executor: LedgerExecutor = db) {
+  const rows = await executor
     .select({
       type: transactions.type,
       total: sum(transactions.amount),
