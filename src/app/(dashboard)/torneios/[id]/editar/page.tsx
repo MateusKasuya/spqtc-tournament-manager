@@ -2,6 +2,8 @@ import { notFound, redirect } from "next/navigation";
 import { getProfile } from "@/lib/get-profile";
 import { getTournamentById } from "@/db/queries/tournaments";
 import { getSeasons } from "@/db/queries/seasons";
+import { hasConfirmedBuyIn } from "@/db/queries/participants";
+import { editLocks } from "@/lib/tournament-edit";
 import { TournamentForm } from "@/components/tournament/tournament-form";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -15,10 +17,11 @@ export default async function EditarTorneioPage({ params }: PageProps) {
   const tournamentId = Number(id);
   if (isNaN(tournamentId)) notFound();
 
-  const [profile, tournament, seasons] = await Promise.all([
+  const [profile, tournament, seasons, confirmedBuyIn] = await Promise.all([
     getProfile(),
     getTournamentById(tournamentId),
     getSeasons(),
+    hasConfirmedBuyIn(tournamentId),
   ]);
 
   if (!profile) redirect("/login");
@@ -43,6 +46,7 @@ export default async function EditarTorneioPage({ params }: PageProps) {
 
       <TournamentForm
         seasons={seasons}
+        locks={editLocks(tournament.status, confirmedBuyIn)}
         initialData={{
           id: tournament.id,
           name: tournament.name,

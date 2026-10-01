@@ -30,4 +30,25 @@ export const STATUS_RULES = {
     allowed: ["pending", "running"],
     error: "Estruturas so podem ser editadas com o torneio pendente ou rodando",
   },
+  // Dados do torneio: nome, data, temporada, valores em dinheiro, limite de
+  // Rebuys e permissao de add-on.
+  tournamentData: {
+    allowed: ["pending", "running"],
+    error: "Torneio so pode ser editado com o torneio pendente ou rodando",
+  },
+  // Fichas (iniciais, de Rebuy, de add-on, de bonus): nao sao guardadas por entrada.
+  chips: {
+    allowed: ["pending"],
+    error: "Fichas so podem ser alteradas com o torneio pendente",
+  },
+  // Taxa de ranking, tipo e percentual de Bounty (alem do Status, exigem que
+  // nenhum buy-in tenha sido confirmado: o Bounty inicial e fixado no buy-in).
+  entryRules: {
+    allowed: ["pending"],
+    error: "Taxa de ranking, tipo e percentual de Bounty so podem ser alterados com o torneio pendente",
+  },
 } as const satisfies Record<string, StatusRule>;
+
+export function statusAllows(rule: StatusRule, status: TournamentStatus): boolean {
+  return rule.allowed.includes(status);
+}

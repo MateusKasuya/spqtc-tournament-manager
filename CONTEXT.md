@@ -41,7 +41,10 @@ Pendente (inscrições, antes de começar), Rodando, Encerrado ou Cancelado. Enc
 - inscrever/remover participante e confirmar/desfazer buy-in: Pendente ou Rodando;
 - Relógio, Knockout, Rebuy, add-on, bônus e Desfazer: só Rodando;
 - Distribuir prêmios: Rodando ou Encerrado;
-- editar estruturas de blinds e de prêmios: Pendente ou Rodando.
+- editar estruturas de blinds e de prêmios: Pendente ou Rodando;
+- editar os dados do torneio (nome, data, temporada, valores de buy-in, Rebuy e add-on, limite de Rebuys, permissão de add-on): Pendente ou Rodando. Os valores em dinheiro valem só para as entradas seguintes, porque cada entrada guarda o valor que pagou;
+- editar as fichas (iniciais, de Rebuy, de add-on, de bônus): só Pendente. As fichas de cada entrada não são guardadas, então mudá-las depois de começar recalcularia o passado;
+- editar a taxa de ranking, o tipo do torneio e o percentual de Bounty: só Pendente e só enquanto nenhum buy-in foi confirmado, porque o Bounty inicial é fixado no buy-in.
 _Avoid_: finalizado, ativo
 
 ### Fichas
