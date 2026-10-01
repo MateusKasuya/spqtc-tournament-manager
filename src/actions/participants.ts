@@ -7,11 +7,10 @@ import { requireAdmin } from "@/lib/require-admin";
 import { revalidateTournament } from "@/lib/revalidate-tournament";
 import { STATUS_RULES } from "@/lib/tournament-status";
 import { clockStateColumns, getTournamentRequiringStatus } from "@/db/queries/tournaments";
-import { getParticipantById, getParticipantByPlayerAndTournament, getParticipants } from "@/db/queries/participants";
-import { getTournamentFinancialSummary } from "@/db/queries/transactions";
-import { computePrizePool } from "@/lib/prize-pool";
-import { formatCurrency } from "@/lib/format";
+import { getParticipantById, getParticipantByPlayerAndTournament } from "@/db/queries/participants";
 import { checkKnockout, checkUndo, initialBounty, KnockoutLedgerError, type KnockoutEvent, type UndoRequest } from "@/lib/knockout-ledger";
+import { assertPremiosCabemNoPrizePool, assertSaldoNaoNegativo } from "@/db/ledger/saldo";
+import { SaldoNegativoError } from "@/lib/prize-pool";
 import { applyKnockout, undoKnockout, loadKnockoutSnapshot, lockTournament, renumberFinalPositions } from "@/db/ledger/knockout-ledger";
 import { pauseTimer } from "@/lib/tournament-clock";
 import { z } from "zod";
@@ -133,7 +132,7 @@ export async function undoBuyIn(participantId: number) {
     return { error: "Desfaca rebuys, add-ons, bonus e bounties antes de remover o buy-in" };
   }
 
-  await db.transaction(async (tx) => {
+  const failed = await runLedger(async (tx) => {
     await lockTournament(tx, participant.tournamentId);
     await tx.delete(transactions).where(
       and(
@@ -149,7 +148,9 @@ export async function undoBuyIn(participantId: number) {
       .where(eq(participants.id, participantId));
 
     await renumberFinalPositions(tx, participant.tournamentId);
+    await assertSaldoNaoNegativo(tx, participant.tournamentId);
   });
+  if (failed) return failed;
 
   revalidateTournament(participant.tournamentId);
   return { success: true };
@@ -169,14 +170,14 @@ async function loadKnockoutContext(participantId: number) {
   return { participant, snapshot };
 }
 
-// Roda a operação do ledger na transação; estado esperado do ledger vira
+// Roda a operação do ledger e do Saldo na transação; recusa esperada (Knockout ou Saldo) vira
 // { error } no contrato da action, bug/infra continua lançando.
-async function runKnockoutLedger(work: (tx: Tx) => Promise<unknown>) {
+async function runLedger(work: (tx: Tx) => Promise<unknown>) {
   try {
     await db.transaction(work);
     return null;
   } catch (e) {
-    if (e instanceof KnockoutLedgerError) return { error: e.message };
+    if (e instanceof KnockoutLedgerError || e instanceof SaldoNegativoError) return { error: e.message };
     throw e;
   }
 }
@@ -194,7 +195,7 @@ async function registerRebuy(participantId: number, eliminatedByPlayerIds: numbe
   const refused = checkKnockout(ctx.snapshot, event);
   if (refused) return refused;
 
-  const failed = await runKnockoutLedger((tx) => applyKnockout(tx, ctx.participant.tournamentId, event));
+  const failed = await runLedger((tx) => applyKnockout(tx, ctx.participant.tournamentId, event));
   if (failed) return failed;
 
   revalidateTournament(ctx.participant.tournamentId);
@@ -250,7 +251,10 @@ export async function undoRebuy(participantId: number) {
   const refused = checkUndo(ctx.snapshot, req);
   if (refused) return refused;
 
-  const failed = await runKnockoutLedger((tx) => undoKnockout(tx, ctx.participant.tournamentId, req));
+  const failed = await runLedger(async (tx) => {
+    await undoKnockout(tx, ctx.participant.tournamentId, req);
+    await assertSaldoNaoNegativo(tx, ctx.participant.tournamentId);
+  });
   if (failed) return failed;
 
   revalidateTournament(ctx.participant.tournamentId);
@@ -280,7 +284,8 @@ export async function undoAddon(participantId: number) {
     .orderBy(desc(transactions.createdAt))
     .limit(1);
 
-  await db.transaction(async (tx) => {
+  const failed = await runLedger(async (tx) => {
+    await lockTournament(tx, participant.tournamentId);
     if (lastAddonTx) {
       await tx.delete(transactions).where(eq(transactions.id, lastAddonTx.id));
     }
@@ -289,7 +294,10 @@ export async function undoAddon(participantId: number) {
       .update(participants)
       .set({ addonCount: participant.addonCount - 1 })
       .where(eq(participants.id, participantId));
+
+    await assertSaldoNaoNegativo(tx, participant.tournamentId);
   });
+  if (failed) return failed;
 
   revalidateTournament(participant.tournamentId);
   return { success: true };
@@ -371,7 +379,7 @@ export async function eliminatePlayer(participantId: number, eliminatedByPlayerI
   const refused = checkKnockout(ctx.snapshot, event);
   if (refused) return refused;
 
-  const failed = await runKnockoutLedger(async (tx) => {
+  const failed = await runLedger(async (tx) => {
     const { crowned } = await applyKnockout(tx, ctx.participant.tournamentId, event);
     if (crowned) await pauseTimerAtEnd(tx, ctx.participant.tournamentId);
   });
@@ -392,7 +400,7 @@ export async function undoElimination(participantId: number) {
   const refused = checkUndo(ctx.snapshot, req);
   if (refused) return refused;
 
-  const failed = await runKnockoutLedger((tx) => undoKnockout(tx, ctx.participant.tournamentId, req));
+  const failed = await runLedger((tx) => undoKnockout(tx, ctx.participant.tournamentId, req));
   if (failed) return failed;
 
   revalidateTournament(ctx.participant.tournamentId);
@@ -433,22 +441,13 @@ export async function distributePayouts(
   // Acordo na mesa final (Rodando) ou acerto no fim (Encerrado); Pendente e Cancelado não pagam.
   const loaded = await getTournamentRequiringStatus(tournamentId, STATUS_RULES.payouts);
   if ("error" in loaded) return loaded;
-  const { tournament } = loaded;
-
-  const [collected, tournamentParticipants] = await Promise.all([
-    getTournamentFinancialSummary(tournamentId),
-    getParticipants(tournamentId),
-  ]);
-
-  const { prizePool } = computePrizePool({ rules: tournament, collected, participants: tournamentParticipants });
   const total = allowed.reduce((sum, p) => sum + p.amount, 0);
-  if (total > prizePool) {
-    return {
-      error: `Premios somam ${formatCurrency(total)}, acima do Prize pool de ${formatCurrency(prizePool)}`,
-    };
-  }
 
-  await db.transaction(async (tx) => {
+  // Confere dentro do lock, para um Desfazer concorrente não furar a trava.
+  const failed = await runLedger(async (tx) => {
+    await lockTournament(tx, tournamentId);
+    await assertPremiosCabemNoPrizePool(tx, tournamentId, total);
+
     await tx
       .delete(transactions)
       .where(and(eq(transactions.tournamentId, tournamentId), eq(transactions.type, "prize")));
@@ -475,6 +474,7 @@ export async function distributePayouts(
       )
     );
   });
+  if (failed) return failed;
 
   revalidateTournament(tournamentId);
   return { success: true };

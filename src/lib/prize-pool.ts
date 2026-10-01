@@ -33,3 +33,11 @@ export function computePrizePool({ rules, collected, participants }: PrizePoolIn
     : 0;
   return { collected: total, rankingFund, bountyAllocated, prizePool: total - rankingFund - bountyAllocated };
 }
+
+// Saldo: Prize pool menos Prêmios pagos. Negativo é estado proibido (CONTEXT.md).
+export function computeSaldo(prizePool: number, prizesPaid: number): number {
+  return prizePool - prizesPaid;
+}
+
+// Recusa esperada: um Desfazer deixaria o Saldo negativo. A action devolve a mensagem como { error }.
+export class SaldoNegativoError extends Error {}

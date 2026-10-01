@@ -5,6 +5,9 @@ import {
   addAddon,
   eliminatePlayer,
   undoElimination,
+  undoBuyIn,
+  undoRebuy,
+  undoAddon,
   distributePayouts,
 } from "@/actions/participants";
 import { getParticipantByPlayerAndTournament } from "@/db/queries/participants";
@@ -47,7 +50,7 @@ async function setupNormal({ status, ...overrides }: TournamentOverrides = {}) {
   await addRebuy(parts[0]);
   await addAddon(parts[1]);
   if (status) await testDb.update(tournaments).set({ status }).where(eq(tournaments.id, t));
-  return { t, players };
+  return { t, players, parts };
 }
 
 const BOUNTY: TournamentOverrides = {
@@ -150,5 +153,63 @@ describe("distributePayouts e o Status do torneio", () => {
   it("torneio inexistente retorna erro", async () => {
     const res = await distributePayouts(999999, []);
     expect(res).toHaveProperty("error");
+  });
+});
+
+// Prize pool 420 (setupNormal): Rebuy de 100 no P0 e add-on de 50 no P1.
+// Desfazer um Rebuy tira 100 do Prize pool; um add-on, 50; um buy-in, 100 menos a taxa de 10.
+describe("Desfazer e o Saldo", () => {
+  it("undoRebuy que deixaria o Saldo negativo e recusado e nao muda nada", async () => {
+    const { t, players, parts } = await setupNormal();
+    await distributePayouts(t, [{ playerId: players[0], amount: 400, position: 1 }]);
+    const res = await undoRebuy(parts[0]);
+    expect(res).toHaveProperty("error");
+    expect((res as { error: string }).error).toMatch(/Saldo negativo.*Refaca a distribuicao de premios/);
+    expect((await getTournamentFinancialSummary(t)).rebuy).toBe(100);
+    expect((await getParticipantByPlayerAndTournament(players[0], t))?.rebuyCount).toBe(1);
+  });
+
+  it("undoRebuy que deixa o Saldo em zero e aceito", async () => {
+    const { t, players, parts } = await setupNormal();
+    await distributePayouts(t, [{ playerId: players[0], amount: 320, position: 1 }]);
+    const res = await undoRebuy(parts[0]);
+    expect(res).not.toHaveProperty("error");
+    expect((await getTournamentFinancialSummary(t)).rebuy).toBe(0);
+  });
+
+  it("undoAddon que deixaria o Saldo negativo e recusado e nao muda nada", async () => {
+    const { t, players, parts } = await setupNormal();
+    await distributePayouts(t, [{ playerId: players[0], amount: 400, position: 1 }]);
+    const res = await undoAddon(parts[1]);
+    expect(res).toHaveProperty("error");
+    expect((res as { error: string }).error).toMatch(/Saldo negativo.*Refaca a distribuicao de premios/);
+    expect((await getTournamentFinancialSummary(t)).addon).toBe(50);
+    expect((await getParticipantByPlayerAndTournament(players[1], t))?.addonCount).toBe(1);
+  });
+
+  it("undoAddon que deixa o Saldo em zero e aceito", async () => {
+    const { t, players, parts } = await setupNormal();
+    await distributePayouts(t, [{ playerId: players[0], amount: 370, position: 1 }]);
+    const res = await undoAddon(parts[1]);
+    expect(res).not.toHaveProperty("error");
+    expect((await getTournamentFinancialSummary(t)).addon).toBe(0);
+  });
+
+  it("undoBuyIn que deixaria o Saldo negativo e recusado e nao muda nada", async () => {
+    const { t, players, parts } = await setupNormal();
+    await distributePayouts(t, [{ playerId: players[0], amount: 400, position: 1 }]);
+    const res = await undoBuyIn(parts[2]);
+    expect(res).toHaveProperty("error");
+    expect((res as { error: string }).error).toMatch(/Saldo negativo.*Refaca a distribuicao de premios/);
+    expect((await getTournamentFinancialSummary(t)).buy_in).toBe(300);
+    expect((await getParticipantByPlayerAndTournament(players[2], t))?.buyInPaid).toBe(true);
+  });
+
+  it("undoBuyIn que deixa o Saldo em zero e aceito", async () => {
+    const { t, players, parts } = await setupNormal();
+    await distributePayouts(t, [{ playerId: players[0], amount: 330, position: 1 }]);
+    const res = await undoBuyIn(parts[2]);
+    expect(res).not.toHaveProperty("error");
+    expect((await getTournamentFinancialSummary(t)).buy_in).toBe(200);
   });
 });
