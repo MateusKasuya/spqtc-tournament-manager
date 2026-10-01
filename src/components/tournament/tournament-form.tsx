@@ -17,6 +17,7 @@ import { createTournament, updateTournament } from "@/actions/tournaments";
 import { DateTimePicker } from "@/components/ui/date-time-picker";
 import { Plus } from "lucide-react";
 import { SeasonFormDialog } from "./season-form-dialog";
+import { CHIP_FIELDS, type EditLocks } from "@/lib/tournament-edit";
 
 interface Season {
   id: number;
@@ -26,6 +27,8 @@ interface Season {
 
 interface TournamentFormProps {
   seasons: Season[];
+  // Campos travados pela regra do Status do torneio (só na edição).
+  locks?: EditLocks;
   initialData?: {
     id: number;
     name: string;
@@ -51,7 +54,9 @@ function centsToReais(cents: number): string {
   return (cents / 100).toFixed(2);
 }
 
-export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
+const NO_LOCKS: EditLocks = { chips: false, entryRules: false };
+
+export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: TournamentFormProps) {
   const action = initialData
     ? updateTournament.bind(null, initialData.id)
     : createTournament;
@@ -128,6 +133,17 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
       }
     }
 
+    // Campo travado vai desabilitado na tela e some do FormData (ou o toggle de
+    // add-on o esconde): reenvia o valor atual para o servidor ver "sem mudança".
+    if (initialData && locks.chips) {
+      for (const field of CHIP_FIELDS) {
+        raw.set(field, String(initialData[field]));
+      }
+    }
+    if (initialData && locks.entryRules) {
+      raw.set("rankingFeeAmount", String(initialData.rankingFeeAmount));
+    }
+
     // Max rebuys: ilimitado = 0
     if (unlimited) {
       raw.set("maxRebuys", "0");
@@ -137,8 +153,11 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
     raw.set("allowAddon", allowAddon ? "true" : "false");
 
     // Tipo e bounty
-    raw.set("tournamentType", tournamentType);
-    raw.set("bountyPercentage", bountyPercentage);
+    raw.set("tournamentType", locks.entryRules && initialData?.tournamentType ? initialData.tournamentType : tournamentType);
+    raw.set(
+      "bountyPercentage",
+      locks.entryRules && initialData ? String(initialData.bountyPercentage ?? 50) : bountyPercentage
+    );
 
     // Temporada selecionada
     if (selectedSeason) {
@@ -215,9 +234,15 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
           <DateTimePicker value={dateTime} onChange={setDateTime} />
         </div>
 
+        {locks.entryRules && (
+          <p className="text-xs text-muted-foreground">
+            Modalidade, % Bounty e taxa de ranking so mudam com o torneio pendente e antes do primeiro buy-in confirmado.
+          </p>
+        )}
+
         <div className="space-y-2">
           <Label>Modalidade</Label>
-          <Select value={tournamentType} onValueChange={(v) => setTournamentType(v as "normal" | "bounty_builder")}>
+          <Select value={tournamentType} onValueChange={(v) => setTournamentType(v as "normal" | "bounty_builder")} disabled={locks.entryRules}>
             <SelectTrigger>
               <SelectValue>
                 {tournamentType === "bounty_builder" ? "Bounty Builder (PKO)" : "Normal"}
@@ -241,6 +266,7 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
               max="99"
               value={bountyPercentage}
               onChange={(e) => setBountyPercentage(e.target.value)}
+              disabled={locks.entryRules}
             />
             <p className="text-xs text-muted-foreground">
               Percentual do valor liquido (apos taxa de ranking) destinado ao bounty do jogador.
@@ -254,6 +280,11 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           Fichas
         </h2>
+        {locks.chips && (
+          <p className="text-xs text-muted-foreground">
+            As fichas so podem ser alteradas com o torneio pendente.
+          </p>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
@@ -265,6 +296,7 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
               min="1"
               value={initialChips}
               onChange={(e) => setInitialChips(e.target.value)}
+              disabled={locks.chips}
               required
             />
           </div>
@@ -277,6 +309,7 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
               min="0"
               value={rebuyChips}
               onChange={(e) => setRebuyChips(e.target.value)}
+              disabled={locks.chips}
             />
           </div>
           {allowAddon && (
@@ -289,6 +322,7 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
                 min="0"
                 value={addonChips}
                 onChange={(e) => setAddonChips(e.target.value)}
+                disabled={locks.chips}
               />
             </div>
           )}
@@ -301,6 +335,7 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
               min="0"
               value={bonusChipAmount}
               onChange={(e) => setBonusChipAmount(e.target.value)}
+              disabled={locks.chips}
             />
             <p className="text-xs text-muted-foreground">
               Fichas extras concedidas individualmente. 0 = recurso desativado.
@@ -409,6 +444,7 @@ export function TournamentForm({ seasons, initialData }: TournamentFormProps) {
             placeholder="0,00"
             value={rankingFeeAmount}
             onChange={(e) => setRankingFeeAmount(e.target.value)}
+            disabled={locks.entryRules}
           />
           <p className="text-xs text-muted-foreground">
             Valor descontado de cada buy-in para o fundo de ranking. Rebuys e add-ons vao 100% pro pote.

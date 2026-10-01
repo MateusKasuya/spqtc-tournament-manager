@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { tournaments, seasons, blindStructures, prizeStructures } from "@/db/schema";
 import { eq, desc } from "drizzle-orm";
 import { MESA_CONFIG_COLUMNS, type MesaConfigKey } from "@/lib/mesa-snapshot";
-import type { StatusRule } from "@/lib/tournament-status";
+import { statusAllows, type StatusRule } from "@/lib/tournament-status";
 
 export async function getTournaments() {
   return db
@@ -44,7 +44,7 @@ export async function getTournamentRequiringStatus(
 ): Promise<{ tournament: typeof tournaments.$inferSelect } | { error: string }> {
   const tournament = await getTournamentById(id);
   if (!tournament) return { error: "Torneio nao encontrado" };
-  if (!rule.allowed.includes(tournament.status)) return { error: rule.error };
+  if (!statusAllows(rule, tournament.status)) return { error: rule.error };
   return { tournament };
 }
 

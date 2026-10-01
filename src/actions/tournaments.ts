@@ -2,17 +2,19 @@
 
 import { requireAdmin } from "@/lib/require-admin";
 import { revalidateTournament } from "@/lib/revalidate-tournament";
-import { STATUS_RULES } from "@/lib/tournament-status";
+import { STATUS_RULES, statusAllows } from "@/lib/tournament-status";
 import { db } from "@/db";
 import { tournaments, blindStructures, prizeStructures, participants } from "@/db/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
 import { computeParticipantPoints } from "@/lib/points-table";
-import { countKnockoutsByEliminator } from "@/db/ledger/knockout-ledger";
+import { countKnockoutsByEliminator, lockTournament } from "@/db/ledger/knockout-ledger";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { clockStateColumns, getTournamentRequiringStatus } from "@/db/queries/tournaments";
+import { hasConfirmedBuyIn } from "@/db/queries/participants";
 import { alwaysChanges, applyClockTransition } from "@/db/ledger/tournament-clock";
+import { lockedFieldError } from "@/lib/tournament-edit";
 import { DEFAULT_BLIND_STRUCTURE, DEFAULT_PRIZE_STRUCTURE } from "@/lib/tournament-defaults";
 import {
   startTimer as startClockTimer,
@@ -165,14 +167,32 @@ export async function updateTournament(id: number, formData: FormData) {
 
   if (!parsed.success) return { error: parsed.error.issues[0].message };
 
-  await db
-    .update(tournaments)
-    .set({
-      ...parsed.data,
-      date: new Date(parsed.data.date),
-      updatedAt: new Date(),
-    })
-    .where(eq(tournaments.id, id));
+  const loaded = await getTournamentRequiringStatus(id, STATUS_RULES.tournamentData);
+  if ("error" in loaded) return loaded;
+
+  // Trava a linha e relê: um buy-in confirmado ou uma troca de Status no meio
+  // não pode furar a checagem dos campos travados.
+  const refusal = await db.transaction(async (tx) => {
+    await lockTournament(tx, id);
+    const [current] = await tx.select().from(tournaments).where(eq(tournaments.id, id));
+    if (!current || !statusAllows(STATUS_RULES.tournamentData, current.status)) {
+      return STATUS_RULES.tournamentData.error;
+    }
+
+    const locked = lockedFieldError(current.status, await hasConfirmedBuyIn(id, tx), current, parsed.data);
+    if (locked) return locked;
+
+    await tx
+      .update(tournaments)
+      .set({
+        ...parsed.data,
+        date: new Date(parsed.data.date),
+        updatedAt: new Date(),
+      })
+      .where(eq(tournaments.id, id));
+    return null;
+  });
+  if (refusal) return { error: refusal };
 
   revalidateTournament(id);
   revalidatePath("/torneios");

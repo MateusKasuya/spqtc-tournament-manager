@@ -1,6 +1,17 @@
 import { db } from "@/db";
 import { participants, players } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
+import type { LedgerExecutor } from "@/db/ledger/knockout-ledger";
+
+// Algum Participante já teve o buy-in confirmado (aceita a transação do chamador).
+export async function hasConfirmedBuyIn(tournamentId: number, executor: LedgerExecutor = db) {
+  const [row] = await executor
+    .select({ id: participants.id })
+    .from(participants)
+    .where(and(eq(participants.tournamentId, tournamentId), eq(participants.buyInPaid, true)))
+    .limit(1);
+  return Boolean(row);
+}
 
 export async function getParticipants(tournamentId: number) {
   return db
