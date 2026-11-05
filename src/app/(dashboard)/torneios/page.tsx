@@ -48,7 +48,6 @@ export default async function TorneiosPage() {
               tournament={{
                 ...tournament,
                 date: new Date(tournament.date),
-                status: tournament.status as "pending" | "running" | "finished" | "cancelled",
               }}
             />
           ))}

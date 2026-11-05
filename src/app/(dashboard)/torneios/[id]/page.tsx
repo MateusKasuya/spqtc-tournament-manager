@@ -25,6 +25,7 @@ import { buttonVariants } from "@/components/ui/button-variants";
 import { formatCurrency, formatChips } from "@/lib/format";
 import { calculateRoundedPrizeAmounts } from "@/lib/prize";
 import { computePrizePool, computeSaldo } from "@/lib/prize-pool";
+import { STATUS_RULES, statusAllows } from "@/lib/tournament-status";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ArrowLeft, Pencil, Monitor } from "lucide-react";
@@ -57,8 +58,8 @@ export default async function TorneioPage({ params }: PageProps) {
 
   const season = tournament.seasonId ? seasonsList.find((s) => s.id === tournament.seasonId) ?? null : null;
   const isAdmin = profile?.role === "admin";
-  const canEdit = isAdmin && !["finished", "cancelled"].includes(tournament.status);
-  const isActive = ["pending", "running"].includes(tournament.status);
+  const canEdit = isAdmin && statusAllows(STATUS_RULES.tournamentData, tournament.status);
+  const isActive = statusAllows(STATUS_RULES.registration, tournament.status);
 
   const prizeData = prizePositions.map((p) => ({
     position: p.position,
@@ -96,9 +97,7 @@ export default async function TorneioPage({ params }: PageProps) {
             )}
           </div>
         </div>
-        <StatusBadge
-          status={tournament.status as "pending" | "running" | "finished" | "cancelled"}
-        />
+        <StatusBadge status={tournament.status} />
       </div>
 
       {tournament.status === "running" && (
@@ -124,7 +123,7 @@ export default async function TorneioPage({ params }: PageProps) {
           )}
           <TournamentStatusButton
             tournamentId={tournamentId}
-            currentStatus={tournament.status as "pending" | "running" | "finished" | "cancelled"}
+            currentStatus={tournament.status}
           />
           <DeleteTournamentButton tournamentId={tournamentId} />
         </div>

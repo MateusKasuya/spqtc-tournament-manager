@@ -5,13 +5,14 @@ import { formatCurrency } from "@/lib/format";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarDays, Coins } from "lucide-react";
+import type { TournamentStatus } from "@/lib/tournament-status";
 
 interface TournamentCardProps {
   tournament: {
     id: number;
     name: string;
     date: Date;
-    status: "pending" | "running" | "finished" | "cancelled";
+    status: TournamentStatus;
     buyInAmount: number;
     seasonName?: string | null;
   };
