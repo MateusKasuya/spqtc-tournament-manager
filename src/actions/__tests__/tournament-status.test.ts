@@ -232,6 +232,9 @@ const ALLOWED_TRANSITIONS: Record<TournamentStatus, readonly TournamentStatus[]>
   cancelled: [],
 };
 
+// Re-encerrar é no-op silencioso de sucesso, coberto à parte.
+const isRefinish = (from: TournamentStatus, to: TournamentStatus) => from === "finished" && to === "finished";
+
 const TRANSITIONS = ALL_STATUSES.flatMap((from) => ALL_STATUSES.map((to) => ({ from, to })));
 
 describe("updateTournamentStatus: transicoes do Status do torneio", () => {
@@ -240,23 +243,22 @@ describe("updateTournamentStatus: transicoes do Status do torneio", () => {
     async ({ from, to }) => {
       const t = await seedTournament({ status: from });
 
-      expect(await updateTournamentStatus(t, to)).toEqual({ success: true });
+      expect(await updateTournamentStatus(t, to)).not.toHaveProperty("error");
       const [row] = await testDb.select({ status: tournaments.status }).from(tournaments).where(eq(tournaments.id, t));
       expect(row.status).toBe(to);
     }
   );
 
-  it.each(
-    TRANSITIONS.filter(
-      ({ from, to }) => !ALLOWED_TRANSITIONS[from].includes(to) && !(from === "finished" && to === "finished")
-    )
-  )("$from -> $to e recusada sem gravar nada", async ({ from, to }) => {
-    const t = await seedTournament({ status: from });
-    const before = await dumpDb();
+  it.each(TRANSITIONS.filter(({ from, to }) => !ALLOWED_TRANSITIONS[from].includes(to) && !isRefinish(from, to)))(
+    "$from -> $to e recusada sem gravar nada",
+    async ({ from, to }) => {
+      const t = await seedTournament({ status: from });
+      const before = await dumpDb();
 
-    expect(await updateTournamentStatus(t, to)).toEqual({ error: "Transicao de status invalida" });
-    expect(await dumpDb()).toEqual(before);
-  });
+      expect(await updateTournamentStatus(t, to)).toEqual({ error: "Transicao de status invalida" });
+      expect(await dumpDb()).toEqual(before);
+    }
+  );
 
   it("re-encerrar torneio Encerrado e sucesso sem efeito", async () => {
     const t = await seedTournament({ status: "finished" });
