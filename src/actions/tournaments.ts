@@ -2,7 +2,12 @@
 
 import { requireAdmin } from "@/lib/require-admin";
 import { revalidateTournament } from "@/lib/revalidate-tournament";
-import { STATUS_RULES, statusAllows } from "@/lib/tournament-status";
+import {
+  STATUS_RULES,
+  TOURNAMENT_STATUS_TRANSITIONS,
+  statusAllows,
+  type TournamentStatus,
+} from "@/lib/tournament-status";
 import { db } from "@/db";
 import { tournaments, blindStructures, prizeStructures, participants } from "@/db/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
@@ -201,7 +206,7 @@ export async function updateTournament(id: number, formData: FormData) {
 
 export async function updateTournamentStatus(
   id: number,
-  status: "pending" | "running" | "finished" | "cancelled"
+  status: TournamentStatus
 ) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
@@ -215,13 +220,7 @@ export async function updateTournamentStatus(
   // Idempotent re-finish stays a silent no-op (test 7 relies on this).
   if (status === "finished" && current.status === "finished") return { success: true };
 
-  const ALLOWED_TRANSITIONS: Record<string, readonly string[]> = {
-    pending: ["running", "finished", "cancelled"],
-    running: ["finished", "cancelled"],
-    finished: [],
-    cancelled: [],
-  };
-  if (!ALLOWED_TRANSITIONS[current.status]?.includes(status)) {
+  if (!TOURNAMENT_STATUS_TRANSITIONS[current.status].includes(status)) {
     return { error: "Transicao de status invalida" };
   }
 

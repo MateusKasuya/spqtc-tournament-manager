@@ -49,6 +49,16 @@ export const STATUS_RULES = {
   },
 } as const satisfies Record<string, StatusRule>;
 
+// Transições do Status do torneio (CONTEXT.md): Encerrado e Cancelado são
+// finais; Rodando não volta a Pendente. Re-encerrar um torneio Encerrado é
+// tratado à parte por quem aplica a transição.
+export const TOURNAMENT_STATUS_TRANSITIONS: Record<TournamentStatus, readonly TournamentStatus[]> = {
+  pending: ["running", "finished", "cancelled"],
+  running: ["finished", "cancelled"],
+  finished: [],
+  cancelled: [],
+};
+
 export function statusAllows(rule: StatusRule, status: TournamentStatus): boolean {
   return rule.allowed.includes(status);
 }
