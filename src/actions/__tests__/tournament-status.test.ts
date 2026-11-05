@@ -27,6 +27,7 @@ import {
   expireLevel,
   startBreak,
   endBreak,
+  updateTournamentStatus,
 } from "@/actions/tournaments";
 import { testDb } from "@/test/db";
 import * as schema from "@/db/schema";
@@ -222,6 +223,49 @@ describeGroup("estruturas de blinds e de premios: Pendente ou Rodando", STATUS_R
     },
   },
 ]);
+
+// Transições do Status do torneio: Encerrado e Cancelado são finais; Rodando não volta a Pendente.
+const ALLOWED_TRANSITIONS: Record<TournamentStatus, readonly TournamentStatus[]> = {
+  pending: ["running", "finished", "cancelled"],
+  running: ["finished", "cancelled"],
+  finished: [],
+  cancelled: [],
+};
+
+const TRANSITIONS = ALL_STATUSES.flatMap((from) => ALL_STATUSES.map((to) => ({ from, to })));
+
+describe("updateTournamentStatus: transicoes do Status do torneio", () => {
+  it.each(TRANSITIONS.filter(({ from, to }) => ALLOWED_TRANSITIONS[from].includes(to)))(
+    "$from -> $to e aceita",
+    async ({ from, to }) => {
+      const t = await seedTournament({ status: from });
+
+      expect(await updateTournamentStatus(t, to)).toEqual({ success: true });
+      const [row] = await testDb.select({ status: tournaments.status }).from(tournaments).where(eq(tournaments.id, t));
+      expect(row.status).toBe(to);
+    }
+  );
+
+  it.each(
+    TRANSITIONS.filter(
+      ({ from, to }) => !ALLOWED_TRANSITIONS[from].includes(to) && !(from === "finished" && to === "finished")
+    )
+  )("$from -> $to e recusada sem gravar nada", async ({ from, to }) => {
+    const t = await seedTournament({ status: from });
+    const before = await dumpDb();
+
+    expect(await updateTournamentStatus(t, to)).toEqual({ error: "Transicao de status invalida" });
+    expect(await dumpDb()).toEqual(before);
+  });
+
+  it("re-encerrar torneio Encerrado e sucesso sem efeito", async () => {
+    const t = await seedTournament({ status: "finished" });
+    const before = await dumpDb();
+
+    expect(await updateTournamentStatus(t, "finished")).toEqual({ success: true });
+    expect(await dumpDb()).toEqual(before);
+  });
+});
 
 describe("torneio inexistente", () => {
   it("addAddon de participante cujo torneio nao existe devolve 'Torneio nao encontrado'", async () => {

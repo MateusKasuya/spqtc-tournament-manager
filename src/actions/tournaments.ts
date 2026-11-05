@@ -217,7 +217,7 @@ export async function updateTournamentStatus(
 
   const ALLOWED_TRANSITIONS: Record<string, readonly string[]> = {
     pending: ["running", "finished", "cancelled"],
-    running: ["finished", "cancelled", "pending"],
+    running: ["finished", "cancelled"],
     finished: [],
     cancelled: [],
   };

@@ -37,7 +37,7 @@ Recompra de fichas por um participante que caiu; em Bounty Builder o participant
 _Avoid_: recompra
 
 **Status do torneio**:
-Pendente (inscrições, antes de começar), Rodando, Encerrado ou Cancelado. Encerrado e Cancelado são finais. O status decide o que pode ser feito:
+Pendente (inscrições, antes de começar), Rodando, Encerrado ou Cancelado. Encerrado e Cancelado são finais; Rodando não volta a Pendente. O status decide o que pode ser feito:
 - inscrever/remover participante e confirmar/desfazer buy-in: Pendente ou Rodando;
 - Relógio, Knockout, Rebuy, add-on, bônus e Desfazer: só Rodando;
 - Distribuir prêmios: Rodando ou Encerrado;
