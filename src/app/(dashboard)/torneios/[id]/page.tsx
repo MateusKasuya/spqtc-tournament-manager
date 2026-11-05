@@ -300,7 +300,7 @@ export default async function TorneioPage({ params }: PageProps) {
             )}
           </div>
 
-          {["running", "finished"].includes(tournament.status) && isAdmin && (
+          {statusAllows(STATUS_RULES.payouts, tournament.status) && isAdmin && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold">Premios pagos</h3>
@@ -344,7 +344,7 @@ export default async function TorneioPage({ params }: PageProps) {
             </div>
           )}
 
-          {["running", "finished"].includes(tournament.status) && !isAdmin && participantsList.some((p) => p.prizeAmount > 0) && (
+          {statusAllows(STATUS_RULES.payouts, tournament.status) && !isAdmin && participantsList.some((p) => p.prizeAmount > 0) && (
             <Table>
               <TableHeader>
                 <TableRow>
