@@ -4,6 +4,7 @@ import { getTournamentById } from "@/db/queries/tournaments";
 import { getSeasons } from "@/db/queries/seasons";
 import { hasConfirmedBuyIn } from "@/db/queries/participants";
 import { editLocks } from "@/lib/tournament-edit";
+import { STATUS_RULES, statusAllows } from "@/lib/tournament-status";
 import { TournamentForm } from "@/components/tournament/tournament-form";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -28,7 +29,7 @@ export default async function EditarTorneioPage({ params }: PageProps) {
   if (profile.role !== "admin") redirect(`/torneios/${tournamentId}`);
   if (!tournament) notFound();
 
-  if (["finished", "cancelled"].includes(tournament.status)) {
+  if (!statusAllows(STATUS_RULES.tournamentData, tournament.status)) {
     redirect(`/torneios/${tournamentId}`);
   }
 

@@ -1,17 +1,18 @@
 import { Badge } from "@/components/ui/badge";
+import type { TournamentStatus } from "@/lib/tournament-status";
 
 const STATUS_MAP = {
-  pending: { label: "Pendente", variant: "outline" as const },
-  running: { label: "Em andamento", variant: "default" as const },
-  finished: { label: "Finalizado", variant: "secondary" as const },
-  cancelled: { label: "Cancelado", variant: "destructive" as const },
-};
+  pending: { label: "Pendente", variant: "outline" },
+  running: { label: "Em andamento", variant: "default" },
+  finished: { label: "Finalizado", variant: "secondary" },
+  cancelled: { label: "Cancelado", variant: "destructive" },
+} as const satisfies Record<TournamentStatus, { label: string; variant: string }>;
 
 interface StatusBadgeProps {
-  status: keyof typeof STATUS_MAP;
+  status: TournamentStatus;
 }
 
 export function StatusBadge({ status }: StatusBadgeProps) {
-  const { label, variant } = STATUS_MAP[status] ?? STATUS_MAP.pending;
+  const { label, variant } = STATUS_MAP[status];
   return <Badge variant={variant}>{label}</Badge>;
 }

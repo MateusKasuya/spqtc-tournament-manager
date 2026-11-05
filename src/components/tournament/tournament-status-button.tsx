@@ -11,37 +11,39 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { updateTournamentStatus } from "@/actions/tournaments";
+import type { TournamentStatus } from "@/lib/tournament-status";
 import { toast } from "sonner";
-import { PlayCircle, FlagTriangleRight } from "lucide-react";
+import { PlayCircle, FlagTriangleRight, type LucideIcon } from "lucide-react";
 
-const NEXT_STATUS = {
+// Qual avanço o botão oferece é escolha de UI; o servidor recusa transição inválida.
+const NEXT_STATUS: Partial<Record<TournamentStatus, { value: TournamentStatus; label: string; icon: LucideIcon }>> = {
   pending: { value: "running", label: "Iniciar torneio", icon: PlayCircle },
   running: { value: "finished", label: "Encerrar torneio", icon: FlagTriangleRight },
-} as const;
+};
 
 interface TournamentStatusButtonProps {
   tournamentId: number;
-  currentStatus: "pending" | "running" | "finished" | "cancelled";
+  currentStatus: TournamentStatus;
 }
 
 export function TournamentStatusButton({ tournamentId, currentStatus }: TournamentStatusButtonProps) {
   const [isPending, startTransition] = useTransition();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const next = NEXT_STATUS[currentStatus as keyof typeof NEXT_STATUS];
+  const next = NEXT_STATUS[currentStatus];
   if (!next) return null;
 
-  const Icon = next.icon;
-  const needsConfirmation = next.value === "finished";
+  const { value: nextStatus, label, icon: Icon } = next;
+  const needsConfirmation = nextStatus === "finished";
 
   function handleAdvance() {
     startTransition(async () => {
-      const result = await updateTournamentStatus(tournamentId, next.value as "running" | "finished");
+      const result = await updateTournamentStatus(tournamentId, nextStatus);
       if (result && "error" in result) {
         toast.error(result.error);
       } else {
         toast.success(
-          next.value === "running" ? "Torneio iniciado!" : "Torneio encerrado!"
+          nextStatus === "running" ? "Torneio iniciado!" : "Torneio encerrado!"
         );
       }
       setConfirmOpen(false);
@@ -58,7 +60,7 @@ export function TournamentStatusButton({ tournamentId, currentStatus }: Tourname
           disabled={isPending}
         >
           <Icon className="h-4 w-4 mr-2" />
-          {next.label}
+          {label}
         </Button>
         <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
           <DialogContent>
@@ -90,7 +92,7 @@ export function TournamentStatusButton({ tournamentId, currentStatus }: Tourname
       disabled={isPending}
     >
       <Icon className="h-4 w-4 mr-2" />
-      {isPending ? "Aguarde..." : next.label}
+      {isPending ? "Aguarde..." : label}
     </Button>
   );
 }
