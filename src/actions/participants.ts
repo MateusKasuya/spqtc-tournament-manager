@@ -312,6 +312,7 @@ export async function addBonusChip(participantId: number) {
   const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.live);
   if ("error" in loaded) return loaded;
   const { tournament } = loaded;
+  if (participant.status !== "playing") return { error: "Participante nao esta em jogo" };
   if (participant.bonusChipUsed) return { error: "Bonus chip ja utilizado" };
   if (tournament.bonusChipAmount === 0) return { error: "Torneio nao permite bonus chip" };
 
