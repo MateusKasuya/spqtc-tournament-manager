@@ -1,9 +1,7 @@
 import type { MesaLevel, MesaTournament } from "@/db/queries/mesa";
+// Nível atual: a regra mora no núcleo do Relógio, que o Iniciar e o anel também usam.
 import { findCurrentLevel } from "@/lib/tournament-clock";
 import type { MesaPanelsInput } from "./types";
-
-// Nível atual: a regra mora no núcleo do Relógio, que o Iniciar e o anel também usam.
-export { findCurrentLevel };
 
 type ClockPosition = Pick<MesaTournament, "currentBlindLevel" | "breakActive">;
 

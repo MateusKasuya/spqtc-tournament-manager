@@ -87,10 +87,20 @@ export function findCurrentLevel<L extends Pick<ClockLevel, "level">>(
   return sorted.find((l) => l.level === state.currentBlindLevel) ?? sorted[0] ?? null;
 }
 
+// Nível para onde o Avançar e o Fim do nível levam: o primeiro com número maior
+// que o Nível atual do Relógio. No Nível 0 (torneio novo) é o primeiro Nível.
+// `null` no último Nível.
+export function findLevelAfterAdvance<L extends Pick<ClockLevel, "level">>(
+  state: Pick<ClockState, "currentBlindLevel">,
+  levels: L[]
+): L | null {
+  return sortedLevels(levels).find((l) => l.level > state.currentBlindLevel) ?? null;
+}
+
 // Avançar (clique manual ou Fim do nível): aponta pro próximo Nível com a
 // duração cheia; mantém "correndo" se já estava, senão fica pausado.
 export function advanceLevel(state: ClockState, levels: ClockLevel[], now: Date): ClockResult {
-  const next = sortedLevels(levels).find((l) => l.level > state.currentBlindLevel);
+  const next = findLevelAfterAdvance(state, levels);
   if (!next) return { ok: false, error: "Ja esta no ultimo nivel" };
 
   return {
