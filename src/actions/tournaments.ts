@@ -12,7 +12,7 @@ import { db } from "@/db";
 import { tournaments, blindStructures, prizeStructures, participants } from "@/db/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
 import { computeParticipantPoints } from "@/lib/points-table";
-import { countKnockoutsByEliminator, lockTournament } from "@/db/ledger/knockout-ledger";
+import { countKnockoutsByEliminator, lockAndReadTournament, lockTournament } from "@/db/ledger/knockout-ledger";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -212,20 +212,17 @@ export async function updateTournamentStatus(
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  const [current] = await db
-    .select({ status: tournaments.status, tournamentType: tournaments.tournamentType })
-    .from(tournaments)
-    .where(eq(tournaments.id, id));
+  // Trava a linha e decide pela releitura: duas transições que saem do mesmo
+  // Status entram em fila, e a segunda vê o Status que a primeira gravou.
+  const outcome = await db.transaction(async (tx): Promise<{ error: string } | { applied: boolean }> => {
+    const current = await lockAndReadTournament(tx, id);
+    if (!current) return { error: "Torneio nao encontrado" };
+    // Re-encerrar é no-op silencioso de sucesso: não recalcula os pontos.
+    if (status === "finished" && current.status === "finished") return { applied: false };
+    if (!TOURNAMENT_STATUS_TRANSITIONS[current.status].includes(status)) {
+      return { error: "Transicao de status invalida" };
+    }
 
-  if (!current) return { error: "Torneio nao encontrado" };
-  // Idempotent re-finish stays a silent no-op (test 7 relies on this).
-  if (status === "finished" && current.status === "finished") return { success: true };
-
-  if (!TOURNAMENT_STATUS_TRANSITIONS[current.status].includes(status)) {
-    return { error: "Transicao de status invalida" };
-  }
-
-  await db.transaction(async (tx) => {
     await tx
       .update(tournaments)
       .set({ status, updatedAt: new Date() })
@@ -257,7 +254,10 @@ export async function updateTournamentStatus(
         }
       }
     }
+    return { applied: true };
   });
+  if ("error" in outcome) return outcome;
+  if (!outcome.applied) return { success: true };
 
   if (status === "finished") {
     revalidateTag("ranking");

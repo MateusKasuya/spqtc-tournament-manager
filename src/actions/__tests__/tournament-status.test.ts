@@ -352,6 +352,56 @@ describe("updateTournamentStatus: transicoes do Status do torneio", () => {
     }
   );
 
+  // Torneio Rodando com dois que já caíram (pontuam ao Encerrar) e um em jogo.
+  async function seedWithFinishers() {
+    const t = await seedTournament({ status: "running" });
+    const ids = [
+      await seedParticipant(t, await seedPlayer("P0"), { status: "finished", buyInPaid: true, finishPosition: 1 }),
+      await seedParticipant(t, await seedPlayer("P1"), { status: "eliminated", buyInPaid: true, finishPosition: 2 }),
+      await seedParticipant(t, await seedPlayer("P2"), { status: "playing", buyInPaid: true }),
+    ];
+    return { t, ids };
+  }
+
+  async function pointsOf(t: number) {
+    const rows = await testDb
+      .select({ pointsEarned: participants.pointsEarned })
+      .from(participants)
+      .where(eq(participants.tournamentId, t))
+      .orderBy(participants.id);
+    return rows.map((r) => r.pointsEarned);
+  }
+
+  // Um Cancelar concorrente gravou antes do lock: a decisão sai da linha do banco.
+  it("Encerrar com o torneio Cancelado no banco e recusado, sem gravar Status nem pontos", async () => {
+    const { t } = await seedWithFinishers();
+    await setStatus(t, "cancelled");
+    const before = await dumpDb();
+
+    expect(await updateTournamentStatus(t, "finished")).toEqual({ error: "Transicao de status invalida" });
+    expect(await dumpDb()).toEqual(before);
+    const [row] = await testDb.select({ status: tournaments.status }).from(tournaments).where(eq(tournaments.id, t));
+    expect(row.status).toBe("cancelled");
+    expect(await pointsOf(t)).toEqual(["0.00", "0.00", "0.00"]);
+  });
+
+  it("re-encerrar nao recalcula os pontos ja gravados", async () => {
+    const { t, ids } = await seedWithFinishers();
+    expect(await updateTournamentStatus(t, "finished")).toEqual({ success: true });
+    const points = await pointsOf(t);
+    expect(points[0]).not.toBe("0.00");
+    // Se re-encerrar recalculasse, a troca de posição mudaria os pontos.
+    await testDb.update(participants).set({ finishPosition: 2 }).where(eq(participants.id, ids[0]));
+    await testDb.update(participants).set({ finishPosition: 1 }).where(eq(participants.id, ids[1]));
+
+    expect(await updateTournamentStatus(t, "finished")).toEqual({ success: true });
+    expect(await pointsOf(t)).toEqual(points);
+  });
+
+  it("torneio inexistente devolve 'Torneio nao encontrado'", async () => {
+    expect(await updateTournamentStatus(999999, "finished")).toEqual({ error: "Torneio nao encontrado" });
+  });
+
   it("re-encerrar torneio Encerrado e sucesso sem efeito", async () => {
     const t = await seedTournament({ status: "finished" });
     const before = await dumpDb();

@@ -75,6 +75,13 @@ export async function lockTournament(tx: LedgerExecutor, tournamentId: number) {
   await tx.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.id, tournamentId)).for("update");
 }
 
+// Trava o torneio e relê a linha na mesma consulta: quem decide pelo Status
+// do torneio (ou por outro campo dele) decide por esta leitura, não pela de fora.
+export async function lockAndReadTournament(tx: LedgerExecutor, tournamentId: number) {
+  const [tournament] = await tx.select().from(tournaments).where(eq(tournaments.id, tournamentId)).for("update");
+  return tournament ?? null;
+}
+
 // Carimbo único do evento, estritamente maior que qualquer linha já gravada no
 // torneio: dois eventos nunca compartilham created_at nem em pglite.
 async function nextStamp(tx: LedgerExecutor, tournamentId: number, now: Date) {
