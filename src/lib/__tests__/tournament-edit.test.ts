@@ -125,16 +125,12 @@ describe("lockedFieldError: ligar o add-on depois do primeiro buy-in", () => {
 });
 
 describe("buyInBelowRankingFeeError", () => {
-  it("ao criar, buy-in menor que a taxa de ranking e recusado", () => {
-    expect(buyInBelowRankingFeeError({ buyInAmount: 1000, rankingFeeAmount: 2000 })).toBe(BUY_IN_BELOW_RANKING_FEE_ERROR);
-  });
-
-  it("ao criar, buy-in igual a taxa de ranking passa (Bounty zero)", () => {
-    expect(buyInBelowRankingFeeError({ buyInAmount: 2000, rankingFeeAmount: 2000 })).toBeNull();
-  });
-
-  it("ao criar, buy-in maior que a taxa de ranking passa", () => {
-    expect(buyInBelowRankingFeeError({ buyInAmount: 5000, rankingFeeAmount: 2000 })).toBeNull();
+  it.each([
+    { label: "menor que a taxa e recusado", buyInAmount: 1000, expected: BUY_IN_BELOW_RANKING_FEE_ERROR },
+    { label: "igual a taxa passa (Bounty zero)", buyInAmount: 2000, expected: null },
+    { label: "maior que a taxa passa", buyInAmount: 5000, expected: null },
+  ])("ao criar, buy-in $label", ({ buyInAmount, expected }) => {
+    expect(buyInBelowRankingFeeError({ buyInAmount, rankingFeeAmount: 2000 })).toBe(expected);
   });
 
   const old = { buyInAmount: 100, rankingFeeAmount: 200 };
