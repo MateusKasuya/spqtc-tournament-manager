@@ -18,7 +18,7 @@ describe("card Stack médio", () => {
       makeParticipant({ status: "eliminated" }),
     ]);
 
-    expect(card).toEqual({ label: "Stack medio", value: formatChips(22500), sub: null });
+    expect(card).toEqual({ label: "Stack medio", value: formatChips(22500), supportLines: [] });
   });
 
   it("arredonda a média para o inteiro mais próximo", () => {

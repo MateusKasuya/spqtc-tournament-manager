@@ -17,5 +17,6 @@ export interface MesaPanelsInput {
 export interface CardFace {
   label: string;
   value: string;
-  sub: string | null;
+  // Linhas de apoio abaixo do valor, na ordem em que aparecem; vazia quando não há.
+  supportLines: string[];
 }

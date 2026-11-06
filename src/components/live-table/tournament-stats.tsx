@@ -21,7 +21,9 @@ function StatCard({ icon, face, onOpen }: StatCardProps) {
         <span className="text-sm font-medium">{face.label}</span>
       </div>
       <p className="text-xl font-bold tabular-nums">{face.value}</p>
-      {face.sub && <p className="text-sm text-muted-foreground">{face.sub}</p>}
+      {face.supportLines.map((line, i) => (
+        <p key={i} className="text-sm text-muted-foreground">{line}</p>
+      ))}
     </>
   );
 

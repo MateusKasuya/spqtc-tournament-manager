@@ -3,7 +3,12 @@
 import { useState } from "react";
 import { Drawer, DrawerBody, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import type { MesaPanelId, MesaPanelsView } from "@/lib/mesa-panels";
+import { PlayersPanel } from "./panels/players-panel";
+import { AverageStackPanel } from "./panels/average-stack-panel";
 import { ChipsInPlayPanel } from "./panels/chips-in-play-panel";
+import { PrizePoolPanel } from "./panels/prize-pool-panel";
+import { BountyPanel } from "./panels/bounty-panel";
+import { LevelPanel } from "./panels/level-panel";
 
 const PANEL_TITLE: Record<MesaPanelId, string> = {
   players: "Jogadores",
@@ -53,25 +58,22 @@ export function MesaPanelDrawer({ openPanel, view, onClose }: MesaPanelDrawerPro
   );
 }
 
-// Um caso por painel; cada ticket de painel preenche só o seu.
+// Um caso por painel, já ligado ao componente do painel: cada ticket de painel
+// preenche só o próprio componente em `panels/`.
 function PanelBody({ panel, view }: { panel: MesaPanelId; view: MesaPanelsView }) {
   switch (panel) {
     case "players":
-      return null;
-
+      return <PlayersPanel panel={view.players.panel} />;
     case "averageStack":
-      return null;
-
+      return <AverageStackPanel panel={view.averageStack.panel} />;
     case "chipsInPlay":
       return <ChipsInPlayPanel panel={view.chipsInPlay.panel} />;
-
     case "prizePool":
-      return null;
-
+      return <PrizePoolPanel panel={view.prizePool.panel} />;
     case "bounty":
-      return null;
-
+      // Fora do Bounty Builder não há card de Bounty, então a gaveta não abre nele.
+      return view.bounty && <BountyPanel panel={view.bounty.panel} />;
     case "level":
-      return null;
+      return <LevelPanel panel={view.level.panel} />;
   }
 }

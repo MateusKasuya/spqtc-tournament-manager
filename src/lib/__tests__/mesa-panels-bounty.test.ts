@@ -15,7 +15,7 @@ describe("card Bounty", () => {
     });
     const { bounty } = buildMesaPanels(makeInput({ snapshot }));
 
-    expect(bounty?.card).toEqual({ label: "Bounty pool", value: formatCurrency(8501), sub: "em jogo" });
+    expect(bounty?.card).toEqual({ label: "Bounty pool", value: formatCurrency(8501), supportLines: ["em jogo"] });
   });
 
   it("em torneio normal não existe", () => {

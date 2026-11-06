@@ -4,7 +4,6 @@ import type { CardFace, MesaPanelsInput } from "./types";
 
 export interface PrizePoolSlice {
   card: CardFace;
-  // Painel ainda não construído (spec #75): o card não abre gaveta.
   panel: null;
 }
 
@@ -15,7 +14,7 @@ export function derivePrizePool({ snapshot }: MesaPanelsInput): PrizePoolSlice {
     participants: snapshot.participants,
   });
   return {
-    card: { label: "Prize pool", value: formatCurrency(prizePool), sub: null },
+    card: { label: "Prize pool", value: formatCurrency(prizePool), supportLines: [] },
     panel: null,
   };
 }

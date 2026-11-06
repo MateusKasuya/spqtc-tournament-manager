@@ -51,7 +51,7 @@ export function computeChipsInPlay({ tournament, participants }: Pick<MesaSnapsh
 export function deriveChipsInPlay({ snapshot }: MesaPanelsInput): ChipsInPlaySlice {
   const panel = computeChipsInPlay(snapshot);
   return {
-    card: { label: "Fichas em jogo", value: formatChips(panel.total), sub: null },
+    card: { label: "Fichas em jogo", value: formatChips(panel.total), supportLines: [] },
     panel,
   };
 }

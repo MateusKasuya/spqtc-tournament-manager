@@ -12,7 +12,7 @@ describe("card Prize pool", () => {
     });
     const { card } = buildMesaPanels(makeInput({ snapshot })).prizePool;
 
-    expect(card).toEqual({ label: "Prize pool", value: formatCurrency(31000), sub: null });
+    expect(card).toEqual({ label: "Prize pool", value: formatCurrency(31000), supportLines: [] });
   });
 
   it("em Bounty Builder desconta também o Bounty armado", () => {

@@ -1,7 +1,11 @@
 // Módulo puro dos painéis da Mesa ao vivo (spec #75): recebe o snapshot da mesa,
 // o Tempo restante e se quem vê é admin, e devolve o modelo de visão com a face
 // de cada card e o conteúdo de cada painel. Os componentes só desenham.
-// Cada painel tem a própria derivação, num arquivo deste diretório.
+//
+// Cada painel tem a própria derivação, num arquivo deste diretório, que exporta o
+// tipo `XxxSlice` e a função `deriveXxx`. Este arquivo já liga os seis: um painel
+// novo só edita o próprio arquivo. `panel: null` quer dizer que o painel ainda não
+// existe e o card não abre gaveta.
 
 import { deriveAverageStack, type AverageStackSlice } from "./average-stack";
 import { deriveBounty, type BountySlice } from "./bounty";
@@ -12,12 +16,18 @@ import { derivePrizePool, type PrizePoolSlice } from "./prize-pool";
 import type { MesaPanelsInput } from "./types";
 
 export * from "./types";
-export type { AverageStackSlice } from "./average-stack";
-export type { BountySlice } from "./bounty";
-export type { ChipSource, ChipsInPlayLine, ChipsInPlayPanel, ChipsInPlaySlice } from "./chips-in-play";
-export type { LevelSlice } from "./level";
-export type { PlayersSlice } from "./players";
-export type { PrizePoolSlice } from "./prize-pool";
+
+export * from "./players";
+
+export * from "./average-stack";
+
+export * from "./chips-in-play";
+
+export * from "./prize-pool";
+
+export * from "./bounty";
+
+export * from "./level";
 
 export interface MesaPanelsView {
   players: PlayersSlice;

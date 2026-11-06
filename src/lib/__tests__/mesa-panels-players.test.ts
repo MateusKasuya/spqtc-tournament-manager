@@ -12,6 +12,6 @@ describe("card Jogadores", () => {
     ];
     const { card } = buildMesaPanels(makeInput({ snapshot: makeSnapshot({ participants }) })).players;
 
-    expect(card).toEqual({ label: "Jogadores", value: "2", sub: "de 3 pagos" });
+    expect(card).toEqual({ label: "Jogadores", value: "2", supportLines: ["de 3 pagos"] });
   });
 });

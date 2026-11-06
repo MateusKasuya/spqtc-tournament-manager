@@ -74,6 +74,6 @@ describe("painel Fichas em jogo", () => {
 
     expect(card.label).toBe("Fichas em jogo");
     expect(card.value).toBe(formatChips(panel.total));
-    expect(card.sub).toBeNull();
+    expect(card.supportLines).toEqual([]);
   });
 });
