@@ -428,8 +428,8 @@ describe("Knockout e Desfazer releem o Status do torneio dentro do lock", () => 
   // Três em jogo com Rebuy permitido; `prepare` monta o estado com o torneio Rodando.
   const cases: {
     label: string;
-    prepare: (ids: number[], playerIds: number[]) => Promise<unknown>;
-    call: (ids: number[], playerIds: number[]) => Promise<unknown>;
+    prepare: (ids: number[]) => Promise<unknown>;
+    call: (ids: number[]) => Promise<unknown>;
   }[] = [
     { label: "eliminatePlayer", prepare: async () => {}, call: (ids) => eliminatePlayer(ids[0]) },
     { label: "addRebuy", prepare: async () => {}, call: (ids) => addRebuy(ids[0]) },
@@ -442,10 +442,11 @@ describe("Knockout e Desfazer releem o Status do torneio dentro do lock", () => 
 
   it.each(cases)("$label com o torneio Encerrado no banco devolve erro e não grava nada", async ({ prepare, call }) => {
     const t = await seedTournament({ status: "running", rebuyAmount: 50 });
-    const playerIds = [await seedPlayer("P0"), await seedPlayer("P1"), await seedPlayer("P2")];
     const ids: number[] = [];
-    for (const pl of playerIds) ids.push(await seedParticipant(t, pl, { status: "playing", buyInPaid: true }));
-    await prepare(ids, playerIds);
+    for (const name of ["P0", "P1", "P2"]) {
+      ids.push(await seedParticipant(t, await seedPlayer(name), { status: "playing", buyInPaid: true }));
+    }
+    await prepare(ids);
 
     const staleRow = await tournamentRow(t);
     const staleSnapshot = await knockoutLedger.loadKnockoutSnapshot(testDb, t);
@@ -455,7 +456,7 @@ describe("Knockout e Desfazer releem o Status do torneio dentro do lock", () => 
     const tournamentSpy = staleTournament(staleRow, {});
     const snapshotSpy = vi.spyOn(knockoutLedger, "loadKnockoutSnapshot").mockResolvedValueOnce(staleSnapshot);
 
-    const res = await call(ids, playerIds);
+    const res = await call(ids);
 
     expect(tournamentSpy).toHaveBeenCalled();
     expect(snapshotSpy).toHaveBeenCalled();

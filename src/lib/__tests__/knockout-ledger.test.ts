@@ -537,17 +537,17 @@ describe("Ledger de Knockout: Status do torneio", () => {
     const s = makeSnapshot([40, 40, 40]);
     expect(checkKnockout(s, elimination)).toBeNull();
     expect(checkKnockout(s, rebuy)).toBeNull();
-    const h = withHistory();
-    expect(checkUndo(h, { kind: "elimination", victimId: 1 })).toBeNull();
-    expect(checkUndo(h, { kind: "rebuy", victimId: 2 })).toBeNull();
+    const history = withHistory();
+    expect(checkUndo(history, { kind: "elimination", victimId: 1 })).toBeNull();
+    expect(checkUndo(history, { kind: "rebuy", victimId: 2 })).toBeNull();
   });
 
   it("planKnockout e planUndo com torneio Encerrado lançam sem produzir plano", () => {
     const s = { ...makeSnapshot([40, 40, 40]), tournamentStatus: "finished" as const };
     expect(() => planKnockout(s, elimination)).toThrow(LedgerStateChangedError);
     expect(() => planKnockout(s, rebuy)).toThrow(LedgerStateChangedError);
-    const h = { ...withHistory(), tournamentStatus: "finished" as const };
-    expect(() => planUndo(h, { kind: "elimination", victimId: 1 })).toThrow(LedgerStateChangedError);
-    expect(() => planUndo(h, { kind: "rebuy", victimId: 2 })).toThrow(LedgerStateChangedError);
+    const history = { ...withHistory(), tournamentStatus: "finished" as const };
+    expect(() => planUndo(history, { kind: "elimination", victimId: 1 })).toThrow(LedgerStateChangedError);
+    expect(() => planUndo(history, { kind: "rebuy", victimId: 2 })).toThrow(LedgerStateChangedError);
   });
 });
