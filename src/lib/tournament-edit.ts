@@ -5,40 +5,66 @@
 import { STATUS_RULES, statusAllows, type TournamentStatus } from "@/lib/tournament-status";
 
 export const CHIP_FIELDS = ["initialChips", "rebuyChips", "addonChips", "bonusChipAmount"] as const;
-// Definem o Bounty inicial, que é fixado no buy-in.
-export const ENTRY_RULE_FIELDS = ["rankingFeeAmount", "tournamentType", "bountyPercentage"] as const;
+// Travam no primeiro buy-in confirmado: a taxa, o tipo e o percentual fixam o
+// Bounty inicial, e as telas de total pago multiplicam os valores atuais pelas
+// contagens de cada participante.
+export const ENTRY_RULE_FIELDS = [
+  "buyInAmount",
+  "rebuyAmount",
+  "rankingFeeAmount",
+  "tournamentType",
+  "bountyPercentage",
+] as const;
 
 export const ENTRY_RULES_AFTER_BUY_IN_ERROR =
-  "Taxa de ranking, tipo e percentual de Bounty nao podem mudar depois do primeiro buy-in confirmado";
+  "Valores de buy-in, Rebuy e add-on, taxa de ranking, tipo e percentual de Bounty nao podem mudar depois do primeiro buy-in confirmado";
 
 export interface EditLocks {
   chips: boolean;
   entryRules: boolean;
+  // Valor do add-on: trava com as regras de entrada, salvo enquanto o add-on
+  // não é permitido e ninguém fez add-on (não há total pago a reescrever).
+  addonAmount: boolean;
 }
 
-export function editLocks(status: TournamentStatus, hasConfirmedBuyIn: boolean): EditLocks {
+// Fatos do torneio que a trava lê além do Status e da permissão de add-on.
+export interface EditLockFacts {
+  hasConfirmedBuyIn: boolean;
+  hasAddon: boolean;
+}
+
+interface LockedTournament {
+  status: TournamentStatus;
+  allowAddon: boolean;
+}
+
+export function editLocks(tournament: LockedTournament, facts: EditLockFacts): EditLocks {
+  const entryRules = !statusAllows(STATUS_RULES.entryRules, tournament.status) || facts.hasConfirmedBuyIn;
   return {
-    chips: !statusAllows(STATUS_RULES.chips, status),
-    entryRules: !statusAllows(STATUS_RULES.entryRules, status) || hasConfirmedBuyIn,
+    chips: !statusAllows(STATUS_RULES.chips, tournament.status),
+    entryRules,
+    addonAmount: entryRules && (tournament.allowAddon || facts.hasAddon),
   };
 }
 
-type EditableValues = Record<(typeof CHIP_FIELDS)[number] | (typeof ENTRY_RULE_FIELDS)[number], unknown>;
+type EditableField = (typeof CHIP_FIELDS)[number] | (typeof ENTRY_RULE_FIELDS)[number] | "addonAmount";
+type EditableValues = Record<EditableField, unknown>;
 
 // Recusa do salvamento inteiro quando um campo travado muda de valor; reenviar o
 // valor atual passa (o formulário manda todos os campos sempre).
 export function lockedFieldError(
-  status: TournamentStatus,
-  hasConfirmedBuyIn: boolean,
-  current: EditableValues,
+  current: LockedTournament & EditableValues,
+  facts: EditLockFacts,
   next: EditableValues
 ): string | null {
-  const changed = (fields: readonly (keyof EditableValues)[]) => fields.some((f) => current[f] !== next[f]);
+  const changed = (fields: readonly EditableField[]) => fields.some((f) => current[f] !== next[f]);
 
-  const locks = editLocks(status, hasConfirmedBuyIn);
+  const locks = editLocks(current, facts);
   if (locks.chips && changed(CHIP_FIELDS)) return STATUS_RULES.chips.error;
-  if (locks.entryRules && changed(ENTRY_RULE_FIELDS)) {
-    return statusAllows(STATUS_RULES.entryRules, status) ? ENTRY_RULES_AFTER_BUY_IN_ERROR : STATUS_RULES.entryRules.error;
+  if ((locks.entryRules && changed(ENTRY_RULE_FIELDS)) || (locks.addonAmount && changed(["addonAmount"]))) {
+    return statusAllows(STATUS_RULES.entryRules, current.status)
+      ? ENTRY_RULES_AFTER_BUY_IN_ERROR
+      : STATUS_RULES.entryRules.error;
   }
   return null;
 }
