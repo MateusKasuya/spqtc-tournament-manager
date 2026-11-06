@@ -56,8 +56,8 @@ function DrawerContent({
           className={cn(
             "relative flex w-full flex-col bg-popover text-sm text-popover-foreground outline-none ring-1 ring-foreground/10",
             "transition-transform duration-[450ms] ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform data-swiping:select-none data-ending-style:duration-[calc(var(--drawer-swipe-strength)*400ms)]",
-            // Celular: sobe de baixo sem ocupar a tela inteira.
-            "max-h-[80dvh] rounded-t-xl pb-[env(safe-area-inset-bottom,0px)] [transform:translateY(var(--drawer-swipe-movement-y))] data-starting-style:[transform:translateY(100%)] data-ending-style:[transform:translateY(100%)]",
+            // Celular: sobe de baixo e para em 70% da altura, para o Relógio continuar visível por trás.
+            "max-h-[70dvh] rounded-t-xl pb-[env(safe-area-inset-bottom,0px)] [transform:translateY(var(--drawer-swipe-movement-y))] data-starting-style:[transform:translateY(100%)] data-ending-style:[transform:translateY(100%)]",
             // Desktop: abre na lateral direita, com a mesa visível ao lado.
             "md:h-full md:max-h-none md:max-w-md md:rounded-none md:pb-0 md:[transform:translateX(var(--drawer-swipe-movement-x))] md:data-starting-style:[transform:translateX(100%)] md:data-ending-style:[transform:translateX(100%)]",
             className
