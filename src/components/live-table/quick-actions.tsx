@@ -7,6 +7,7 @@ import { Skull, RefreshCw, Plus, RotateCcw, CheckCircle, Zap, ChevronRight } fro
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/format";
 import { displayName } from "@/lib/display-name";
+import { allowsAddon, allowsBonusChip, allowsRebuy } from "@/lib/tournament-entries";
 import {
   Dialog,
   DialogContent,
@@ -129,9 +130,9 @@ export function QuickActions({ participants, tournament, onMutated }: QuickActio
 
   if (active.length === 0) return null;
 
-  const showRebuy = tournament.rebuyAmount > 0;
-  const showAddon = tournament.allowAddon;
-  const showBonus = tournament.bonusChipAmount > 0;
+  const showRebuy = allowsRebuy(tournament);
+  const showAddon = allowsAddon(tournament);
+  const showBonus = allowsBonusChip(tournament);
   const isBounty = tournament.tournamentType === "bounty_builder";
 
   return (
@@ -300,7 +301,7 @@ function ParticipantMobileCard({
               )}
               {isPlaying && (
                 <>
-                  {tournament.rebuyAmount > 0 && (
+                  {allowsRebuy(tournament) && (
                     <>
                       <button
                         type="button"
@@ -322,7 +323,7 @@ function ParticipantMobileCard({
                       </button>
                     </>
                   )}
-                  {tournament.allowAddon && (
+                  {allowsAddon(tournament) && (
                     <button
                       type="button"
                       onClick={() => run(() => addAddon(participant.id))}
@@ -355,7 +356,7 @@ function ParticipantMobileCard({
                       <span className="text-sm font-medium">-Rebuy</span>
                     </button>
                   )}
-                  {tournament.allowAddon && participant.addonCount > 0 && (
+                  {allowsAddon(tournament) && participant.addonCount > 0 && (
                     <button
                       type="button"
                       onClick={() => run(() => undoAddon(participant.id))}
@@ -580,7 +581,7 @@ function ParticipantRowFiltered({
             )}
             {isPlaying && (
               <>
-                {tournament.rebuyAmount > 0 && (
+                {allowsRebuy(tournament) && (
                   <>
                     <button
                       type="button"
@@ -604,7 +605,7 @@ function ParticipantRowFiltered({
                     </button>
                   </>
                 )}
-                {tournament.allowAddon && (
+                {allowsAddon(tournament) && (
                   <button
                     type="button"
                     onClick={() => run(() => addAddon(participant.id))}

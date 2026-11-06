@@ -19,6 +19,7 @@ export function makeTournament(overrides: Partial<MesaTournament> = {}): MesaTou
     bonusChipAmount: 2000,
     allowAddon: true,
     rankingFeeAmount: 2000,
+    maxRebuys: 0,
     currentBlindLevel: 1,
     timerRunning: false,
     timerRemainingSecs: null,

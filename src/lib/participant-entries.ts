@@ -5,6 +5,7 @@
 // "participante nao encontrado" ficam com quem carrega as leituras.
 
 import type { participants, tournaments } from "@/db/schema";
+import { allowsAddon, allowsBonusChip } from "@/lib/tournament-entries";
 
 type Participant = typeof participants.$inferSelect;
 type Tournament = typeof tournaments.$inferSelect;
@@ -40,7 +41,7 @@ export function checkAddAddon(
   tournament: Pick<Tournament, "allowAddon">
 ): Refusal {
   if (!participant.buyInPaid) return { error: "Jogador ainda nao pagou buy-in" };
-  if (!tournament.allowAddon) return { error: "Torneio nao permite add-on" };
+  if (!allowsAddon(tournament)) return { error: "Torneio nao permite add-on" };
   return null;
 }
 
@@ -55,7 +56,7 @@ export function checkAddBonusChip(
 ): Refusal {
   if (participant.status !== "playing") return { error: "Participante nao esta em jogo" };
   if (participant.bonusChipUsed) return { error: "Bonus chip ja utilizado" };
-  if (tournament.bonusChipAmount === 0) return { error: "Torneio nao permite bonus chip" };
+  if (!allowsBonusChip(tournament)) return { error: "Torneio nao permite bonus chip" };
   return null;
 }
 
