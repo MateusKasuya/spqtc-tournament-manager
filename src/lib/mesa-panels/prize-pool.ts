@@ -2,9 +2,10 @@ import { formatCurrency } from "@/lib/format";
 import { isBountyBuilder } from "@/lib/knockout-ledger";
 import { computePrizePool, computeSaldo } from "@/lib/prize-pool";
 import { calculateRoundedPrizeAmounts } from "@/lib/prize";
-import type { MesaSnapshot } from "@/db/queries/mesa";
+import type { MesaPrizePosition } from "@/db/queries/mesa";
 import type { CardFace, MesaPanelsInput } from "./types";
-import { countPrizedPositions, deriveMoneyLine, isPrizedPosition, type MoneyLine } from "./money-line";
+import { countPrizedPositions, deriveMoneyLine, moneyBoundary, type MoneyLine } from "./money-line";
+import { hasPrizesPaid } from "./prizes-paid";
 
 // A conta do Prize pool (CONTEXT.md, cluster Prêmios), em centavos. Os valores de
 // cada origem são o que entrou de fato no torneio (o resumo financeiro), nunca a
@@ -38,7 +39,7 @@ export interface EstimatedPrizePosition {
 
 export interface PrizeStructureSection {
   positions: EstimatedPrizePosition[];
-  // Última posição com percentual maior que zero: a linha até onde paga fica abaixo dela.
+  // A fronteira do dinheiro: a linha até onde paga fica abaixo dela; 0 sem linha.
   paysThroughPosition: number;
 }
 
@@ -46,7 +47,7 @@ export interface PrizeStructureSection {
 // Prêmios da página do torneio (todas as posições, inclusive as de 0%, para o
 // resto cair igual), nunca percentual × Prize pool.
 export function estimatePrizes(
-  prizeStructure: MesaSnapshot["prizeStructure"],
+  prizeStructure: MesaPrizePosition[],
   prizePool: number
 ): EstimatedPrizePosition[] {
   const amounts = calculateRoundedPrizeAmounts(prizePool, prizeStructure.map((p) => p.percentage));
@@ -54,22 +55,14 @@ export function estimatePrizes(
 }
 
 function buildStructureSection(positions: EstimatedPrizePosition[]): PrizeStructureSection | null {
-  const prized = positions.filter(isPrizedPosition);
-  if (prized.length === 0) return null;
-  return { positions, paysThroughPosition: prized[prized.length - 1].position };
+  if (countPrizedPositions(positions) === 0) return null;
+  return { positions, paysThroughPosition: moneyBoundary(positions) };
 }
 
 function deriveNextOut(moneyLine: MoneyLine | null, positions: EstimatedPrizePosition[]) {
   if (moneyLine?.state !== "inTheMoney" || moneyLine.playing < 2) return null;
   const position = moneyLine.playing;
   return { position, prize: positions.find((p) => p.position === position)?.estimatedPrize ?? 0 };
-}
-
-// Há Prêmios pagos quando o total de Prêmios pagos do resumo financeiro passa de
-// zero. Nunca pelo valor de Prêmio guardado no participante, que fica velho numa
-// redistribuição. É a condição única de "há Prêmios pagos" para todos os painéis.
-export function hasPrizesPaid({ financialSummary }: Pick<MesaSnapshot, "financialSummary">): boolean {
-  return financialSummary.prize > 0;
 }
 
 export interface PrizePoolSlice {

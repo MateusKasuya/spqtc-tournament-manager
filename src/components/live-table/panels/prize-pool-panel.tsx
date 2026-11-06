@@ -17,8 +17,9 @@ export function PrizePoolPanel({ panel }: { panel: PrizePoolPanelModel }) {
         <h3 className="text-sm font-semibold">Estrutura de premios</h3>
         {panel.prizedPositionsAboveBuyIns && (
           <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm">
-            A Estrutura paga {panel.prizedPositionsAboveBuyIns.prizedPositions} posicoes e so ha{" "}
-            {panel.prizedPositionsAboveBuyIns.buyIns} participantes com buy-in. A mesa nao muda a Estrutura.
+            A Estrutura tem {panel.prizedPositionsAboveBuyIns.prizedPositions} Posicoes premiadas e so ha{" "}
+            {panel.prizedPositionsAboveBuyIns.buyIns} participantes com buy-in. A mesa so avisa e nao muda a
+            Estrutura.
           </p>
         )}
         {panel.moneyLine && <MoneyLineSummary moneyLine={panel.moneyLine} />}
@@ -80,7 +81,7 @@ function MoneyLineSummary({ moneyLine }: { moneyLine: MoneyLine }) {
         <p className="text-sm font-medium">Faltam {remaining} Eliminacoes para o dinheiro</p>
       )}
       <p className="text-sm text-muted-foreground tabular-nums">
-        Pagam {moneyLine.prizedPositions} · {moneyLine.playing} em jogo · faltam {remaining}
+        Pagam {moneyLine.paysThrough} · {moneyLine.playing} em jogo · faltam {remaining}
       </p>
     </div>
   );

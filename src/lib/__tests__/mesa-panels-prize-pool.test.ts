@@ -174,7 +174,7 @@ describe("painel Prize pool: linha de dinheiro", () => {
     });
 
     expect(prizePool(snapshot).panel.moneyLine).toEqual({
-      prizedPositions: 2,
+      paysThrough: 2,
       playing: 4,
       remaining: 2,
       state: "beforeMoney",
@@ -183,7 +183,7 @@ describe("painel Prize pool: linha de dinheiro", () => {
 
   it("com Em jogo uma acima das Posições premiadas é Bolha", () => {
     expect(prizePool(withStructure({ playing: 4 })).panel.moneyLine).toEqual({
-      prizedPositions: 3,
+      paysThrough: 3,
       playing: 4,
       remaining: 1,
       state: "bubble",
@@ -238,7 +238,7 @@ describe("painel Prize pool: Estrutura de prêmios", () => {
     });
   });
 
-  it("a linha até onde paga fica na última posição com percentual maior que zero", () => {
+  it("a linha até onde paga fica na última posição premiada", () => {
     const { panel } = prizePool(
       withStructure({
         playing: 4,
@@ -326,7 +326,7 @@ describe("painel Prize pool: aviso de Posições premiadas acima dos Participant
       { position: 2, percentage: 30, estimatedPrize: 9500 },
       { position: 3, percentage: 20, estimatedPrize: 6000 },
     ]);
-    expect(panel.moneyLine).toEqual({ prizedPositions: 3, playing: 2, remaining: -1, state: "inTheMoney" });
+    expect(panel.moneyLine).toEqual({ paysThrough: 3, playing: 2, remaining: -1, state: "inTheMoney" });
     expect(panel.nextOut).toEqual({ position: 2, prize: 9500 });
   });
 });
@@ -342,5 +342,69 @@ describe("card Prize pool: 1º estimado", () => {
     const { card } = prizePool(withStructure({ playing: 4, prizeStructure: [] }));
 
     expect(card.supportLines).toEqual([]);
+  });
+});
+
+// O editor aceita uma posição de 0% no meio. Prêmio garantido só vai até a última
+// posição da sequência premiada a partir do 1º: aqui, o 2º (o 3º não leva nada).
+// Com R$ 310: 60/30/0/10 → R$ 185 / R$ 95 / R$ 0 / R$ 30.
+describe("painel Prize pool: Estrutura com posição de 0% no meio", () => {
+  const gapped = [
+    { position: 1, percentage: 60 },
+    { position: 2, percentage: 30 },
+    { position: 3, percentage: 0 },
+    { position: 4, percentage: 10 },
+  ];
+
+  it("a linha até onde paga, o resumo e o faltam param no fim da sequência premiada a partir do 1º", () => {
+    const { panel } = prizePool(withStructure({ playing: 4, prizeStructure: gapped }));
+
+    expect(panel.structure).toEqual({
+      positions: [
+        { position: 1, percentage: 60, estimatedPrize: 18500 },
+        { position: 2, percentage: 30, estimatedPrize: 9500 },
+        { position: 3, percentage: 0, estimatedPrize: 0 },
+        { position: 4, percentage: 10, estimatedPrize: 3000 },
+      ],
+      paysThroughPosition: 2,
+    });
+    expect(panel.moneyLine).toEqual({ paysThrough: 2, playing: 4, remaining: 2, state: "beforeMoney" });
+  });
+
+  it("com 3 Em jogo é Bolha, porque quem cair em 3º não leva Prêmio", () => {
+    const { panel } = prizePool(withStructure({ playing: 3, eliminated: 1, prizeStructure: gapped }));
+
+    expect(panel.moneyLine).toMatchObject({ remaining: 1, state: "bubble" });
+    expect(panel.nextOut).toBeNull();
+  });
+
+  it("No dinheiro, o próximo a cair nunca leva R$ 0", () => {
+    const { panel } = prizePool(withStructure({ playing: 2, eliminated: 2, prizeStructure: gapped }));
+
+    expect(panel.moneyLine).toMatchObject({ remaining: 0, state: "inTheMoney" });
+    expect(panel.nextOut).toEqual({ position: 2, prize: 9500 });
+  });
+
+  it("o aviso do admin conta todas as Posições premiadas da Estrutura", () => {
+    const snapshot = withStructure({ playing: 2, prizeStructure: gapped });
+    const { panel } = buildMesaPanels(makeInput({ snapshot, isAdmin: true })).prizePool;
+
+    expect(panel.prizedPositionsAboveBuyIns).toEqual({ prizedPositions: 3, buyIns: 2 });
+  });
+
+  it("com o 1º em 0% não há linha de dinheiro nem linha até onde paga", () => {
+    const { panel } = prizePool(
+      withStructure({
+        playing: 2,
+        prizeStructure: [
+          { position: 1, percentage: 0 },
+          { position: 2, percentage: 100 },
+        ],
+      })
+    );
+
+    expect(panel.structure?.paysThroughPosition).toBe(0);
+    expect(panel.moneyLine).toBeNull();
+    expect(panel.nextOut).toBeNull();
   });
 });
