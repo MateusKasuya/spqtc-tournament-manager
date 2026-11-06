@@ -4,7 +4,7 @@ import { updateTournament } from "@/actions/tournaments";
 import { testDb } from "@/test/db";
 import * as schema from "@/db/schema";
 import { tournaments } from "@/db/schema";
-import { CHIP_FIELDS, ENTRY_RULES_AFTER_BUY_IN_ERROR } from "@/lib/tournament-edit";
+import { BUY_IN_BELOW_RANKING_FEE_ERROR, CHIP_FIELDS, ENTRY_RULES_AFTER_BUY_IN_ERROR } from "@/lib/tournament-edit";
 import { STATUS_RULES, statusAllows, type TournamentStatus } from "@/lib/tournament-status";
 import { seedTournament, seedPlayer, seedParticipant, seedSeason } from "@/test/setup";
 
@@ -17,11 +17,12 @@ import { seedTournament, seedPlayer, seedParticipant, seedSeason } from "@/test/
 const ALL_STATUSES: TournamentStatus[] = ["pending", "running", "finished", "cancelled"];
 
 // O valor do add-on tem casos proprios (ver "valor do add-on"): o seed nao
-// permite add-on, entao ele fica livre.
+// permite add-on, entao ele fica livre. A taxa fica abaixo do buy-in do seed
+// (100): buy-in menor que a taxa tem recusa propria (ver "buy-in e taxa de ranking").
 const ENTRY_RULE_CHANGES = {
   buyInAmount: 150,
   rebuyAmount: 80,
-  rankingFeeAmount: 500,
+  rankingFeeAmount: 50,
   tournamentType: "bounty_builder",
   bountyPercentage: 60,
 } as const;
@@ -78,7 +79,7 @@ describe("Encerrado e Cancelado: nada e editavel", () => {
   const changes: { label: string; changes: Record<string, string | number> }[] = [
     { label: "nome", changes: { name: "Outro nome" } },
     { label: "fichas", changes: { initialChips: 20000 } },
-    { label: "taxa de ranking", changes: { rankingFeeAmount: 500 } },
+    { label: "taxa de ranking", changes: { rankingFeeAmount: 50 } },
   ];
 
   const finals = ALL_STATUSES.filter((s) => !statusAllows(STATUS_RULES.tournamentData, s));
@@ -147,7 +148,7 @@ describe("torneio Rodando", () => {
   });
 
   it("aceita reenviar fichas, valores, taxa de ranking, tipo e percentual sem mudar, junto de uma edicao de dados", async () => {
-    const t = await seed({ status: "running", rebuyAmount: 70, addonAmount: 40, rankingFeeAmount: 200, bountyPercentage: 40 });
+    const t = await seed({ status: "running", rebuyAmount: 70, addonAmount: 40, rankingFeeAmount: 20, bountyPercentage: 40 });
     await confirmedBuyIn(t);
 
     expect(await updateTournament(t, await formFor(t, { name: "Novo nome" }))).toBeUndefined();
@@ -184,7 +185,7 @@ describe("torneio Pendente", () => {
   });
 
   it("aceita reenviar valores, taxa de ranking, tipo e percentual sem mudar com buy-in confirmado", async () => {
-    const t = await seed({ status: "pending", rebuyAmount: 70, addonAmount: 40, rankingFeeAmount: 200, bountyPercentage: 40 });
+    const t = await seed({ status: "pending", rebuyAmount: 70, addonAmount: 40, rankingFeeAmount: 20, bountyPercentage: 40 });
     await confirmedBuyIn(t);
 
     expect(await updateTournament(t, await formFor(t, { name: "Novo nome" }))).toBeUndefined();
@@ -222,6 +223,43 @@ describe("valor do add-on", () => {
 
     expect(await updateTournament(t, form)).toEqual({ error: STATUS_RULES.entryRules.error });
     expect(await dumpDb()).toEqual(before);
+  });
+});
+
+describe("buy-in e taxa de ranking", () => {
+  it.each<{ label: string; changes: Record<string, number> }>([
+    { label: "baixar o buy-in para menos que a taxa", changes: { buyInAmount: 10 } },
+    { label: "subir a taxa para mais que o buy-in", changes: { rankingFeeAmount: 150 } },
+  ])("$label e recusado e nao grava nada", async ({ changes }) => {
+    const t = await seed({ status: "pending", buyInAmount: 100, rankingFeeAmount: 20 });
+    const form = await formFor(t, { ...changes, name: "Outro nome" });
+    const before = await dumpDb();
+
+    expect(await updateTournament(t, form)).toEqual({ error: BUY_IN_BELOW_RANKING_FEE_ERROR });
+    expect(await dumpDb()).toEqual(before);
+  });
+
+  it("buy-in igual a taxa e aceito (Bounty zero)", async () => {
+    const t = await seed({ status: "pending", buyInAmount: 100, rankingFeeAmount: 20 });
+
+    expect(await updateTournament(t, await formFor(t, { rankingFeeAmount: 100 }))).toBeUndefined();
+    expect((await tournamentRow(t)).rankingFeeAmount).toBe(100);
+  });
+
+  it("torneio ja gravado com buy-in menor que a taxa continua editavel nos outros campos", async () => {
+    const t = await seed({ status: "pending", buyInAmount: 100, rankingFeeAmount: 200 });
+
+    expect(await updateTournament(t, await formFor(t, { name: "Novo nome" }))).toBeUndefined();
+    expect((await tournamentRow(t)).name).toBe("Novo nome");
+  });
+
+  it("com buy-in confirmado, a trava das regras de entrada responde antes", async () => {
+    const t = await seed({ status: "pending", buyInAmount: 100, rankingFeeAmount: 20 });
+    await confirmedBuyIn(t);
+
+    expect(await updateTournament(t, await formFor(t, { rankingFeeAmount: 150 }))).toEqual({
+      error: ENTRY_RULES_AFTER_BUY_IN_ERROR,
+    });
   });
 });
 

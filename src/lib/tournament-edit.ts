@@ -68,3 +68,23 @@ export function lockedFieldError(
   }
   return null;
 }
+
+export const BUY_IN_BELOW_RANKING_FEE_ERROR = "Buy-in nao pode ser menor que a taxa de ranking";
+
+interface EntryAmounts {
+  buyInAmount: number;
+  rankingFeeAmount: number;
+}
+
+// Buy-in ≥ taxa de ranking (a diferença é o que sobra para Bounty e Prize pool).
+// Sem `current` é a criação e a regra vale sempre. Na edição só vale quando o
+// buy-in ou a taxa mudam, para um torneio antigo gravado abaixo da taxa
+// continuar editável nos outros campos.
+export function buyInBelowRankingFeeError(next: EntryAmounts, current?: EntryAmounts): string | null {
+  if (next.buyInAmount >= next.rankingFeeAmount) return null;
+  const unchanged =
+    current !== undefined &&
+    current.buyInAmount === next.buyInAmount &&
+    current.rankingFeeAmount === next.rankingFeeAmount;
+  return unchanged ? null : BUY_IN_BELOW_RANKING_FEE_ERROR;
+}

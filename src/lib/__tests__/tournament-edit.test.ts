@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { editLocks, lockedFieldError, ENTRY_RULES_AFTER_BUY_IN_ERROR } from "@/lib/tournament-edit";
+import {
+  editLocks,
+  lockedFieldError,
+  buyInBelowRankingFeeError,
+  BUY_IN_BELOW_RANKING_FEE_ERROR,
+  ENTRY_RULES_AFTER_BUY_IN_ERROR,
+} from "@/lib/tournament-edit";
 import { STATUS_RULES, type TournamentStatus } from "@/lib/tournament-status";
 
 const VALUES = {
@@ -115,5 +121,45 @@ describe("lockedFieldError: ligar o add-on depois do primeiro buy-in", () => {
     expect(lockedFieldError(current("pending", false), BUY_IN, { ...VALUES, addonAmount: 2500, buyInAmount: 6000 })).toBe(
       ENTRY_RULES_AFTER_BUY_IN_ERROR
     );
+  });
+});
+
+describe("buyInBelowRankingFeeError", () => {
+  it("ao criar, buy-in menor que a taxa de ranking e recusado", () => {
+    expect(buyInBelowRankingFeeError({ buyInAmount: 1000, rankingFeeAmount: 2000 })).toBe(BUY_IN_BELOW_RANKING_FEE_ERROR);
+  });
+
+  it("ao criar, buy-in igual a taxa de ranking passa (Bounty zero)", () => {
+    expect(buyInBelowRankingFeeError({ buyInAmount: 2000, rankingFeeAmount: 2000 })).toBeNull();
+  });
+
+  it("ao criar, buy-in maior que a taxa de ranking passa", () => {
+    expect(buyInBelowRankingFeeError({ buyInAmount: 5000, rankingFeeAmount: 2000 })).toBeNull();
+  });
+
+  const old = { buyInAmount: 100, rankingFeeAmount: 200 };
+
+  it("ao editar, torneio gravado com buy-in menor que a taxa passa se nenhum dos dois muda", () => {
+    expect(buyInBelowRankingFeeError({ ...old }, old)).toBeNull();
+  });
+
+  it("ao editar, mudar o buy-in para baixo da taxa e recusado", () => {
+    expect(buyInBelowRankingFeeError({ buyInAmount: 1000, rankingFeeAmount: 2000 }, { buyInAmount: 5000, rankingFeeAmount: 2000 })).toBe(
+      BUY_IN_BELOW_RANKING_FEE_ERROR
+    );
+  });
+
+  it("ao editar, mudar a taxa para acima do buy-in e recusado", () => {
+    expect(buyInBelowRankingFeeError({ buyInAmount: 5000, rankingFeeAmount: 6000 }, { buyInAmount: 5000, rankingFeeAmount: 2000 })).toBe(
+      BUY_IN_BELOW_RANKING_FEE_ERROR
+    );
+  });
+
+  it("ao editar, torneio gravado com buy-in menor que a taxa continua recusado se a mudanca nao resolve", () => {
+    expect(buyInBelowRankingFeeError({ buyInAmount: 150, rankingFeeAmount: 200 }, old)).toBe(BUY_IN_BELOW_RANKING_FEE_ERROR);
+  });
+
+  it("ao editar, corrigir um torneio antigo para buy-in maior ou igual a taxa passa", () => {
+    expect(buyInBelowRankingFeeError({ buyInAmount: 200, rankingFeeAmount: 200 }, old)).toBeNull();
   });
 });
