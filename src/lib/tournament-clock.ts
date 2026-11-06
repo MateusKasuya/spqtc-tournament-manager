@@ -38,15 +38,11 @@ export function remainingSecs(
 }
 
 export function startTimer(state: ClockState, levels: ClockLevel[], now: Date): ClockResult {
-  if (levels.length === 0) return { ok: false, error: "Sem estrutura de blinds" };
+  const current = findCurrentLevel(state, levels);
+  if (!current) return { ok: false, error: "Sem estrutura de blinds" };
   if (state.timerRunning) return { ok: true, state };
 
-  let remaining = state.timerRemainingSecs;
-  if (remaining === null || remaining === undefined) {
-    const sorted = sortedLevels(levels);
-    const level = sorted.find((l) => l.level === state.currentBlindLevel) ?? sorted[0];
-    remaining = level.durationMinutes * 60;
-  }
+  const remaining = state.timerRemainingSecs ?? current.durationMinutes * 60;
 
   return {
     ok: true,
@@ -75,14 +71,36 @@ export function toIsoOrNull(value: Date | string | null): string | null {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 }
 
-function sortedLevels(levels: ClockLevel[]): ClockLevel[] {
+function sortedLevels<L extends Pick<ClockLevel, "level">>(levels: L[]): L[] {
   return [...levels].sort((a, b) => a.level - b.level);
+}
+
+// Nível atual (CONTEXT.md, Relógio): o Nível cujo número é o Nível atual do
+// Relógio. Sem nenhum que bata (torneio novo, Relógio no Nível 0), o primeiro da
+// estrutura. Sem estrutura, `null`. Única regra do Nível atual: o Iniciar, o anel
+// de progresso e os painéis da mesa a usam.
+export function findCurrentLevel<L extends Pick<ClockLevel, "level">>(
+  state: Pick<ClockState, "currentBlindLevel">,
+  levels: L[]
+): L | null {
+  const sorted = sortedLevels(levels);
+  return sorted.find((l) => l.level === state.currentBlindLevel) ?? sorted[0] ?? null;
+}
+
+// Nível para onde o Avançar e o Fim do nível levam: o primeiro com número maior
+// que o Nível atual do Relógio. No Nível 0 (torneio novo) é o primeiro Nível.
+// `null` no último Nível.
+export function findLevelAfterAdvance<L extends Pick<ClockLevel, "level">>(
+  state: Pick<ClockState, "currentBlindLevel">,
+  levels: L[]
+): L | null {
+  return sortedLevels(levels).find((l) => l.level > state.currentBlindLevel) ?? null;
 }
 
 // Avançar (clique manual ou Fim do nível): aponta pro próximo Nível com a
 // duração cheia; mantém "correndo" se já estava, senão fica pausado.
 export function advanceLevel(state: ClockState, levels: ClockLevel[], now: Date): ClockResult {
-  const next = sortedLevels(levels).find((l) => l.level > state.currentBlindLevel);
+  const next = findLevelAfterAdvance(state, levels);
   if (!next) return { ok: false, error: "Ja esta no ultimo nivel" };
 
   return {
@@ -261,10 +279,8 @@ export function ringTotalSecs(
   levels: ClockLevel[]
 ): number {
   if (state.breakActive && state.breakTotalSecs) return state.breakTotalSecs;
-  if (levels.length === 0) return 0;
-  const sorted = sortedLevels(levels);
-  const level = sorted.find((l) => l.level === state.currentBlindLevel) ?? sorted[0];
-  return level.durationMinutes * 60;
+  const level = findCurrentLevel(state, levels);
+  return level ? level.durationMinutes * 60 : 0;
 }
 
 // Linha crua do realtime (nomes snake_case das colunas). Espelha o shape do

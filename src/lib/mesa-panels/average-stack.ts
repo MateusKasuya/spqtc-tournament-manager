@@ -1,8 +1,9 @@
 import { formatChips } from "@/lib/format";
 import type { MesaLevel, MesaSnapshot } from "@/db/queries/mesa";
 import { computeChipsInPlay } from "./chips-in-play";
+import { findCurrentLevel } from "@/lib/tournament-clock";
 import { countPlaying } from "./playing";
-import { findCurrentLevel, findNextPlayLevel, findReturnLevel } from "./level";
+import { findNextPlayLevel, findReturnLevel } from "./level";
 import type { CardFace, MesaPanelsInput } from "./types";
 
 // Stack médio (CONTEXT.md) = Fichas em jogo ÷ Participantes em jogo, sem

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTransition } from "react";
 import { useMesaSnapshot } from "@/hooks/use-mesa-snapshot";
 import { useCountdown } from "@/hooks/use-countdown";
@@ -14,7 +14,7 @@ import { StickyTimerBar } from "./sticky-timer-bar";
 import { MesaPanelDrawer } from "./mesa-panel-drawer";
 import { expireLevel, updateTournamentStatus } from "@/actions/tournaments";
 import { playLevelSound } from "@/lib/play-level-sound";
-import { clockTone, ringTotalSecs, toIsoOrNull } from "@/lib/tournament-clock";
+import { clockTone, findCurrentLevel, findLevelAfterAdvance, ringTotalSecs, toIsoOrNull } from "@/lib/tournament-clock";
 import { buildMesaPanels, type MesaPanelId } from "@/lib/mesa-panels";
 import type { MesaSnapshot } from "@/db/queries/mesa";
 import Link from "next/link";
@@ -33,11 +33,14 @@ export function MesaAoVivo({ snapshot: initialSnapshot, isAdmin }: MesaAoVivoPro
   // Mora aqui, e não no card: o snapshot é re-semeado a cada ressincronização
   // e a gaveta aberta não pode fechar a cada Knockout.
   const [openPanel, setOpenPanel] = useState<MesaPanelId | null>(null);
+  const blindInfoId = useId();
   useWakeLock(isRunning);
 
+  // Posição para os controles do Relógio, que seguem como antes (-1 no Nível 0).
   const currentIndex = blindLevels.findIndex((b) => b.level === tournament.currentBlindLevel);
-  const currentLevel = blindLevels[currentIndex] ?? blindLevels[0];
-  const nextLevel = blindLevels[currentIndex + 1] ?? null;
+  const currentLevel = findCurrentLevel(tournament, blindLevels);
+  // O "Proximo" do bloco é para onde o Avançar e o Fim do nível levam.
+  const nextLevel = findLevelAfterAdvance(tournament, blindLevels);
 
   const totalSeconds = ringTotalSecs(tournament, blindLevels);
   const isBreak = tournament.breakActive || (currentLevel?.isBreak ?? false);
@@ -131,11 +134,25 @@ export function MesaAoVivo({ snapshot: initialSnapshot, isAdmin }: MesaAoVivoPro
           totalSeconds={totalSeconds}
         />
 
-        <BlindInfo
-          currentLevel={currentLevel}
-          nextLevel={nextLevel}
-          breakActive={tournament.breakActive}
-        />
+        {/* Só abre o painel Nível: nunca pausa nem avança o Relógio. O nome diz o
+            que o botão faz; o conteúdo do bloco continua lido como descrição. */}
+        <button
+          type="button"
+          onClick={() => setOpenPanel("level")}
+          aria-haspopup="dialog"
+          aria-expanded={openPanel === "level"}
+          aria-label="Abrir painel Nivel: estrutura de blinds"
+          aria-describedby={blindInfoId}
+          className="rounded-lg px-4 py-2 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <span id={blindInfoId} className="block">
+            <BlindInfo
+              currentLevel={currentLevel}
+              nextLevel={nextLevel}
+              breakActive={tournament.breakActive}
+            />
+          </span>
+        </button>
 
         {isAdmin && (
           <TimerControls

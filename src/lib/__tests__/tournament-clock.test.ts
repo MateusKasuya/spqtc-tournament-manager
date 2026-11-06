@@ -4,6 +4,7 @@ import {
   startTimer,
   pauseTimer,
   advanceLevel,
+  findLevelAfterAdvance,
   goBackLevel,
   expireLevel,
   startBreak,
@@ -155,6 +156,22 @@ describe("Relógio do torneio: Avançar", () => {
   it("recusa 'Ja esta no ultimo nivel' quando não há próximo Nível", () => {
     const result = advanceLevel({ ...BASE, currentBlindLevel: 3 }, LEVELS, NOW);
     expect(result).toEqual({ ok: false, error: "Ja esta no ultimo nivel" });
+  });
+});
+
+describe("Relógio do torneio: Nível depois do Avançar", () => {
+  it("é o Nível seguinte ao Nível atual", () => {
+    expect(findLevelAfterAdvance({ currentBlindLevel: 2 }, LEVELS)?.level).toBe(3);
+  });
+
+  it("com o Relógio no Nível 0 é o primeiro Nível, para onde o Avançar e o Fim do nível levam", () => {
+    expect(findLevelAfterAdvance({ currentBlindLevel: 0 }, LEVELS)?.level).toBe(1);
+    const advanced = advanceLevel({ ...BASE, currentBlindLevel: 0 }, LEVELS, NOW);
+    expect(advanced.ok && advanced.state.currentBlindLevel).toBe(1);
+  });
+
+  it("no último Nível não existe", () => {
+    expect(findLevelAfterAdvance({ currentBlindLevel: 3 }, LEVELS)).toBeNull();
   });
 });
 

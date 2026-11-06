@@ -15,6 +15,13 @@ export function formatTime(totalSeconds: number): string {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
+// Contagem regressiva longa: mm:ss como o Relógio e, a partir de 1 hora, h:mm:ss.
+export function formatCountdown(totalSeconds: number): string {
+  const hours = Math.floor(totalSeconds / 3600);
+  if (hours === 0) return formatTime(totalSeconds);
+  return `${hours}:${formatTime(totalSeconds % 3600)}`;
+}
+
 // Pontos de ranking: inteiros ficam limpos (12) e frações usam vírgula (12,25).
 export function formatPoints(value: number | string | null | undefined): string {
   return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 2 }).format(Number(value ?? 0));

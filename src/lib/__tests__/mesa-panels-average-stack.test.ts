@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   buildMesaPanels,
-  findCurrentLevel,
   findReturnLevel,
   formatAverageInBigBlinds,
   formatAverageStack,
 } from "@/lib/mesa-panels";
 import { formatChips } from "@/lib/format";
+import { findCurrentLevel } from "@/lib/tournament-clock";
 import type { MesaLevel, MesaParticipant, MesaTournament } from "@/db/queries/mesa";
 import { makeInput, makeLevel, makeParticipant, makeSnapshot, makeTournament } from "./mesa-panels-fixture";
 
