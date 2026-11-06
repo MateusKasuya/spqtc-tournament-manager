@@ -42,9 +42,7 @@ export interface BlindStructureRow {
   ante: number;
   isBigAnte: boolean;
   durationMinutes: number;
-  // Intervalo da estrutura.
   isBreak: boolean;
-  // Nível do add-on.
   isAddonLevel: boolean;
   isCurrent: boolean;
 }
@@ -62,12 +60,12 @@ export interface LevelSlice {
 }
 
 // Tempo restante do Nível atual. Num Intervalo avulso, `remainingSeconds` é o do
-// Intervalo, e o do Nível interrompido é o guardado. Com o Relógio nunca iniciado
-// (nada gravado), é a duração cheia, como no Iniciar.
+// Intervalo, e o do Nível interrompido é o guardado, o mesmo que o Encerrar
+// Intervalo devolve. Com o Relógio nunca iniciado (nada gravado), é a duração
+// cheia, como no Iniciar.
 function currentLevelRemaining({ snapshot: { tournament }, remainingSeconds }: MesaPanelsInput, current: MesaLevel): number {
-  const fullDuration = current.durationMinutes * 60;
-  if (tournament.breakActive) return tournament.levelRemainingSecs ?? fullDuration;
-  if (!tournament.timerRunning && tournament.timerRemainingSecs === null) return fullDuration;
+  if (tournament.breakActive) return tournament.levelRemainingSecs ?? 0;
+  if (!tournament.timerRunning && tournament.timerRemainingSecs === null) return current.durationMinutes * 60;
   return remainingSeconds;
 }
 
@@ -80,8 +78,8 @@ function secondsToNextBreak(input: MesaPanelsInput, current: MesaLevel): number 
   if (breakIndex === -1) return null;
 
   const between = ahead.slice(0, breakIndex).reduce((sum, l) => sum + l.durationMinutes * 60, 0);
-  const avulsoRemaining = input.snapshot.tournament.breakActive ? input.remainingSeconds : 0;
-  return avulsoRemaining + currentLevelRemaining(input, current) + between;
+  const adHocBreakRemaining = input.snapshot.tournament.breakActive ? input.remainingSeconds : 0;
+  return adHocBreakRemaining + currentLevelRemaining(input, current) + between;
 }
 
 export function deriveLevel(input: MesaPanelsInput): LevelSlice {

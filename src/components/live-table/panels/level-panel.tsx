@@ -9,7 +9,7 @@ function formatCountdown(totalSeconds: number): string {
   return `${hours}:${formatTime(totalSeconds % 3600)}`;
 }
 
-function blinds(row: BlindStructureRow): string {
+function formatBlinds(row: BlindStructureRow): string {
   const base = `${formatChips(row.smallBlind)} / ${formatChips(row.bigBlind)}`;
   if (row.ante <= 0) return base;
   return `${base} / ${formatChips(row.ante)}${row.isBigAnte ? " BBA" : ""}`;
@@ -47,7 +47,7 @@ export function LevelPanel({ panel }: { panel: BlindStructurePanel }) {
               </th>
               <td className="py-2 pr-3">
                 <span className="flex flex-wrap items-center gap-1.5">
-                  {row.isBreak ? "Intervalo" : blinds(row)}
+                  {row.isBreak ? "Intervalo" : formatBlinds(row)}
                   {row.isCurrent && (
                     <Badge variant="outline" className="text-xs" aria-hidden>
                       Atual

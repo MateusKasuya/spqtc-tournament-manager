@@ -8,27 +8,28 @@ interface BlindInfoProps {
   breakActive?: boolean;
 }
 
+// Mora dentro do botão que abre o painel Nível: só elementos de frase (span).
 export function BlindInfo({ currentLevel, nextLevel, breakActive }: BlindInfoProps) {
   if (breakActive || currentLevel.isBreak) {
     const resumeLevel = breakActive ? currentLevel : nextLevel;
     return (
-      <div className="flex flex-col items-center gap-2 text-center">
+      <span className="flex flex-col items-center gap-2 text-center">
         <span className="rounded-md bg-amber-100 px-4 py-1.5 text-xl font-bold text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
           INTERVALO
         </span>
         {resumeLevel && !resumeLevel.isBreak && (
-          <p className="text-sm text-muted-foreground">
+          <span className="block text-sm text-muted-foreground">
             Retorna: SB {formatChips(resumeLevel.smallBlind)} / BB {formatChips(resumeLevel.bigBlind)}
             {resumeLevel.ante > 0 && ` / Ante ${formatChips(resumeLevel.ante)}`}
-          </p>
+          </span>
         )}
-      </div>
+      </span>
     );
   }
 
   return (
-    <div className="flex flex-col items-center gap-1 text-center">
-      <div className="flex items-center gap-2">
+    <span className="flex flex-col items-center gap-1 text-center">
+      <span className="flex items-center gap-2">
         <span className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
           Nivel {currentLevel.level}
         </span>
@@ -37,9 +38,9 @@ export function BlindInfo({ currentLevel, nextLevel, breakActive }: BlindInfoPro
             Add-on disponivel
           </Badge>
         )}
-      </div>
+      </span>
 
-      <div className="flex items-center gap-3 text-3xl font-bold tabular-nums">
+      <span className="flex items-center gap-3 text-3xl font-bold tabular-nums">
         <span>{formatChips(currentLevel.smallBlind)}</span>
         <span className="text-muted-foreground text-xl">/</span>
         <span>{formatChips(currentLevel.bigBlind)}</span>
@@ -49,21 +50,21 @@ export function BlindInfo({ currentLevel, nextLevel, breakActive }: BlindInfoPro
             <span className="text-xl">{formatChips(currentLevel.ante)}</span>
           </>
         )}
-      </div>
+      </span>
 
-      <p className="text-sm text-muted-foreground">
+      <span className="block text-sm text-muted-foreground">
         {currentLevel.isBigAnte ? "SB / BB / Big Ante" : currentLevel.ante > 0 ? "SB / BB / Ante" : "Small Blind / Big Blind"}
-      </p>
+      </span>
 
       {nextLevel ? (
-        <p className="text-sm text-muted-foreground mt-1">
+        <span className="block text-sm text-muted-foreground mt-1">
           {nextLevel.isBreak
             ? `Proximo: Intervalo (${nextLevel.durationMinutes}min)`
             : `Proximo: ${formatChips(nextLevel.smallBlind)} / ${formatChips(nextLevel.bigBlind)}${nextLevel.ante > 0 ? ` / ${formatChips(nextLevel.ante)}` : ""}`}
-        </p>
+        </span>
       ) : (
-        <p className="text-sm text-muted-foreground mt-1">Ultimo nivel</p>
+        <span className="block text-sm text-muted-foreground mt-1">Ultimo nivel</span>
       )}
-    </div>
+    </span>
   );
 }

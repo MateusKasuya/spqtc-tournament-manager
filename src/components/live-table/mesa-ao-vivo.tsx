@@ -14,9 +14,10 @@ import { StickyTimerBar } from "./sticky-timer-bar";
 import { MesaPanelDrawer } from "./mesa-panel-drawer";
 import { expireLevel, updateTournamentStatus } from "@/actions/tournaments";
 import { playLevelSound } from "@/lib/play-level-sound";
-import { clockTone, ringTotalSecs, toIsoOrNull } from "@/lib/tournament-clock";
-import { buildMesaPanels, findCurrentLevel, findNextLevel, type MesaPanelId } from "@/lib/mesa-panels";
+import { clockTone, findCurrentLevel, ringTotalSecs, toIsoOrNull } from "@/lib/tournament-clock";
+import { buildMesaPanels, findNextLevel, type MesaPanelId } from "@/lib/mesa-panels";
 import type { MesaSnapshot } from "@/db/queries/mesa";
+import { formatChips } from "@/lib/format";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
@@ -35,7 +36,7 @@ export function MesaAoVivo({ snapshot: initialSnapshot, isAdmin }: MesaAoVivoPro
   const [openPanel, setOpenPanel] = useState<MesaPanelId | null>(null);
   useWakeLock(isRunning);
 
-  // Só os controles do Relógio usam a posição: -1 no Nível 0, como sempre.
+  // Posição para os controles do Relógio, que seguem como antes (-1 no Nível 0).
   const currentIndex = blindLevels.findIndex((b) => b.level === tournament.currentBlindLevel);
   const currentLevel = findCurrentLevel(tournament, blindLevels);
   const nextLevel = currentLevel && findNextLevel(currentLevel, blindLevels);
@@ -137,7 +138,7 @@ export function MesaAoVivo({ snapshot: initialSnapshot, isAdmin }: MesaAoVivoPro
           type="button"
           onClick={() => setOpenPanel("level")}
           aria-haspopup="dialog"
-          aria-label={`${isBreak ? "Intervalo" : `Nivel ${currentLevel.level}`}: ver estrutura de blinds`}
+          aria-label={`${isBreak ? "Intervalo" : `Nivel ${currentLevel.level}, ${formatChips(currentLevel.smallBlind)} / ${formatChips(currentLevel.bigBlind)}`}: ver estrutura de blinds`}
           className="rounded-lg px-4 py-2 transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <BlindInfo
