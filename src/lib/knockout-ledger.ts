@@ -4,6 +4,8 @@
 // ids a apagar, um patch por participante. Sem banco, sem relógio.
 // Também é o único lugar das fórmulas de Bounty: inicial, de rebuy e a divisão.
 
+import { STATUS_RULES, statusAllows, type TournamentStatus } from "@/lib/tournament-status";
+
 export type TournamentType = "normal" | "bounty_builder";
 export type ParticipantStatus = "registered" | "playing" | "eliminated" | "finished";
 export type LedgerRowType = "bounty_earned" | "rebuy";
@@ -42,6 +44,8 @@ export interface LedgerRow {
 }
 
 export interface LedgerSnapshot {
+  // Knockout e Desfazer só com o torneio Rodando (STATUS_RULES.live).
+  tournamentStatus: TournamentStatus;
   rules: LedgerRules;
   participants: LedgerParticipant[];
   rows: LedgerRow[];
@@ -156,7 +160,15 @@ export function renumberedFinalPositions(
   return new Map(fallen.map((p, i) => [p.id, base + 1 + i]));
 }
 
+// Recusa do Status do torneio: relido no lock, pega um Encerrar ou Cancelar que
+// entrou entre a checagem de fora e a transação.
+function statusRefusal(snapshot: LedgerSnapshot): { error: string } | null {
+  return statusAllows(STATUS_RULES.live, snapshot.tournamentStatus) ? null : { error: STATUS_RULES.live.error };
+}
+
 export function checkKnockout(snapshot: LedgerSnapshot, event: KnockoutEvent): { error: string } | null {
+  const refused = statusRefusal(snapshot);
+  if (refused) return refused;
   const { rules, participants } = snapshot;
   const victim = participants.find((p) => p.id === event.victimId);
   if (!victim) return { error: "Participante nao encontrado" };
@@ -185,6 +197,8 @@ export function checkKnockout(snapshot: LedgerSnapshot, event: KnockoutEvent): {
 }
 
 export function checkUndo(snapshot: LedgerSnapshot, req: UndoRequest): { error: string } | null {
+  const refused = statusRefusal(snapshot);
+  if (refused) return refused;
   const victim = snapshot.participants.find((p) => p.id === req.victimId);
   if (!victim) return { error: "Participante nao encontrado" };
   if (req.kind === "elimination") {

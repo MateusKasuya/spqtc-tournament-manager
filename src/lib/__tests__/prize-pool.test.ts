@@ -39,7 +39,7 @@ function makeSnapshot(n: number): LedgerSnapshot {
     eliminatedByIds: [],
     eliminatedAt: null,
   }));
-  return { rules: RULES, participants, rows: [], now: new Date("2026-09-24T12:00:00.000Z") };
+  return { tournamentStatus: "running", rules: RULES, participants, rows: [], now: new Date("2026-09-24T12:00:00.000Z") };
 }
 
 // Simula o adapter do ledger: aplica o plano sobre o snapshot.
