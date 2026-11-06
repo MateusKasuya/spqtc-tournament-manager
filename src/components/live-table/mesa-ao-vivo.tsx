@@ -228,7 +228,12 @@ export function MesaAoVivo({ snapshot: initialSnapshot, isAdmin }: MesaAoVivoPro
       )}
     </div>
 
-      <MesaPanelDrawer openPanel={openPanel} view={panelsView} onClose={() => setOpenPanel(null)} />
+      <MesaPanelDrawer
+        openPanel={openPanel}
+        view={panelsView}
+        onOpenPanel={setOpenPanel}
+        onClose={() => setOpenPanel(null)}
+      />
     </>
   );
 }

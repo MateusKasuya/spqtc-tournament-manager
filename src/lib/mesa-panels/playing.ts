@@ -10,3 +10,9 @@ export function isPlaying(participant: Pick<MesaParticipant, "status">): boolean
 export function countPlaying(participants: Pick<MesaParticipant, "status">[]): number {
   return participants.filter(isPlaying).length;
 }
+
+// Participantes com buy-in confirmado, Em jogo ou não: a única contagem "com
+// buy-in" dos painéis (Jogadores, Fichas em jogo e Prize pool).
+export function countWithBuyIn(participants: Pick<MesaParticipant, "buyInPaid">[]): number {
+  return participants.filter((p) => p.buyInPaid).length;
+}

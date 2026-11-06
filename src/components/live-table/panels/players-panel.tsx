@@ -1,19 +1,30 @@
-import { Trophy } from "lucide-react";
+import { ChevronRight, Trophy } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/format";
 import type {
   PlayersCounts,
   PlayersPanel as PlayersPanelModel,
   PlayersPlayingEntry,
 } from "@/lib/mesa-panels";
+import { MoneyLineSummary } from "./money-line-summary";
 
-// Painel Jogadores: as contagens do card, o campeão em destaque, quem está Em jogo,
-// as Eliminações com a Posição final e quem está Aguardando buy-in. Recebe o modelo
-// da derivação e só desenha.
-export function PlayersPanel({ panel }: { panel: PlayersPanelModel }) {
+// Painel Jogadores: as contagens do card, a linha de dinheiro com o atalho para o
+// Prize pool, o campeão em destaque, quem está Em jogo, as Eliminações com a Posição
+// final e quem está Aguardando buy-in. Recebe o modelo da derivação e só desenha.
+export function PlayersPanel({ panel, onOpenPrizePool }: { panel: PlayersPanelModel; onOpenPrizePool: () => void }) {
   return (
     <div className="flex flex-col gap-6">
       <Header counts={panel.counts} />
+      {panel.moneyLine && (
+        <section className="flex flex-col gap-2">
+          <MoneyLineSummary moneyLine={panel.moneyLine} />
+          <Button variant="outline" size="sm" className="self-start" onClick={onOpenPrizePool}>
+            Ver Prize pool
+            <ChevronRight data-icon="inline-end" aria-hidden />
+          </Button>
+        </section>
+      )}
       {panel.champion && (
         <p className="flex items-center gap-2 rounded-md bg-amber-500 px-3 py-2 text-sm font-semibold text-amber-950">
           <Trophy className="h-4 w-4" aria-hidden />

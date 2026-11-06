@@ -6,6 +6,7 @@ import type { MesaPrizePosition } from "@/db/queries/mesa";
 import type { CardFace, MesaPanelsInput } from "./types";
 import { countPrizedPositions, deriveMoneyLine, moneyBoundary, type MoneyLine } from "./money-line";
 import { hasPrizesPaid } from "./prizes-paid";
+import { countWithBuyIn } from "./playing";
 
 // A conta do Prize pool (CONTEXT.md, cluster Prêmios), em centavos. Os valores de
 // cada origem são o que entrou de fato no torneio (o resumo financeiro), nunca a
@@ -73,7 +74,7 @@ export interface PrizePoolSlice {
 function derivePrizedPositionsAboveBuyIns({ snapshot, isAdmin }: MesaPanelsInput) {
   if (!isAdmin) return null;
   const prizedPositions = countPrizedPositions(snapshot.prizeStructure);
-  const buyIns = snapshot.participants.filter((p) => p.buyInPaid).length;
+  const buyIns = countWithBuyIn(snapshot.participants);
   return prizedPositions > buyIns ? { prizedPositions, buyIns } : null;
 }
 
