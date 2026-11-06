@@ -9,7 +9,7 @@ export function BountyPanel({ panel }: { panel: BountyPanelModel }) {
   return (
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-semibold">Bounty de cada jogador em jogo</h3>
+        <h3 className="text-sm font-semibold">Bounty de cada Participante em jogo</h3>
         {panel.inPlay.length === 0 ? (
           <p className="text-sm text-muted-foreground">Ninguem em jogo.</p>
         ) : (
@@ -40,7 +40,7 @@ export function BountyPanel({ panel }: { panel: BountyPanelModel }) {
               <li key={e.participantId} className="flex flex-col gap-0.5 border-b py-2">
                 <div className="flex items-baseline justify-between gap-3 text-sm">
                   <span className="font-medium">{e.name}</span>
-                  <span className="tabular-nums whitespace-nowrap">{formatCurrency(e.collected)}</span>
+                  <span className="tabular-nums whitespace-nowrap">{formatCurrency(e.bountyCollected)}</span>
                 </div>
                 {e.champion && (
                   <p className="text-xs text-muted-foreground">
@@ -59,11 +59,11 @@ export function BountyPanel({ panel }: { panel: BountyPanelModel }) {
           <tbody>
             <Row label="Bounty em jogo" amount={panel.bountyInPlay} />
             <Row label="Bounties coletados" amount={panel.collectedTotal} />
-            <Row label="Bounty armado" amount={panel.allocated} total />
+            <Row label="Bounty armado" amount={panel.bountyAllocated} total />
           </tbody>
         </table>
         <p className="text-xs text-muted-foreground">
-          O Bounty armado e o mesmo que sai do Prize pool.
+          Bounty armado = Bounty em jogo + Bounties coletados. E o mesmo Bounty armado que sai do Prize pool.
         </p>
       </section>
     </div>

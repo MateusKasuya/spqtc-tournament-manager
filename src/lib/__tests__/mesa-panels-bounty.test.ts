@@ -76,9 +76,9 @@ describe("painel Bounty em jogo", () => {
     const { panel } = bountyOf([vice, campeao, terceiro, semKnockout]);
 
     expect(panel.collected).toEqual([
-      { participantId: campeao.id, name: "Campeao", collected: 9000, champion: true },
-      { participantId: terceiro.id, name: "Terceiro", collected: 5000, champion: false },
-      { participantId: vice.id, name: "Vice", collected: 3000, champion: false },
+      { participantId: campeao.id, name: "Campeao", bountyCollected: 9000, champion: true },
+      { participantId: terceiro.id, name: "Terceiro", bountyCollected: 5000, champion: false },
+      { participantId: vice.id, name: "Vice", bountyCollected: 3000, champion: false },
     ]);
     expect(panel.collectedTotal).toBe(17000);
     // Depois da Coroação não há Bounty em jogo.
@@ -98,8 +98,8 @@ describe("painel Bounty em jogo", () => {
 
     const { bounty, prizePool } = buildMesaPanels(makeInput({ snapshot }));
 
-    expect(bounty?.panel.allocated).toBe(14000);
-    expect(bounty?.panel.allocated).toBe(prizePool.panel.bountyAllocated);
-    expect(bounty?.panel.allocated).toBe((bounty?.panel.bountyInPlay ?? 0) + (bounty?.panel.collectedTotal ?? 0));
+    expect(bounty?.panel.bountyAllocated).toBe(14000);
+    expect(bounty?.panel.bountyAllocated).toBe(prizePool.panel.bountyAllocated);
+    expect(bounty?.panel.bountyAllocated).toBe((bounty?.panel.bountyInPlay ?? 0) + (bounty?.panel.collectedTotal ?? 0));
   });
 });

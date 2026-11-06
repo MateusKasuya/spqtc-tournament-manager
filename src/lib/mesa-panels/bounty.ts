@@ -15,12 +15,13 @@ export interface BountyInPlayEntry {
 export interface BountyCollectedEntry {
   participantId: number;
   name: string;
-  collected: number;
+  bountyCollected: number;
   // O do campeão inclui o próprio Bounty coletado na Coroação.
   champion: boolean;
 }
 
-// Painel Bounty em jogo, em centavos. Listas do maior para o menor.
+// Painel Bounty em jogo, em centavos. Listas do maior para o menor; o Bounty
+// coletado lista só quem já coletou algum.
 export interface BountyPanel {
   inPlay: BountyInPlayEntry[];
   bountyInPlay: number;
@@ -28,7 +29,7 @@ export interface BountyPanel {
   collectedTotal: number;
   // O mesmo Bounty armado que o Prize pool desconta. Pela Conservação, é
   // bountyInPlay + collectedTotal: a conferência explica, não diagnostica.
-  allocated: number;
+  bountyAllocated: number;
 }
 
 export interface BountySlice {
@@ -55,16 +56,16 @@ export function deriveBounty({ snapshot }: MesaPanelsInput): BountySlice | null 
     .sort((a, b) => b.bounty - a.bounty);
   const collected: BountyCollectedEntry[] = participants
     .filter((p) => p.bountiesCollected > 0)
-    .map((p) => ({ participantId: p.id, name: displayName(p), collected: p.bountiesCollected, champion: p.status === "finished" }))
-    .sort((a, b) => b.collected - a.collected);
+    .map((p) => ({ participantId: p.id, name: displayName(p), bountyCollected: p.bountiesCollected, champion: p.status === "finished" }))
+    .sort((a, b) => b.bountyCollected - a.bountyCollected);
 
   const bountyInPlay = inPlay.reduce((sum, e) => sum + e.bounty, 0);
   const panel: BountyPanel = {
     inPlay,
     bountyInPlay,
     collected,
-    collectedTotal: collected.reduce((sum, e) => sum + e.collected, 0),
-    allocated: computePrizePool({ rules: tournament, collected: financialSummary, participants }).bountyAllocated,
+    collectedTotal: collected.reduce((sum, e) => sum + e.bountyCollected, 0),
+    bountyAllocated: computePrizePool({ rules: tournament, collected: financialSummary, participants }).bountyAllocated,
   };
   return {
     card: { label: "Bounty em jogo", value: formatCurrency(bountyInPlay), supportLines: [] },
