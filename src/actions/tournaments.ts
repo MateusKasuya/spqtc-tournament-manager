@@ -272,7 +272,24 @@ export async function deleteTournament(id: number) {
   const auth = await requireAdmin();
   if ("error" in auth) return auth;
 
-  await db.delete(tournaments).where(eq(tournaments.id, id));
+  const loaded = await getTournamentRequiringStatus(id, STATUS_RULES.deletion);
+  if ("error" in loaded) return loaded;
+
+  // Trava a linha e relê: um Iniciar ou Encerrar no meio não pode deixar
+  // apagar um torneio Rodando ou Encerrado.
+  const refusal = await db.transaction(async (tx) => {
+    await lockTournament(tx, id);
+    const [current] = await tx
+      .select({ status: tournaments.status })
+      .from(tournaments)
+      .where(eq(tournaments.id, id));
+    if (!current) return "Torneio nao encontrado";
+    if (!statusAllows(STATUS_RULES.deletion, current.status)) return STATUS_RULES.deletion.error;
+
+    await tx.delete(tournaments).where(eq(tournaments.id, id));
+    return null;
+  });
+  if (refusal) return { error: refusal };
 
   revalidatePath("/torneios");
   redirect("/torneios");

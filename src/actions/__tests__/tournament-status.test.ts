@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import {
   addParticipant,
@@ -28,11 +28,14 @@ import {
   startBreak,
   endBreak,
   updateTournamentStatus,
+  deleteTournament,
 } from "@/actions/tournaments";
+import * as tournamentQueries from "@/db/queries/tournaments";
+import { redirect } from "next/navigation";
 import { testDb } from "@/test/db";
 import * as schema from "@/db/schema";
 import { tournaments, participants } from "@/db/schema";
-import { STATUS_RULES, type TournamentStatus } from "@/lib/tournament-status";
+import { STATUS_RULES, statusAllows, type TournamentStatus } from "@/lib/tournament-status";
 import { seedTournament, seedPlayer, seedParticipant, seedPlayingParticipants, makeLevels } from "@/test/setup";
 
 const ALL_STATUSES: TournamentStatus[] = ["pending", "running", "finished", "cancelled"];
@@ -223,6 +226,95 @@ describeGroup("estruturas de blinds e de premios: Pendente ou Rodando", STATUS_R
     },
   },
 ]);
+
+// Excluir apaga em cascade participantes, transações e estruturas; um Encerrado
+// carrega o histórico de dinheiro e os pontos do ranking da temporada.
+describe("exclusao: Pendente ou Cancelado", () => {
+  beforeEach(() => {
+    vi.mocked(redirect).mockClear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  // Torneio com participante, buy-in, estruturas de blinds e de prêmios: tudo
+  // que o cascade apagaria.
+  async function seedFull(status: TournamentStatus) {
+    const t = await seedTournament({ status: "running" });
+    await clockRunning(t);
+    expect(await updatePrizeStructure(t, [{ position: 1, percentage: 100 }])).not.toHaveProperty("error");
+    const p = await seedParticipant(t, await seedPlayer());
+    expect(await confirmBuyIn(p)).not.toHaveProperty("error");
+    await setStatus(t, status);
+    return t;
+  }
+
+  const byId = (a: number, b: number) => a - b;
+
+  // Ids dos torneios que existem e dos que têm linhas em cada tabela filha.
+  async function tournamentsWithRows() {
+    const ids = (rows: { tournamentId: number }[]) => [...new Set(rows.map((r) => r.tournamentId))].sort(byId);
+    const ts = await testDb.select({ id: tournaments.id }).from(tournaments);
+    return {
+      tournaments: ts.map((r) => r.id).sort(byId),
+      children: [
+        ids(await testDb.select({ tournamentId: schema.participants.tournamentId }).from(schema.participants)),
+        ids(await testDb.select({ tournamentId: schema.transactions.tournamentId }).from(schema.transactions)),
+        ids(await testDb.select({ tournamentId: schema.blindStructures.tournamentId }).from(schema.blindStructures)),
+        ids(await testDb.select({ tournamentId: schema.prizeStructures.tournamentId }).from(schema.prizeStructures)),
+      ],
+    };
+  }
+
+  const forbidden = ALL_STATUSES.filter((s) => !statusAllows(STATUS_RULES.deletion, s));
+  const allowed = ALL_STATUSES.filter((s) => statusAllows(STATUS_RULES.deletion, s));
+
+  it("so Pendente e Cancelado permitem excluir", () => {
+    expect(allowed).toEqual(["pending", "cancelled"]);
+  });
+
+  it.each(forbidden)("deleteTournament com torneio %s e recusado sem apagar nada", async (status) => {
+    const t = await seedFull(status);
+    const before = await dumpDb();
+
+    expect(await deleteTournament(t)).toEqual({ error: STATUS_RULES.deletion.error });
+    expect(await dumpDb()).toEqual(before);
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  it.each(allowed)("deleteTournament com torneio %s apaga o torneio e as linhas filhas", async (status) => {
+    const t = await seedFull(status);
+    const other = await seedFull("pending");
+    const both = [t, other].sort(byId);
+    expect(await tournamentsWithRows()).toEqual({ tournaments: both, children: [both, both, both, both] });
+
+    expect(await deleteTournament(t)).toBeUndefined();
+    expect(redirect).toHaveBeenCalledWith("/torneios");
+
+    expect(await tournamentsWithRows()).toEqual({ tournaments: [other], children: [[other], [other], [other], [other]] });
+  });
+
+  it("deleteTournament com id inexistente devolve 'Torneio nao encontrado'", async () => {
+    expect(await deleteTournament(999999)).toEqual({ error: "Torneio nao encontrado" });
+    expect(redirect).not.toHaveBeenCalled();
+  });
+
+  // O pglite tem uma conexão só, então a corrida não se reproduz: a leitura de
+  // fora do lock devolve Pendente enquanto o banco já está Encerrado.
+  it("deleteTournament rele o Status dentro do lock e recusa se o torneio foi encerrado no meio", async () => {
+    const t = await seedFull("finished");
+    const [row] = await testDb.select().from(tournaments).where(eq(tournaments.id, t));
+    vi.spyOn(tournamentQueries, "getTournamentRequiringStatus").mockResolvedValueOnce({
+      tournament: { ...row, status: "pending" },
+    });
+    const before = await dumpDb();
+
+    expect(await deleteTournament(t)).toEqual({ error: STATUS_RULES.deletion.error });
+    expect(await dumpDb()).toEqual(before);
+    expect(redirect).not.toHaveBeenCalled();
+  });
+});
 
 // Transições do Status do torneio: Encerrado e Cancelado são finais; Rodando não volta a Pendente.
 const ALLOWED_TRANSITIONS: Record<TournamentStatus, readonly TournamentStatus[]> = {
