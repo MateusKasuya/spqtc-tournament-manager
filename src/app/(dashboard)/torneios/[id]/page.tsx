@@ -18,6 +18,7 @@ import { FinancialSummary } from "@/components/tournament/financial-summary";
 import { PayoutDialog } from "@/components/tournament/payout-dialog";
 import { DeleteTournamentButton } from "@/components/tournament/delete-tournament-button";
 import { TournamentStatusButton } from "@/components/tournament/tournament-status-button";
+import { CancelTournamentButton } from "@/components/tournament/cancel-tournament-button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -126,7 +127,13 @@ export default async function TorneioPage({ params }: PageProps) {
             tournamentId={tournamentId}
             currentStatus={tournament.status}
           />
-          <DeleteTournamentButton tournamentId={tournamentId} />
+          <CancelTournamentButton
+            tournamentId={tournamentId}
+            currentStatus={tournament.status}
+          />
+          {statusAllows(STATUS_RULES.deletion, tournament.status) && (
+            <DeleteTournamentButton tournamentId={tournamentId} />
+          )}
         </div>
       )}
 

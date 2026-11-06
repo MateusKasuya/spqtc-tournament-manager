@@ -51,6 +51,12 @@ export const STATUS_RULES = {
     error:
       "Valores de buy-in, Rebuy e add-on, taxa de ranking, tipo e percentual de Bounty so podem ser alterados com o torneio pendente",
   },
+  // Excluir o torneio: um Rodando é cancelado antes; um Encerrado carrega o
+  // histórico de dinheiro e os pontos do ranking da temporada.
+  deletion: {
+    allowed: ["pending", "cancelled"],
+    error: "Torneio so pode ser excluido com o torneio pendente ou cancelado",
+  },
 } as const satisfies Record<string, StatusRule>;
 
 // Transições do Status do torneio (CONTEXT.md): Encerrado e Cancelado são

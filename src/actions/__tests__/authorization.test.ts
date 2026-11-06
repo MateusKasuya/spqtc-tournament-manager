@@ -17,6 +17,9 @@ interface Fixture {
   player: number;
   participant: number;
   season: number;
+  // Pendente: excluir só é permitido em Pendente ou Cancelado, então com o
+  // torneio Rodando a recusa não viria só do gate de admin.
+  pendingTournament: number;
 }
 
 type AdminAction = (f: Fixture) => Promise<unknown>;
@@ -39,7 +42,7 @@ const ADMIN_ACTIONS: Record<string, { module: object; actions: Record<string, Ad
       createTournament: () => tournamentActions.createTournament(form(TOURNAMENT_FORM)),
       updateTournament: (f) => tournamentActions.updateTournament(f.t, form(TOURNAMENT_FORM)),
       updateTournamentStatus: (f) => tournamentActions.updateTournamentStatus(f.t, "finished"),
-      deleteTournament: (f) => tournamentActions.deleteTournament(f.t),
+      deleteTournament: (f) => tournamentActions.deleteTournament(f.pendingTournament),
       updateBlindStructure: (f) => tournamentActions.updateBlindStructure(f.t, makeLevels(2)),
       deletePrizeStructure: (f) => tournamentActions.deletePrizeStructure(f.t),
       updatePrizeStructure: (f) => tournamentActions.updatePrizeStructure(f.t, [{ position: 1, percentage: 100 }]),
@@ -142,7 +145,8 @@ async function seedFixture(): Promise<Fixture> {
   const participant = await seedParticipant(t, player, { status: "playing", buyInPaid: true });
   await testDb.insert(schema.blindTemplates).values({ name: "B", levels: makeLevels(1), createdBy: TEST_USER_ID });
   await testDb.insert(schema.prizeTemplates).values({ name: "P", levels: [{ position: 1, percentage: 100 }], createdBy: TEST_USER_ID });
-  return { t, player, participant, season };
+  const pendingTournament = await seedTournament({ status: "pending" });
+  return { t, player, participant, season, pendingTournament };
 }
 
 const ROWS = Object.entries(ADMIN_ACTIONS).flatMap(([file, { actions }]) =>
