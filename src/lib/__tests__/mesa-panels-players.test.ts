@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildMesaPanels } from "@/lib/mesa-panels";
-import type { MesaParticipant, MesaTournament } from "@/db/queries/mesa";
+import type { MesaParticipant, MesaPrizePosition, MesaTournament } from "@/db/queries/mesa";
 import { makeInput, makeParticipant, makeSnapshot, makeTournament } from "./mesa-panels-fixture";
 
 describe("card Jogadores", () => {
@@ -157,5 +157,104 @@ describe("painel Jogadores: campeão e Aguardando buy-in", () => {
 
     expect(panel.awaitingBuyIn.map((p) => p.name)).toEqual(["Bibi", "Zeca"]);
     expect(panel.playing.map((p) => p.name)).toEqual(["Ana"]);
+  });
+});
+
+// Linha de dinheiro (#84): a mesma derivação do Prize pool (`deriveMoneyLine`).
+const PAYS_THREE = [
+  { position: 1, percentage: 50 },
+  { position: 2, percentage: 30 },
+  { position: 3, percentage: 20 },
+];
+
+function playersSlice(participants: MesaParticipant[], prizeStructure: MesaPrizePosition[] = PAYS_THREE) {
+  return buildMesaPanels(makeInput({ snapshot: makeSnapshot({ participants, prizeStructure }) })).players;
+}
+
+// N Em jogo e mais uma Eliminação, que conta no "com buy-in".
+function playersWithPlaying(playing: number, prizeStructure?: MesaPrizePosition[]) {
+  const participants = [
+    ...Array.from({ length: playing }, () => makeParticipant()),
+    makeParticipant({ status: "eliminated", finishPosition: playing + 1 }),
+  ];
+  return playersSlice(participants, prizeStructure);
+}
+
+const beforeFirstBuyIn = () => [
+  makeParticipant({ status: "registered", buyInPaid: false }),
+  makeParticipant({ status: "registered", buyInPaid: false }),
+];
+
+const afterCoronation = () => [
+  makeParticipant({ status: "finished", finishPosition: 1 }),
+  makeParticipant({ status: "eliminated", finishPosition: 2 }),
+  makeParticipant({ status: "eliminated", finishPosition: 3 }),
+];
+
+describe("card Jogadores: linha de dinheiro", () => {
+  it("antes do dinheiro mostra quantas Eliminações faltam", () => {
+    expect(playersWithPlaying(5).card.supportLines).toEqual(["de 6 com buy-in", "faltam 2 p/ o dinheiro"]);
+  });
+
+  it("na Bolha mostra Bolha", () => {
+    expect(playersWithPlaying(4).card.supportLines).toEqual(["de 5 com buy-in", "Bolha"]);
+  });
+
+  it("No dinheiro não mostra nada da linha", () => {
+    expect(playersWithPlaying(3).card.supportLines).toEqual(["de 4 com buy-in"]);
+  });
+
+  it("com 1 Em jogo não mostra nada da linha", () => {
+    expect(playersWithPlaying(1).card.supportLines).toEqual(["de 2 com buy-in"]);
+  });
+
+  it("antes do primeiro buy-in e depois da Coroação não mostra a linha", () => {
+    expect(playersSlice(beforeFirstBuyIn()).card.supportLines).toEqual(["de 0 com buy-in"]);
+    expect(playersSlice(afterCoronation()).card.supportLines).toEqual(["de 3 com buy-in"]);
+  });
+
+  it("sem Posições premiadas não mostra a linha", () => {
+    expect(playersWithPlaying(5, []).card.supportLines).toEqual(["de 6 com buy-in"]);
+    expect(playersWithPlaying(5, [{ position: 1, percentage: 0 }]).card.supportLines).toEqual(["de 6 com buy-in"]);
+  });
+});
+
+describe("painel Jogadores: linha de dinheiro", () => {
+  it("antes do dinheiro diz quantas Eliminações faltam e até onde paga", () => {
+    expect(playersWithPlaying(5).panel.moneyLine).toEqual({
+      paysThrough: 3,
+      playing: 5,
+      remaining: 2,
+      state: "beforeMoney",
+    });
+  });
+
+  it("com uma Eliminação para o dinheiro está na Bolha", () => {
+    expect(playersWithPlaying(4).panel.moneyLine).toMatchObject({ remaining: 1, state: "bubble" });
+  });
+
+  it("com Em jogo igual à fronteira está No dinheiro", () => {
+    expect(playersWithPlaying(3).panel.moneyLine).toMatchObject({ remaining: 0, state: "inTheMoney" });
+  });
+
+  it("com 1 Em jogo está No dinheiro", () => {
+    expect(playersWithPlaying(1).panel.moneyLine).toMatchObject({ playing: 1, state: "inTheMoney" });
+  });
+
+  it("é a mesma do painel do Prize pool", () => {
+    const participants = [makeParticipant(), makeParticipant(), makeParticipant(), makeParticipant()];
+    const snapshot = makeSnapshot({ participants, prizeStructure: PAYS_THREE });
+    const view = buildMesaPanels(makeInput({ snapshot }));
+    expect(view.players.panel.moneyLine).toEqual(view.prizePool.panel.moneyLine);
+  });
+
+  it("antes do primeiro buy-in e depois da Coroação não há linha", () => {
+    expect(playersSlice(beforeFirstBuyIn()).panel.moneyLine).toBeNull();
+    expect(playersSlice(afterCoronation()).panel.moneyLine).toBeNull();
+  });
+
+  it("sem Posições premiadas não há linha", () => {
+    expect(playersWithPlaying(5, []).panel.moneyLine).toBeNull();
+    expect(playersWithPlaying(5, [{ position: 1, percentage: 0 }]).panel.moneyLine).toBeNull();
   });
 });

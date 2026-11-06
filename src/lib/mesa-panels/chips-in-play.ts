@@ -2,6 +2,7 @@ import { formatChips } from "@/lib/format";
 import { allowsAddon, allowsBonusChip, allowsRebuy, rebuyLimit } from "@/lib/tournament-entries";
 import type { MesaSnapshot, MesaTournament } from "@/db/queries/mesa";
 import type { CardFace, MesaPanelsInput } from "./types";
+import { countWithBuyIn } from "./playing";
 
 export type ChipSource = "buyIn" | "rebuy" | "addon" | "bonus";
 
@@ -38,7 +39,7 @@ export interface ChipsInPlaySlice {
 // (o Rebuy duplo já conta 2 no rebuyCount), add-ons e bônus. Nenhuma ficha sai do jogo.
 export function computeChipsInPlay({ tournament, participants }: Pick<MesaSnapshot, "tournament" | "participants">): Pick<ChipsInPlayPanel, "lines" | "total"> {
   const counts: Record<ChipSource, number> = {
-    buyIn: participants.filter((p) => p.buyInPaid).length,
+    buyIn: countWithBuyIn(participants),
     rebuy: participants.reduce((sum, p) => sum + p.rebuyCount, 0),
     addon: participants.reduce((sum, p) => sum + p.addonCount, 0),
     bonus: participants.filter((p) => p.bonusChipUsed).length,

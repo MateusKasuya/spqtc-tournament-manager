@@ -1,6 +1,7 @@
 import { displayName } from "@/lib/display-name";
 import { isBountyBuilder } from "@/lib/knockout-ledger";
-import { isPlaying } from "./playing";
+import { countWithBuyIn, isPlaying } from "./playing";
+import { deriveMoneyLine, type MoneyLine } from "./money-line";
 import type { MesaParticipant } from "@/db/queries/mesa";
 import type { CardFace, MesaPanelsInput } from "./types";
 
@@ -41,6 +42,9 @@ export interface PlayersPanel {
   // Depois da Coroação; `null` antes dela ou quando ela é desfeita.
   champion: PlayersNamedEntry | null;
   awaitingBuyIn: PlayersNamedEntry[];
+  // A Fronteira do dinheiro do painel do Prize pool, a mesma conta; `null` quando
+  // ela não aparece (ninguém Em jogo ou sem Posições premiadas).
+  moneyLine: MoneyLine | null;
 }
 
 export interface PlayersSlice {
@@ -65,6 +69,13 @@ function positionOrder(finishPosition: number | null): number {
   return finishPosition ?? Number.MAX_SAFE_INTEGER;
 }
 
+// Na face só os estados antes do dinheiro; No dinheiro ela não diz nada disso.
+function moneyLineSupportLine(moneyLine: MoneyLine | null): string | null {
+  if (moneyLine?.state === "bubble") return "Bolha";
+  if (moneyLine?.state === "beforeMoney") return `faltam ${moneyLine.remaining} p/ o dinheiro`;
+  return null;
+}
+
 export function derivePlayers({ snapshot }: MesaPanelsInput): PlayersSlice {
   const { participants, tournament } = snapshot;
   const withBounty = isBountyBuilder(tournament);
@@ -75,12 +86,18 @@ export function derivePlayers({ snapshot }: MesaPanelsInput): PlayersSlice {
   const champion = participants.find((p) => p.status === "finished");
   const counts: PlayersCounts = {
     playing: playing.length,
-    withBuyIn: participants.filter((p) => p.buyInPaid).length,
+    withBuyIn: countWithBuyIn(participants),
     eliminated: eliminated.length,
     awaitingBuyIn: awaiting.length,
   };
+  const moneyLine = deriveMoneyLine({ participants, prizeStructure: snapshot.prizeStructure });
+  const moneyLineText = moneyLineSupportLine(moneyLine);
   return {
-    card: { label: "Jogadores", value: `${counts.playing}`, supportLines: [`de ${counts.withBuyIn} com buy-in`] },
+    card: {
+      label: "Jogadores",
+      value: `${counts.playing}`,
+      supportLines: [`de ${counts.withBuyIn} com buy-in`, ...(moneyLineText ? [moneyLineText] : [])],
+    },
     panel: {
       counts,
       playing: playing
@@ -97,6 +114,7 @@ export function derivePlayers({ snapshot }: MesaPanelsInput): PlayersSlice {
         .sort((a, b) => positionOrder(a.finishPosition) - positionOrder(b.finishPosition)),
       champion: champion ? toNamedEntry(champion) : null,
       awaitingBuyIn: awaiting.map(toNamedEntry).sort(byDisplayName),
+      moneyLine,
     },
   };
 }

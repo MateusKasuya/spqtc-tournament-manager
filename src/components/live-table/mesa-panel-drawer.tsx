@@ -22,12 +22,14 @@ const PANEL_TITLE: Record<MesaPanelId, string> = {
 interface MesaPanelDrawerProps {
   openPanel: MesaPanelId | null;
   view: MesaPanelsView;
+  // Troca o painel aberto sem fechar a gaveta (o atalho do Jogadores para o Prize pool).
+  onOpenPanel: (panel: MesaPanelId) => void;
   onClose: () => void;
 }
 
 // Gaveta só de consulta com o painel aberto. Quem guarda qual painel está aberto
 // é a mesa: o snapshot é re-semeado a cada ressincronização e a gaveta não fecha.
-export function MesaPanelDrawer({ openPanel, view, onClose }: MesaPanelDrawerProps) {
+export function MesaPanelDrawer({ openPanel, view, onOpenPanel, onClose }: MesaPanelDrawerProps) {
   // Mantém o último painel enquanto a gaveta anima a saída, para ela não sair vazia.
   const [shownPanel, setShownPanel] = useState<MesaPanelId | null>(openPanel);
   if (openPanel !== null && openPanel !== shownPanel) setShownPanel(openPanel);
@@ -49,7 +51,7 @@ export function MesaPanelDrawer({ openPanel, view, onClose }: MesaPanelDrawerPro
               <DrawerTitle>{PANEL_TITLE[shownPanel]}</DrawerTitle>
             </DrawerHeader>
             <DrawerBody>
-              <PanelBody panel={shownPanel} view={view} />
+              <PanelBody panel={shownPanel} view={view} onOpenPanel={onOpenPanel} />
             </DrawerBody>
           </>
         )}
@@ -60,10 +62,14 @@ export function MesaPanelDrawer({ openPanel, view, onClose }: MesaPanelDrawerPro
 
 // Um caso por painel, já ligado ao componente do painel: cada ticket de painel
 // preenche só o próprio componente em `panels/`.
-function PanelBody({ panel, view }: { panel: MesaPanelId; view: MesaPanelsView }) {
+function PanelBody({ panel, view, onOpenPanel }: {
+  panel: MesaPanelId;
+  view: MesaPanelsView;
+  onOpenPanel: (panel: MesaPanelId) => void;
+}) {
   switch (panel) {
     case "players":
-      return <PlayersPanel panel={view.players.panel} />;
+      return <PlayersPanel panel={view.players.panel} onOpenPrizePool={() => onOpenPanel("prizePool")} />;
     case "averageStack":
       return <AverageStackPanel panel={view.averageStack.panel} />;
     case "chipsInPlay":
