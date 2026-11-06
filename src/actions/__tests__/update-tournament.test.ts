@@ -4,17 +4,23 @@ import { updateTournament } from "@/actions/tournaments";
 import { testDb } from "@/test/db";
 import * as schema from "@/db/schema";
 import { tournaments } from "@/db/schema";
-import { CHIP_FIELDS } from "@/lib/tournament-edit";
+import { CHIP_FIELDS, ENTRY_RULES_AFTER_BUY_IN_ERROR } from "@/lib/tournament-edit";
 import { STATUS_RULES, statusAllows, type TournamentStatus } from "@/lib/tournament-status";
 import { seedTournament, seedPlayer, seedParticipant, seedSeason } from "@/test/setup";
 
 // Regra do Status do torneio para editar o torneio (CONTEXT.md):
-// dados: Pendente ou Rodando; fichas: so Pendente; taxa de ranking, tipo e
-// percentual de Bounty: so Pendente e sem buy-in confirmado.
+// dados: Pendente ou Rodando; fichas: so Pendente; valores de buy-in, Rebuy e
+// add-on, taxa de ranking, tipo e percentual de Bounty: so Pendente e sem
+// buy-in confirmado. O valor do add-on fica livre enquanto o add-on nao e
+// permitido e ninguem fez add-on.
 
 const ALL_STATUSES: TournamentStatus[] = ["pending", "running", "finished", "cancelled"];
 
-const BOUNTY_RULE_CHANGES = {
+// O valor do add-on tem casos proprios (ver "valor do add-on"): o seed nao
+// permite add-on, entao ele fica livre.
+const ENTRY_RULE_CHANGES = {
+  buyInAmount: 150,
+  rebuyAmount: 80,
   rankingFeeAmount: 500,
   tournamentType: "bounty_builder",
   bountyPercentage: 60,
@@ -95,7 +101,7 @@ describe("Encerrado e Cancelado: nada e editavel", () => {
 });
 
 describe("torneio Rodando", () => {
-  it("aceita editar nome, data, temporada, valores em dinheiro, limite de Rebuys e permissao de add-on", async () => {
+  it("aceita editar nome, data, temporada, limite de Rebuys e permissao de add-on", async () => {
     const season = await seedSeason();
     const t = await seed({ status: "running" });
     await confirmedBuyIn(t);
@@ -106,9 +112,6 @@ describe("torneio Rodando", () => {
         name: "Novo nome",
         date: "2026-12-24T22:00:00.000Z",
         seasonId: season,
-        buyInAmount: 150,
-        rebuyAmount: 80,
-        addonAmount: 60,
         maxRebuys: 3,
         allowAddon: true,
       })
@@ -119,9 +122,6 @@ describe("torneio Rodando", () => {
     expect(row).toMatchObject({
       name: "Novo nome",
       seasonId: season,
-      buyInAmount: 150,
-      rebuyAmount: 80,
-      addonAmount: 60,
       maxRebuys: 3,
       allowAddon: true,
     });
@@ -137,7 +137,7 @@ describe("torneio Rodando", () => {
     expect(await dumpDb()).toEqual(before);
   });
 
-  it.each(Object.entries(BOUNTY_RULE_CHANGES))("recusa alterar %s e nao grava nada", async (field, value) => {
+  it.each(Object.entries(ENTRY_RULE_CHANGES))("recusa alterar %s e nao grava nada", async (field, value) => {
     const t = await seed({ status: "running" });
     const form = await formFor(t, { [field]: value, name: "Outro nome" });
     const before = await dumpDb();
@@ -146,8 +146,8 @@ describe("torneio Rodando", () => {
     expect(await dumpDb()).toEqual(before);
   });
 
-  it("aceita reenviar fichas, taxa de ranking, tipo e percentual sem mudar, junto de uma edicao de dados", async () => {
-    const t = await seed({ status: "running", rankingFeeAmount: 200, bountyPercentage: 40 });
+  it("aceita reenviar fichas, valores, taxa de ranking, tipo e percentual sem mudar, junto de uma edicao de dados", async () => {
+    const t = await seed({ status: "running", rebuyAmount: 70, addonAmount: 40, rankingFeeAmount: 200, bountyPercentage: 40 });
     await confirmedBuyIn(t);
 
     expect(await updateTournament(t, await formFor(t, { name: "Novo nome" }))).toBeUndefined();
@@ -164,33 +164,64 @@ describe("torneio Pendente", () => {
     expect((await tournamentRow(t))[field]).toBe(12345);
   });
 
-  it.each(Object.entries(BOUNTY_RULE_CHANGES))("aceita alterar %s enquanto nenhum buy-in foi confirmado", async (field, value) => {
+  it.each(Object.entries(ENTRY_RULE_CHANGES))("aceita alterar %s enquanto nenhum buy-in foi confirmado", async (field, value) => {
     const t = await seed({ status: "pending" });
     // Participante inscrito mas Aguardando buy-in nao conta como buy-in confirmado.
     await seedParticipant(t, await seedPlayer(), { status: "registered", buyInPaid: false });
 
     expect(await updateTournament(t, await formFor(t, { [field]: value }))).toBeUndefined();
-    expect((await tournamentRow(t))[field as keyof typeof BOUNTY_RULE_CHANGES]).toBe(value);
+    expect((await tournamentRow(t))[field as keyof typeof ENTRY_RULE_CHANGES]).toBe(value);
   });
 
-  it.each(Object.entries(BOUNTY_RULE_CHANGES))("recusa alterar %s depois do primeiro buy-in confirmado e nao grava nada", async (field, value) => {
+  it.each(Object.entries(ENTRY_RULE_CHANGES))("recusa alterar %s depois do primeiro buy-in confirmado e nao grava nada", async (field, value) => {
     const t = await seed({ status: "pending" });
     await confirmedBuyIn(t);
     const form = await formFor(t, { [field]: value, name: "Outro nome" });
     const before = await dumpDb();
 
-    expect(await updateTournament(t, form)).toEqual({
-      error: "Taxa de ranking, tipo e percentual de Bounty nao podem mudar depois do primeiro buy-in confirmado",
-    });
+    expect(await updateTournament(t, form)).toEqual({ error: ENTRY_RULES_AFTER_BUY_IN_ERROR });
     expect(await dumpDb()).toEqual(before);
   });
 
-  it("aceita reenviar taxa de ranking, tipo e percentual sem mudar com buy-in confirmado", async () => {
-    const t = await seed({ status: "pending", rankingFeeAmount: 200, bountyPercentage: 40 });
+  it("aceita reenviar valores, taxa de ranking, tipo e percentual sem mudar com buy-in confirmado", async () => {
+    const t = await seed({ status: "pending", rebuyAmount: 70, addonAmount: 40, rankingFeeAmount: 200, bountyPercentage: 40 });
     await confirmedBuyIn(t);
 
     expect(await updateTournament(t, await formFor(t, { name: "Novo nome" }))).toBeUndefined();
     expect((await tournamentRow(t)).name).toBe("Novo nome");
+  });
+});
+
+describe("valor do add-on", () => {
+  it.each(["pending", "running"] as const)(
+    "torneio %s sem add-on, com buy-in confirmado, aceita ligar o add-on com valor",
+    async (status) => {
+      const t = await seed({ status, allowAddon: false, addonAmount: 0 });
+      await confirmedBuyIn(t);
+
+      expect(await updateTournament(t, await formFor(t, { allowAddon: true, addonAmount: 3000 }))).toBeUndefined();
+      expect(await tournamentRow(t)).toMatchObject({ allowAddon: true, addonAmount: 3000 });
+    }
+  );
+
+  it("torneio com add-on permitido e buy-in confirmado recusa mudar o valor e nao grava nada", async () => {
+    const t = await seed({ status: "pending", allowAddon: true, addonAmount: 3000 });
+    await confirmedBuyIn(t);
+    const form = await formFor(t, { addonAmount: 2500 });
+    const before = await dumpDb();
+
+    expect(await updateTournament(t, form)).toEqual({ error: ENTRY_RULES_AFTER_BUY_IN_ERROR });
+    expect(await dumpDb()).toEqual(before);
+  });
+
+  it("torneio Rodando com add-on desligado mas com add-on registrado recusa mudar o valor", async () => {
+    const t = await seed({ status: "running", allowAddon: false, addonAmount: 3000 });
+    await seedParticipant(t, await seedPlayer(), { status: "playing", buyInPaid: true, addonCount: 1 });
+    const form = await formFor(t, { addonAmount: 2500 });
+    const before = await dumpDb();
+
+    expect(await updateTournament(t, form)).toEqual({ error: STATUS_RULES.entryRules.error });
+    expect(await dumpDb()).toEqual(before);
   });
 });
 
