@@ -1,7 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { buildMesaPanels } from "@/lib/mesa-panels";
 import { formatCurrency } from "@/lib/format";
+import type { MesaSnapshot } from "@/db/queries/mesa";
 import { makeInput, makeParticipant, makeSnapshot, makeTournament } from "./mesa-panels-fixture";
+
+function prizePool(snapshot: MesaSnapshot) {
+  return buildMesaPanels(makeInput({ snapshot })).prizePool;
+}
 
 describe("card Prize pool", () => {
   it("mostra o Prize pool: Arrecadado menos o Fundo de ranking", () => {
@@ -10,7 +15,7 @@ describe("card Prize pool", () => {
       participants: [makeParticipant(), makeParticipant(), makeParticipant({ status: "registered", buyInPaid: false })],
       financialSummary: { buy_in: 20000, rebuy: 10000, addon: 5000, prize: 0, bounty_earned: 0 },
     });
-    const { card } = buildMesaPanels(makeInput({ snapshot })).prizePool;
+    const { card } = prizePool(snapshot);
 
     expect(card).toEqual({ label: "Prize pool", value: formatCurrency(31000), supportLines: [] });
   });
@@ -24,7 +29,7 @@ describe("card Prize pool", () => {
       ],
       financialSummary: { buy_in: 20000, rebuy: 0, addon: 0, prize: 0, bounty_earned: 0 },
     });
-    const { card } = buildMesaPanels(makeInput({ snapshot })).prizePool;
+    const { card } = prizePool(snapshot);
 
     expect(card.value).toBe(formatCurrency(20000 - 4000 - 10000));
   });
@@ -37,7 +42,7 @@ describe("painel Prize pool", () => {
       participants: [makeParticipant(), makeParticipant(), makeParticipant({ status: "registered", buyInPaid: false })],
       financialSummary: { buy_in: 20000, rebuy: 10000, addon: 5000, prize: 0, bounty_earned: 0 },
     });
-    const { panel } = buildMesaPanels(makeInput({ snapshot })).prizePool;
+    const { panel } = prizePool(snapshot);
 
     expect(panel).toEqual({
       buyIns: 20000,
@@ -47,7 +52,7 @@ describe("painel Prize pool", () => {
       rankingFund: 4000,
       bountyAllocated: null,
       prizePool: 31000,
-      payout: null,
+      prizesPaid: null,
     });
   });
 
@@ -60,7 +65,7 @@ describe("painel Prize pool", () => {
       ],
       financialSummary: { buy_in: 20000, rebuy: 10000, addon: 0, prize: 0, bounty_earned: 0 },
     });
-    const { panel } = buildMesaPanels(makeInput({ snapshot })).prizePool;
+    const { panel } = prizePool(snapshot);
 
     expect(panel).toMatchObject({
       collected: 30000,
@@ -75,7 +80,7 @@ describe("painel Prize pool", () => {
       tournament: makeTournament({ tournamentType: "bounty_builder" }),
       participants: [makeParticipant({ status: "registered", buyInPaid: false })],
     });
-    const { panel } = buildMesaPanels(makeInput({ snapshot })).prizePool;
+    const { panel } = prizePool(snapshot);
 
     expect(panel.bountyAllocated).toBe(0);
   });
@@ -85,9 +90,9 @@ describe("painel Prize pool", () => {
       participants: [makeParticipant()],
       financialSummary: { buy_in: 10000, rebuy: 0, addon: 0, prize: 0, bounty_earned: 0 },
     });
-    const { panel } = buildMesaPanels(makeInput({ snapshot })).prizePool;
+    const { panel } = prizePool(snapshot);
 
-    expect(panel.payout).toBeNull();
+    expect(panel.prizesPaid).toBeNull();
   });
 
   it("com Prêmios pagos mostra o total pago e o Saldo", () => {
@@ -96,10 +101,10 @@ describe("painel Prize pool", () => {
       participants: [makeParticipant(), makeParticipant({ status: "finished", finishPosition: 1 })],
       financialSummary: { buy_in: 20000, rebuy: 10000, addon: 0, prize: 20000, bounty_earned: 0 },
     });
-    const { panel } = buildMesaPanels(makeInput({ snapshot })).prizePool;
+    const { panel } = prizePool(snapshot);
 
     expect(panel.prizePool).toBe(26000);
-    expect(panel.payout).toEqual({ prizesPaid: 20000, saldo: 6000 });
+    expect(panel.prizesPaid).toEqual({ total: 20000, balance: 6000 });
   });
 
   it("mostra o Saldo como está, mesmo negativo", () => {
@@ -108,9 +113,9 @@ describe("painel Prize pool", () => {
       participants: [makeParticipant()],
       financialSummary: { buy_in: 10000, rebuy: 0, addon: 0, prize: 15000, bounty_earned: 0 },
     });
-    const { panel } = buildMesaPanels(makeInput({ snapshot })).prizePool;
+    const { panel } = prizePool(snapshot);
 
-    expect(panel.payout).toEqual({ prizesPaid: 15000, saldo: -5000 });
+    expect(panel.prizesPaid).toEqual({ total: 15000, balance: -5000 });
   });
 
   it("o Prize pool do painel é o mesmo da face do card", () => {
@@ -119,7 +124,7 @@ describe("painel Prize pool", () => {
       participants: [makeParticipant({ currentBounty: 5000, bountiesCollected: 5000 }), makeParticipant({ currentBounty: 5000 })],
       financialSummary: { buy_in: 30000, rebuy: 10000, addon: 5000, prize: 1000, bounty_earned: 0 },
     });
-    const { card, panel } = buildMesaPanels(makeInput({ snapshot })).prizePool;
+    const { card, panel } = prizePool(snapshot);
 
     expect(panel.prizePool).toBe(45000 - 4000 - 15000);
     expect(card.value).toBe(formatCurrency(26000));

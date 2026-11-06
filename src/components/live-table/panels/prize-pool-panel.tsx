@@ -8,24 +8,17 @@ export function PrizePoolPanel({ panel }: { panel: PrizePoolPanelModel }) {
   return (
     <table className="w-full text-sm tabular-nums">
       <tbody>
-        <Row label="Buy-ins" value={formatCurrency(panel.buyIns)} />
-        <Row label="Rebuys" value={formatCurrency(panel.rebuys)} />
-        <Row label="Add-ons" value={formatCurrency(panel.addons)} />
-        <Row label="Arrecadado" value={formatCurrency(panel.collected)} strong />
-        <Row label="Fundo de ranking" value={`− ${formatCurrency(panel.rankingFund)}`} muted />
-        {panel.bountyAllocated !== null && (
-          <Row label="Bounty armado" value={`− ${formatCurrency(panel.bountyAllocated)}`} muted />
-        )}
-        <Row label="Prize pool" value={formatCurrency(panel.prizePool)} strong />
-        {panel.payout && (
+        <Row label="Buy-ins" amount={panel.buyIns} />
+        <Row label="Rebuys" amount={panel.rebuys} />
+        <Row label="Add-ons" amount={panel.addons} />
+        <Row label="Arrecadado" amount={panel.collected} total />
+        <Row label="Fundo de ranking" amount={panel.rankingFund} deduction />
+        {panel.bountyAllocated !== null && <Row label="Bounty armado" amount={panel.bountyAllocated} deduction />}
+        <Row label="Prize pool" amount={panel.prizePool} total />
+        {panel.prizesPaid && (
           <>
-            <Row label="Premios pagos" value={`− ${formatCurrency(panel.payout.prizesPaid)}`} muted />
-            <Row
-              label="Saldo"
-              value={formatCurrency(panel.payout.saldo)}
-              strong
-              valueClassName={panel.payout.saldo < 0 ? "text-destructive" : undefined}
-            />
+            <Row label="Premios pagos" amount={panel.prizesPaid.total} deduction />
+            <Row label="Saldo" amount={panel.prizesPaid.balance} total />
           </>
         )}
       </tbody>
@@ -33,25 +26,28 @@ export function PrizePoolPanel({ panel }: { panel: PrizePoolPanelModel }) {
   );
 }
 
-function Row({
-  label,
-  value,
-  strong = false,
-  muted = false,
-  valueClassName,
-}: {
+// `deduction` sai da conta: sinal de menos e tom apagado. `total` fecha uma etapa.
+// Um total negativo (Saldo, #73) fica em vermelho.
+function Row({ label, amount, deduction = false, total = false }: {
   label: string;
-  value: string;
-  strong?: boolean;
-  muted?: boolean;
-  valueClassName?: string;
+  amount: number;
+  deduction?: boolean;
+  total?: boolean;
 }) {
   return (
-    <tr className={cn("border-b", strong && "font-semibold", muted && "text-muted-foreground")}>
-      <th scope="row" className={cn("py-2 pr-3 text-left", strong ? "font-semibold" : "font-medium")}>
+    <tr className={cn("border-b", deduction && "text-muted-foreground")}>
+      <th scope="row" className={cn("py-2 pr-3 text-left", total ? "font-semibold" : "font-medium")}>
         {label}
       </th>
-      <td className={cn("py-2 text-right whitespace-nowrap", valueClassName)}>{value}</td>
+      <td
+        className={cn(
+          "py-2 text-right whitespace-nowrap",
+          total && "font-semibold",
+          total && amount < 0 && "text-destructive"
+        )}
+      >
+        {deduction ? `− ${formatCurrency(amount)}` : formatCurrency(amount)}
+      </td>
     </tr>
   );
 }
