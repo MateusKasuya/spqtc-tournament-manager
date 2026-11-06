@@ -141,7 +141,9 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
       }
     }
     if (initialData && locks.entryRules) {
-      raw.set("rankingFeeAmount", String(initialData.rankingFeeAmount));
+      for (const field of ["buyInAmount", "rebuyAmount", "addonAmount", "rankingFeeAmount"] as const) {
+        raw.set(field, String(initialData[field]));
+      }
     }
 
     // Max rebuys: ilimitado = 0
@@ -236,7 +238,7 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
 
         {locks.entryRules && (
           <p className="text-xs text-muted-foreground">
-            Modalidade, % Bounty e taxa de ranking so mudam com o torneio pendente e antes do primeiro buy-in confirmado.
+            Modalidade, % Bounty, valores e taxa de ranking so mudam com o torneio pendente e antes do primeiro buy-in confirmado.
           </p>
         )}
 
@@ -381,6 +383,11 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           Valores
         </h2>
+        {locks.entryRules && (
+          <p className="text-xs text-muted-foreground">
+            Os valores so mudam com o torneio pendente e antes do primeiro buy-in confirmado.
+          </p>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
@@ -394,6 +401,7 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
               placeholder="0,00"
               value={buyInAmount}
               onChange={(e) => setBuyInAmount(e.target.value)}
+              disabled={locks.entryRules}
               required
             />
           </div>
@@ -408,6 +416,7 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
               placeholder="0,00"
               value={rebuyAmount}
               onChange={(e) => setRebuyAmount(e.target.value)}
+              disabled={locks.entryRules}
             />
           </div>
           {allowAddon && (
@@ -422,6 +431,7 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
                 placeholder="0,00"
                 value={addonAmount}
                 onChange={(e) => setAddonAmount(e.target.value)}
+                disabled={locks.entryRules}
               />
             </div>
           )}

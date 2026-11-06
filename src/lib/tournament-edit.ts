@@ -5,11 +5,20 @@
 import { STATUS_RULES, statusAllows, type TournamentStatus } from "@/lib/tournament-status";
 
 export const CHIP_FIELDS = ["initialChips", "rebuyChips", "addonChips", "bonusChipAmount"] as const;
-// Definem o Bounty inicial, que é fixado no buy-in.
-export const ENTRY_RULE_FIELDS = ["rankingFeeAmount", "tournamentType", "bountyPercentage"] as const;
+// Travam no primeiro buy-in confirmado: a taxa, o tipo e o percentual fixam o
+// Bounty inicial, e as telas de total pago multiplicam os valores atuais pelas
+// contagens de cada participante.
+export const ENTRY_RULE_FIELDS = [
+  "buyInAmount",
+  "rebuyAmount",
+  "addonAmount",
+  "rankingFeeAmount",
+  "tournamentType",
+  "bountyPercentage",
+] as const;
 
 export const ENTRY_RULES_AFTER_BUY_IN_ERROR =
-  "Taxa de ranking, tipo e percentual de Bounty nao podem mudar depois do primeiro buy-in confirmado";
+  "Valores de buy-in, Rebuy e add-on, taxa de ranking, tipo e percentual de Bounty nao podem mudar depois do primeiro buy-in confirmado";
 
 export interface EditLocks {
   chips: boolean;
