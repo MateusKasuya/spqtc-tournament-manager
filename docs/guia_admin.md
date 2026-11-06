@@ -55,7 +55,7 @@ Na página do torneio → aba **Blinds** → **Editar Blinds**:
 - Adicione níveis manualmente ou carregue um **template salvo**
 - Cada nível tem: small blind, big blind, ante, duração (minutos)
 - Marque níveis especiais: **Break** (Intervalo da estrutura — o Relógio trata como um Nível comum, com a duração que você definir), **Nível de Add-on**, **Big Ante**
-- Dá para editar com o torneio em andamento: o Relógio continua no mesmo Nível. Se você editar ou remover o próprio Nível atual, o Relógio pausa no Nível que ficou com aquele número (ou no último, se ele sumiu) com a duração cheia
+- Dá para editar com o torneio Rodando: o Relógio continua no mesmo Nível. Se você editar ou remover o próprio Nível atual, o Relógio pausa no Nível que ficou com aquele número (ou no último, se ele sumiu) com a duração cheia
 - Salve — você pode salvar como template para reutilizar
 
 ### Configurar premiação
@@ -81,7 +81,7 @@ Na página do torneio → aba **Jogadores** → **Adicionar Jogador**:
 
 Na página do torneio → botão **Iniciar Torneio**.
 
-O status muda para **Em andamento** e o botão **Mesa ao Vivo** aparece.
+O status muda para **Rodando** e o botão **Mesa ao Vivo** aparece.
 
 ### 3. Mesa ao Vivo
 
@@ -123,7 +123,7 @@ Na página do torneio → aba **Prêmios** → **Distribuir Prêmios**:
 
 Na página do torneio → botão **Encerrar Torneio**:
 - Confirme na caixa de diálogo
-- O status muda para **Finalizado**
+- O status muda para **Encerrado**
 - Os pontos de ranking são calculados automaticamente
 - O torneio não pode mais ser editado
 
@@ -144,4 +144,4 @@ Para ver o ranking de outra temporada, use o seletor no topo da página.
 
 - **Templates de blinds e prêmios** poupam tempo — salve suas estruturas mais usadas
 - A taxa de ranking é descontada automaticamente do pote antes de calcular os prêmios
-- Torneios finalizados não aparecem mais como editáveis — confira tudo antes de encerrar
+- Torneios encerrados não aparecem mais como editáveis — confira tudo antes de encerrar

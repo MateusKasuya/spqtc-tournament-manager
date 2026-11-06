@@ -122,7 +122,7 @@ export function PlayerProfile({ player, stats, seasonHistory, seasonName }: Play
           <CardContent>
             {seasonHistory.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Nenhum torneio finalizado nesta temporada.
+                Nenhum torneio encerrado nesta temporada.
               </p>
             ) : (
               <>

@@ -52,7 +52,7 @@ export function RankingTable({ ranking, pointsByTournament, seasonTournaments }:
     return (
       <Card>
         <CardContent className="py-12 text-center text-muted-foreground">
-          <p>Nenhum torneio finalizado nesta temporada.</p>
+          <p>Nenhum torneio encerrado nesta temporada.</p>
         </CardContent>
       </Card>
     );
