@@ -459,7 +459,8 @@ describe("Knockout e Desfazer releem o Status do torneio dentro do lock", () => 
 
     expect(tournamentSpy).toHaveBeenCalled();
     expect(snapshotSpy).toHaveBeenCalled();
-    expect(res).toHaveProperty("error");
+    // Mensagem do LedgerStateChangedError: a recusa veio de dentro do lock.
+    expect(res).toEqual({ error: "A mesa mudou, recarregue e tente de novo" });
     expect(await knockoutRows(t)).toEqual(before);
     expect((await tournamentRow(t)).status).toBe("finished");
   });
