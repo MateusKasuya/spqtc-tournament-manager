@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { confirmBuyIn, addAddon, undoAddon } from "@/actions/participants";
+import {
+  confirmBuyIn,
+  undoBuyIn,
+  addAddon,
+  undoAddon,
+  addRebuy,
+  addBonusChip,
+  undoBonusChip,
+  eliminatePlayer,
+} from "@/actions/participants";
 import * as participantQueries from "@/db/queries/participants";
 import * as tournamentQueries from "@/db/queries/tournaments";
 import { testDb } from "@/test/db";
@@ -26,7 +35,7 @@ async function tournamentRow(id: number) {
   return row;
 }
 
-async function playerTransactions(tournamentId: number, playerId: number, type: "buy_in" | "addon") {
+async function playerTransactions(tournamentId: number, playerId: number, type: "buy_in" | "addon" | "rebuy") {
   return testDb
     .select()
     .from(transactions)
@@ -213,5 +222,181 @@ describe("undoAddon relê o participante dentro do lock", () => {
     expect(res).not.toHaveProperty("error");
     expect((await participantRow(part)).addonCount).toBe(1);
     expect(await playerTransactions(t, player, "addon")).toHaveLength(1);
+  });
+});
+
+describe("undoBuyIn relê torneio e participante dentro do lock", () => {
+  const BLOCKED = "Desfaca rebuys, add-ons, bonus e bounties antes de remover o buy-in";
+
+  async function paidParticipant(overrides: Partial<typeof tournaments.$inferInsert> = {}) {
+    const t = await seedTournament({ buyInAmount: 100, ...overrides });
+    const player = await seedPlayer();
+    const part = await seedParticipant(t, player);
+    expect(await confirmBuyIn(part)).not.toHaveProperty("error");
+    return { t, player, part };
+  }
+
+  async function expectBuyInKept(t: number, player: number, part: number) {
+    const row = await participantRow(part);
+    expect(row.status).toBe("playing");
+    expect(row.buyInPaid).toBe(true);
+    expect(await playerTransactions(t, player, "buy_in")).toHaveLength(1);
+  }
+
+  it("Rebuy confirmado no banco devolve erro e mantém buy_in e rebuy", async () => {
+    const { t, player, part } = await paidParticipant({ rebuyAmount: 100 });
+    expect(await addRebuy(part)).not.toHaveProperty("error");
+    const spy = staleParticipant(await participantRow(part), { rebuyCount: 0 });
+
+    const res = await undoBuyIn(part);
+
+    expect(spy).toHaveBeenCalled();
+    expect(res).toEqual({ error: BLOCKED });
+    await expectBuyInKept(t, player, part);
+    expect(await playerTransactions(t, player, "rebuy")).toHaveLength(1);
+  });
+
+  it("add-on confirmado no banco devolve erro e mantém buy_in e addon", async () => {
+    const { t, player, part } = await paidParticipant({ addonAmount: 30, allowAddon: true });
+    expect(await addAddon(part)).not.toHaveProperty("error");
+    const spy = staleParticipant(await participantRow(part), { addonCount: 0 });
+
+    const res = await undoBuyIn(part);
+
+    expect(spy).toHaveBeenCalled();
+    expect(res).toEqual({ error: BLOCKED });
+    await expectBuyInKept(t, player, part);
+    expect((await participantRow(part)).addonCount).toBe(1);
+    expect(await playerTransactions(t, player, "addon")).toHaveLength(1);
+  });
+
+  it("bônus usado no banco devolve erro e mantém o buy-in", async () => {
+    const { t, player, part } = await paidParticipant({ bonusChipAmount: 5000 });
+    expect(await addBonusChip(part)).not.toHaveProperty("error");
+    const spy = staleParticipant(await participantRow(part), { bonusChipUsed: false });
+
+    const res = await undoBuyIn(part);
+
+    expect(spy).toHaveBeenCalled();
+    expect(res).toEqual({ error: BLOCKED });
+    await expectBuyInKept(t, player, part);
+    expect((await participantRow(part)).bonusChipUsed).toBe(true);
+  });
+
+  it("participante eliminado no banco devolve erro e mantém eliminação e buy_in", async () => {
+    const t = await seedTournament({ buyInAmount: 100 });
+    const players = [await seedPlayer("A"), await seedPlayer("B"), await seedPlayer("C")];
+    const parts: number[] = [];
+    for (const player of players) {
+      const part = await seedParticipant(t, player);
+      expect(await confirmBuyIn(part)).not.toHaveProperty("error");
+      parts.push(part);
+    }
+    const [victim] = parts;
+    expect(await eliminatePlayer(victim, [players[1]])).not.toHaveProperty("error");
+    const eliminated = await participantRow(victim);
+    const spy = staleParticipant(eliminated, { status: "playing", finishPosition: null, eliminatedAt: null });
+
+    const res = await undoBuyIn(victim);
+
+    expect(spy).toHaveBeenCalled();
+    expect(res).toEqual({ error: "Desfaca a eliminacao antes de remover o buy-in" });
+    const row = await participantRow(victim);
+    expect(row.status).toBe(eliminated.status);
+    expect(row.buyInPaid).toBe(true);
+    expect(row.finishPosition).toBe(eliminated.finishPosition);
+    expect(row.eliminatedAt).toEqual(eliminated.eliminatedAt);
+    expect(await playerTransactions(t, players[0], "buy_in")).toHaveLength(1);
+  });
+
+  it("Status que não permite mais buy-in no banco devolve a recusa do Status e não apaga nada", async () => {
+    const { t, player, part } = await paidParticipant();
+    await testDb.update(tournaments).set({ status: "finished" }).where(eq(tournaments.id, t));
+    const spy = staleTournament(await tournamentRow(t), { status: "running" });
+
+    const res = await undoBuyIn(part);
+
+    expect(spy).toHaveBeenCalled();
+    expect(res).toEqual({ error: STATUS_RULES.registration.error });
+    await expectBuyInKept(t, player, part);
+  });
+});
+
+describe("addBonusChip e undoBonusChip releem torneio e participante dentro do lock", () => {
+  async function playing(overrides: Partial<typeof tournaments.$inferInsert> = {}) {
+    const t = await seedTournament({ bonusChipAmount: 5000, ...overrides });
+    const player = await seedPlayer();
+    const part = await seedParticipant(t, player, { status: "playing", buyInPaid: true });
+    return { t, part };
+  }
+
+  it("addBonusChip com bônus já usado no banco devolve erro", async () => {
+    const { part } = await playing();
+    expect(await addBonusChip(part)).not.toHaveProperty("error");
+    const spy = staleParticipant(await participantRow(part), { bonusChipUsed: false });
+
+    const res = await addBonusChip(part);
+
+    expect(spy).toHaveBeenCalled();
+    expect(res).toEqual({ error: "Bonus chip ja utilizado" });
+    expect((await participantRow(part)).bonusChipUsed).toBe(true);
+  });
+
+  it("addBonusChip com participante fora de jogo no banco devolve erro e não grava", async () => {
+    const { part } = await playing();
+    await testDb.update(participants).set({ status: "eliminated" }).where(eq(participants.id, part));
+    const spy = staleParticipant(await participantRow(part), { status: "playing" });
+
+    const res = await addBonusChip(part);
+
+    expect(spy).toHaveBeenCalled();
+    expect(res).toEqual({ error: "Participante nao esta em jogo" });
+    expect((await participantRow(part)).bonusChipUsed).toBe(false);
+  });
+
+  it("addBonusChip com bonusChipAmount 0 no banco devolve erro e não grava", async () => {
+    const { t, part } = await playing({ bonusChipAmount: 0 });
+    const spy = staleTournament(await tournamentRow(t), { bonusChipAmount: 5000 });
+
+    const res = await addBonusChip(part);
+
+    expect(spy).toHaveBeenCalled();
+    expect(res).toEqual({ error: "Torneio nao permite bonus chip" });
+    expect((await participantRow(part)).bonusChipUsed).toBe(false);
+  });
+
+  it("undoBonusChip com bônus não usado no banco devolve erro", async () => {
+    const { part } = await playing();
+    const spy = staleParticipant(await participantRow(part), { bonusChipUsed: true });
+
+    const res = await undoBonusChip(part);
+
+    expect(spy).toHaveBeenCalled();
+    expect(res).toEqual({ error: "Bonus chip nao foi utilizado" });
+    expect((await participantRow(part)).bonusChipUsed).toBe(false);
+  });
+
+  it("addBonusChip com torneio Encerrado no banco devolve a recusa do Status e não grava", async () => {
+    const { t, part } = await playing({ status: "finished" });
+    const spy = staleTournament(await tournamentRow(t), { status: "running" });
+
+    const res = await addBonusChip(part);
+
+    expect(spy).toHaveBeenCalled();
+    expect(res).toEqual({ error: STATUS_RULES.live.error });
+    expect((await participantRow(part)).bonusChipUsed).toBe(false);
+  });
+
+  it("undoBonusChip com torneio Encerrado no banco devolve a recusa do Status e não grava", async () => {
+    const { t, part } = await playing();
+    expect(await addBonusChip(part)).not.toHaveProperty("error");
+    await testDb.update(tournaments).set({ status: "finished" }).where(eq(tournaments.id, t));
+    const spy = staleTournament(await tournamentRow(t), { status: "running" });
+
+    const res = await undoBonusChip(part);
+
+    expect(spy).toHaveBeenCalled();
+    expect(res).toEqual({ error: STATUS_RULES.live.error });
+    expect((await participantRow(part)).bonusChipUsed).toBe(true);
   });
 });
