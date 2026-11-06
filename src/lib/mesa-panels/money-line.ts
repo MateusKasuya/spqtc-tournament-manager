@@ -1,6 +1,6 @@
 import type { MesaParticipant, MesaPrizePosition } from "@/db/queries/mesa";
 
-// A fronteira do dinheiro (CONTEXT.md: Posições premiadas, Bolha, No dinheiro), a
+// A Fronteira do dinheiro (CONTEXT.md: Posições premiadas, Bolha, No dinheiro), a
 // única conta dela: o painel do Prize pool e o Jogadores (#84) a leem daqui.
 // O #85 desliga a linha com Prêmios pagos aqui dentro, com `hasPrizesPaid` de
 // `./prizes-paid` (que não importa este arquivo).

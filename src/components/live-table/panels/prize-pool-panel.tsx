@@ -88,7 +88,7 @@ function MoneyLineSummary({ moneyLine }: { moneyLine: MoneyLine }) {
 }
 
 // Percentual e Prêmio estimado por posição; a linha até onde paga fica abaixo da
-// última posição com percentual maior que zero.
+// Fronteira do dinheiro (`paysThroughPosition`; 0 = sem linha).
 function StructureTable({ structure }: { structure: PrizeStructureSection }) {
   return (
     <div className="flex flex-col gap-1">
