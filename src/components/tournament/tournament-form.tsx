@@ -54,7 +54,10 @@ function centsToReais(cents: number): string {
   return (cents / 100).toFixed(2);
 }
 
-const NO_LOCKS: EditLocks = { chips: false, entryRules: false };
+const NO_LOCKS: EditLocks = { chips: false, entryRules: false, addonAmount: false };
+
+// Valores em R$ no formulário; vão em centavos para o servidor.
+const MONEY_FIELDS = ["buyInAmount", "rebuyAmount", "addonAmount", "rankingFeeAmount"] as const;
 
 export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: TournamentFormProps) {
   const action = initialData
@@ -126,7 +129,7 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
     }
 
     // Converter R$ para centavos
-    for (const field of ["buyInAmount", "rebuyAmount", "addonAmount", "rankingFeeAmount"]) {
+    for (const field of MONEY_FIELDS) {
       const val = raw.get(field) as string;
       if (val !== null && val !== "") {
         raw.set(field, String(Math.round(parseFloat(val.replace(",", ".")) * 100)));
@@ -140,8 +143,11 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
         raw.set(field, String(initialData[field]));
       }
     }
-    if (initialData && locks.entryRules) {
-      raw.set("rankingFeeAmount", String(initialData.rankingFeeAmount));
+    if (initialData) {
+      for (const field of MONEY_FIELDS) {
+        const locked = field === "addonAmount" ? locks.addonAmount : locks.entryRules;
+        if (locked) raw.set(field, String(initialData[field]));
+      }
     }
 
     // Max rebuys: ilimitado = 0
@@ -381,6 +387,13 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
         <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
           Valores
         </h2>
+        {locks.entryRules && (
+          <p className="text-xs text-muted-foreground">
+            {locks.addonAmount
+              ? "Os valores so mudam com o torneio pendente e antes do primeiro buy-in confirmado."
+              : "Buy-in e Rebuy so mudam com o torneio pendente e antes do primeiro buy-in confirmado. O valor do add-on pode ser definido ao ligar o add-on."}
+          </p>
+        )}
 
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
@@ -394,6 +407,7 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
               placeholder="0,00"
               value={buyInAmount}
               onChange={(e) => setBuyInAmount(e.target.value)}
+              disabled={locks.entryRules}
               required
             />
           </div>
@@ -408,6 +422,7 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
               placeholder="0,00"
               value={rebuyAmount}
               onChange={(e) => setRebuyAmount(e.target.value)}
+              disabled={locks.entryRules}
             />
           </div>
           {allowAddon && (
@@ -422,6 +437,7 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
                 placeholder="0,00"
                 value={addonAmount}
                 onChange={(e) => setAddonAmount(e.target.value)}
+                disabled={locks.addonAmount}
               />
             </div>
           )}

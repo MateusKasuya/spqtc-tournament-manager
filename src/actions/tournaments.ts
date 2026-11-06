@@ -17,7 +17,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { clockStateColumns, getTournamentRequiringStatus } from "@/db/queries/tournaments";
-import { hasConfirmedBuyIn } from "@/db/queries/participants";
+import { hasAddon, hasConfirmedBuyIn } from "@/db/queries/participants";
 import { alwaysChanges, applyClockTransition } from "@/db/ledger/tournament-clock";
 import { lockedFieldError } from "@/lib/tournament-edit";
 import { DEFAULT_BLIND_STRUCTURE, DEFAULT_PRIZE_STRUCTURE } from "@/lib/tournament-defaults";
@@ -184,7 +184,8 @@ export async function updateTournament(id: number, formData: FormData) {
       return STATUS_RULES.tournamentData.error;
     }
 
-    const locked = lockedFieldError(current.status, await hasConfirmedBuyIn(id, tx), current, parsed.data);
+    const facts = { hasConfirmedBuyIn: await hasConfirmedBuyIn(id, tx), hasAddon: await hasAddon(id, tx) };
+    const locked = lockedFieldError(current, facts, parsed.data);
     if (locked) return locked;
 
     await tx

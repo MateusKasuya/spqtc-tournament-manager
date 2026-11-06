@@ -30,8 +30,8 @@ export const STATUS_RULES = {
     allowed: ["pending", "running"],
     error: "Estruturas so podem ser editadas com o torneio pendente ou rodando",
   },
-  // Dados do torneio: nome, data, temporada, valores em dinheiro, limite de
-  // Rebuys e permissao de add-on.
+  // Dados do torneio: nome, data, temporada, limite de Rebuys e permissao de
+  // add-on.
   tournamentData: {
     allowed: ["pending", "running"],
     error: "Torneio so pode ser editado com o torneio pendente ou rodando",
@@ -41,11 +41,15 @@ export const STATUS_RULES = {
     allowed: ["pending"],
     error: "Fichas so podem ser alteradas com o torneio pendente",
   },
-  // Taxa de ranking, tipo e percentual de Bounty (alem do Status, exigem que
-  // nenhum buy-in tenha sido confirmado: o Bounty inicial e fixado no buy-in).
+  // Valores de buy-in, Rebuy e add-on, taxa de ranking, tipo e percentual de
+  // Bounty. Alem do Status, exigem que nenhum buy-in tenha sido confirmado: o
+  // Bounty inicial e fixado no buy-in, e as telas de total pago multiplicam os
+  // valores do torneio pelas contagens de cada participante. O valor do add-on
+  // fica livre enquanto o add-on nao e permitido e ninguem fez add-on.
   entryRules: {
     allowed: ["pending"],
-    error: "Taxa de ranking, tipo e percentual de Bounty so podem ser alterados com o torneio pendente",
+    error:
+      "Valores de buy-in, Rebuy e add-on, taxa de ranking, tipo e percentual de Bounty so podem ser alterados com o torneio pendente",
   },
   // Excluir o torneio: um Rodando é cancelado antes; um Encerrado carrega o
   // histórico de dinheiro e os pontos do ranking da temporada.

@@ -11,9 +11,11 @@ import { BlindInfo } from "./blind-info";
 import { TournamentStats } from "./tournament-stats";
 import { QuickActions } from "./quick-actions";
 import { StickyTimerBar } from "./sticky-timer-bar";
+import { MesaPanelDrawer } from "./mesa-panel-drawer";
 import { expireLevel, updateTournamentStatus } from "@/actions/tournaments";
 import { playLevelSound } from "@/lib/play-level-sound";
 import { clockTone, ringTotalSecs, toIsoOrNull } from "@/lib/tournament-clock";
+import { buildMesaPanels, type MesaPanelId } from "@/lib/mesa-panels";
 import type { MesaSnapshot } from "@/db/queries/mesa";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
@@ -25,13 +27,12 @@ interface MesaAoVivoProps {
 
 export function MesaAoVivo({ snapshot: initialSnapshot, isAdmin }: MesaAoVivoProps) {
   const { snapshot, refetch: refetchMesa } = useMesaSnapshot(initialSnapshot);
-  const {
-    tournament,
-    blindLevels,
-    participants: liveParticipants,
-    financialSummary: liveFinancial,
-  } = snapshot;
+  const { tournament, blindLevels, participants: liveParticipants } = snapshot;
   const { remainingSeconds, isRunning } = useCountdown(tournament);
+  const panelsView = buildMesaPanels({ snapshot, remainingSeconds, isAdmin });
+  // Mora aqui, e não no card: o snapshot é re-semeado a cada ressincronização
+  // e a gaveta aberta não pode fechar a cada Knockout.
+  const [openPanel, setOpenPanel] = useState<MesaPanelId | null>(null);
   useWakeLock(isRunning);
 
   const currentIndex = blindLevels.findIndex((b) => b.level === tournament.currentBlindLevel);
@@ -148,11 +149,7 @@ export function MesaAoVivo({ snapshot: initialSnapshot, isAdmin }: MesaAoVivoPro
       </div>
 
       {/* Stats */}
-      <TournamentStats
-        participants={liveParticipants}
-        tournament={tournament}
-        financialSummary={liveFinancial}
-      />
+      <TournamentStats view={panelsView} onOpenPanel={setOpenPanel} />
 
       {/* Quick Actions (admin only) */}
       {isAdmin && (
@@ -213,6 +210,8 @@ export function MesaAoVivo({ snapshot: initialSnapshot, isAdmin }: MesaAoVivoPro
         </div>
       )}
     </div>
+
+      <MesaPanelDrawer openPanel={openPanel} view={panelsView} onClose={() => setOpenPanel(null)} />
     </>
   );
 }
