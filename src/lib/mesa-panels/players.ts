@@ -43,7 +43,7 @@ export interface PlayersPanel {
   champion: PlayersNamedEntry | null;
   awaitingBuyIn: PlayersNamedEntry[];
   // A Fronteira do dinheiro do painel do Prize pool, a mesma conta; `null` quando
-  // ela não aparece (ninguém Em jogo ou sem Posições premiadas).
+  // ela não aparece (Prêmios pagos, ninguém Em jogo ou sem Posições premiadas).
   moneyLine: MoneyLine | null;
 }
 
@@ -90,7 +90,7 @@ export function derivePlayers({ snapshot }: MesaPanelsInput): PlayersSlice {
     eliminated: eliminated.length,
     awaitingBuyIn: awaiting.length,
   };
-  const moneyLine = deriveMoneyLine({ participants, prizeStructure: snapshot.prizeStructure });
+  const moneyLine = deriveMoneyLine(snapshot);
   const moneyLineText = moneyLineSupportLine(moneyLine);
   return {
     card: {

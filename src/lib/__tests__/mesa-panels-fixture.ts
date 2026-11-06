@@ -59,6 +59,7 @@ export function makeSnapshot(overrides: Partial<MesaSnapshot> = {}): MesaSnapsho
     participants: [],
     financialSummary: { buy_in: 0, rebuy: 0, addon: 0, prize: 0, bounty_earned: 0 },
     prizeStructure: [],
+    paidPrizes: [],
     ...overrides,
   };
 }
@@ -80,5 +81,18 @@ export function makeLevel(level: number, overrides: Partial<MesaLevel> = {}): Me
     isAddonLevel: false,
     isBigAnte: false,
     ...overrides,
+  };
+}
+
+// Distribuir prêmios no snapshot: os Prêmios pagos por Participante e o total
+// deles no resumo financeiro, que vêm dos mesmos registros de Prêmio.
+export function payPrizes(snapshot: MesaSnapshot, paid: [MesaParticipant, number][]): MesaSnapshot {
+  return {
+    ...snapshot,
+    paidPrizes: paid.map(([p, amount]) => ({ participantId: p.id, amount })),
+    financialSummary: {
+      ...snapshot.financialSummary,
+      prize: paid.reduce((total, [, amount]) => total + amount, 0),
+    },
   };
 }

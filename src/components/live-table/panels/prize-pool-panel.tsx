@@ -2,19 +2,21 @@ import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import { MoneyLineSummary } from "./money-line-summary";
 import type {
+  PaidPrizeEntry,
   PrizePoolPanel as PrizePoolPanelModel,
   PrizeStructureSection,
 } from "@/lib/mesa-panels";
 
 // Painel Prize pool: a conta do número do card, de Arrecadado a Prize pool e, quando
 // há Prêmios pagos, até o Saldo; abaixo, a Estrutura de prêmios com o Prêmio
-// estimado e a fronteira do dinheiro. Recebe o modelo da derivação e só desenha.
+// estimado e a fronteira do dinheiro ou, depois de uma distribuição, os Prêmios
+// pagos no lugar deles. Recebe o modelo da derivação e só desenha.
 export function PrizePoolPanel({ panel }: { panel: PrizePoolPanelModel }) {
   return (
     <div className="flex flex-col gap-6">
       <Account panel={panel} />
       <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-semibold">Estrutura de premios</h3>
+        <h3 className="text-sm font-semibold">{panel.paidPrizes ? "Premios pagos" : "Estrutura de premios"}</h3>
         {panel.prizedPositionsAboveBuyIns && (
           <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm">
             A Estrutura tem {panel.prizedPositionsAboveBuyIns.prizedPositions} Posicoes premiadas e so ha{" "}
@@ -29,7 +31,9 @@ export function PrizePoolPanel({ panel }: { panel: PrizePoolPanelModel }) {
             <span className="font-semibold">{formatCurrency(panel.nextOut.prize)}</span>
           </p>
         )}
-        {panel.structure ? (
+        {panel.paidPrizes ? (
+          <PaidPrizesTable entries={panel.paidPrizes} />
+        ) : panel.structure ? (
           <StructureTable structure={panel.structure} />
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -100,6 +104,33 @@ function StructureTable({ structure }: { structure: PrizeStructureSection }) {
       </table>
       <p className="text-xs text-muted-foreground">estimado com o Prize pool atual</p>
     </div>
+  );
+}
+
+// Prêmio pago de cada pessoa pela Posição final; sem ela (Desfazer depois da
+// distribuição), "—" e no fim. A posição pode repetir (#71): a chave é o Participante.
+function PaidPrizesTable({ entries }: { entries: PaidPrizeEntry[] }) {
+  return (
+    <table className="w-full text-sm tabular-nums">
+      <thead>
+        <tr className="border-b text-muted-foreground">
+          <th scope="col" className="py-2 pr-3 text-left font-medium">Posicao</th>
+          <th scope="col" className="py-2 pr-3 text-left font-medium">Jogador</th>
+          <th scope="col" className="py-2 text-right font-medium">Premio pago</th>
+        </tr>
+      </thead>
+      <tbody>
+        {entries.map((e) => (
+          <tr key={e.participantId} className="border-b">
+            <th scope="row" className="py-2 pr-3 text-left font-medium">
+              {e.finishPosition === null ? "—" : `${e.finishPosition}º`}
+            </th>
+            <td className="py-2 pr-3">{e.name}</td>
+            <td className="py-2 text-right whitespace-nowrap">{formatCurrency(e.amount)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

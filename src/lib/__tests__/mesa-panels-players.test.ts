@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { buildMesaPanels } from "@/lib/mesa-panels";
 import type { MesaParticipant, MesaPrizePosition, MesaTournament } from "@/db/queries/mesa";
-import { makeInput, makeParticipant, makeSnapshot, makeTournament } from "./mesa-panels-fixture";
+import { makeInput, makeParticipant, makeSnapshot, makeTournament, payPrizes } from "./mesa-panels-fixture";
 
 describe("card Jogadores", () => {
   it("mostra quantos estão Em jogo e quantos têm buy-in confirmado", () => {
@@ -256,5 +256,28 @@ describe("painel Jogadores: linha de dinheiro", () => {
   it("sem Posições premiadas não há linha", () => {
     expect(playersWithPlaying(5, []).panel.moneyLine).toBeNull();
     expect(playersWithPlaying(5, [{ position: 1, percentage: 0 }]).panel.moneyLine).toBeNull();
+  });
+});
+
+// Acordo na mesa final: 4 Em jogo com 3 Posições premiadas seria Bolha, mas com
+// Prêmios pagos a linha de dinheiro se desliga no painel e no card.
+describe("Jogadores com Prêmios pagos", () => {
+  function afterDeal() {
+    const participants = [makeParticipant(), makeParticipant(), makeParticipant(), makeParticipant()];
+    const snapshot = makeSnapshot({ participants, prizeStructure: PAYS_THREE });
+    return payPrizes(snapshot, [
+      [participants[0], 10000],
+      [participants[1], 6000],
+    ]);
+  }
+
+  it("não há linha de dinheiro no painel", () => {
+    expect(buildMesaPanels(makeInput({ snapshot: afterDeal() })).players.panel.moneyLine).toBeNull();
+  });
+
+  it("a face não mostra Bolha nem faltam", () => {
+    expect(buildMesaPanels(makeInput({ snapshot: afterDeal() })).players.card.supportLines).toEqual([
+      "de 4 com buy-in",
+    ]);
   });
 });

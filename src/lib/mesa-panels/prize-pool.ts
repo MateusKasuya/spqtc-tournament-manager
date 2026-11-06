@@ -1,8 +1,9 @@
+import { displayName } from "@/lib/display-name";
 import { formatCurrency } from "@/lib/format";
 import { isBountyBuilder } from "@/lib/knockout-ledger";
 import { computePrizePool, computeSaldo } from "@/lib/prize-pool";
 import { calculateRoundedPrizeAmounts } from "@/lib/prize";
-import type { MesaPrizePosition } from "@/db/queries/mesa";
+import type { MesaSnapshot, MesaPrizePosition } from "@/db/queries/mesa";
 import type { CardFace, MesaPanelsInput } from "./types";
 import { countPrizedPositions, deriveMoneyLine, moneyBoundary, type MoneyLine } from "./money-line";
 import { hasPrizesPaid } from "./prizes-paid";
@@ -23,8 +24,11 @@ export interface PrizePoolPanel {
   // Só quando há Prêmios pagos; `null` esconde as linhas de Prêmios pagos e Saldo.
   // O Saldo aparece como está, mesmo negativo (#73).
   prizesPaid: { total: number; balance: number } | null;
-  // `null` é o estado vazio da seção: sem Estrutura ou sem Posições premiadas.
+  // Tabela de Prêmios estimados; `null` com Prêmios pagos (a lista deles a
+  // substitui) ou, sem eles, o estado vazio: sem Estrutura ou sem Posições premiadas.
   structure: PrizeStructureSection | null;
+  // Só quando há Prêmios pagos: substituem a tabela de Prêmios estimados.
+  paidPrizes: PaidPrizeEntry[] | null;
   moneyLine: MoneyLine | null;
   // Só No dinheiro com 2 ou mais Em jogo.
   nextOut: { position: number; prize: number } | null;
@@ -36,6 +40,15 @@ export interface EstimatedPrizePosition {
   position: number;
   percentage: number;
   estimatedPrize: number;
+}
+
+export interface PaidPrizeEntry {
+  participantId: number;
+  name: string;
+  // Como está gravada (Distribuir prêmios grava junto com o Prêmio); `null` depois
+  // de um Desfazer que a zerou. Repetida (#71) não é corrigida.
+  finishPosition: number | null;
+  amount: number;
 }
 
 export interface PrizeStructureSection {
@@ -66,6 +79,22 @@ function deriveNextOut(moneyLine: MoneyLine | null, positions: EstimatedPrizePos
   return { position, prize: positions.find((p) => p.position === position)?.estimatedPrize ?? 0 };
 }
 
+// Pela Posição final, quem está sem ela no fim. O sort é estável e parte da ordem
+// da leitura da mesa (ordem de inscrição), como as Eliminações do Jogadores.
+function derivePaidPrizes({ participants, paidPrizes }: MesaSnapshot): PaidPrizeEntry[] {
+  const amountByParticipant = new Map(paidPrizes.map((p) => [p.participantId, p.amount]));
+  const order = (e: PaidPrizeEntry) => e.finishPosition ?? Number.MAX_SAFE_INTEGER;
+  return participants
+    .filter((p) => amountByParticipant.has(p.id))
+    .map((p) => ({
+      participantId: p.id,
+      name: displayName(p),
+      finishPosition: p.finishPosition,
+      amount: amountByParticipant.get(p.id) ?? 0,
+    }))
+    .sort((a, b) => order(a) - order(b));
+}
+
 export interface PrizePoolSlice {
   card: CardFace;
   panel: PrizePoolPanel;
@@ -78,6 +107,13 @@ function derivePrizedPositionsAboveBuyIns({ snapshot, isAdmin }: MesaPanelsInput
   return prizedPositions > buyIns ? { prizedPositions, buyIns } : null;
 }
 
+// Face "1º R$ X": com Prêmios pagos, o de quem tem Posição final 1 (nunca o
+// estimado); sem eles, o Prêmio estimado da 1ª posição. `null` esconde a linha.
+function deriveFirstPrize({ paidPrizes, structure }: PrizePoolPanel): number | null {
+  if (paidPrizes) return paidPrizes.find((p) => p.finishPosition === 1)?.amount ?? null;
+  return structure?.positions.find((p) => p.position === 1)?.estimatedPrize ?? null;
+}
+
 export function derivePrizePool(input: MesaPanelsInput): PrizePoolSlice {
   const { snapshot } = input;
   const { tournament, financialSummary } = snapshot;
@@ -86,6 +122,7 @@ export function derivePrizePool(input: MesaPanelsInput): PrizePoolSlice {
     collected: financialSummary,
     participants: snapshot.participants,
   });
+  const paid = hasPrizesPaid(snapshot);
   const estimated = estimatePrizes(snapshot.prizeStructure, pool.prizePool);
   const moneyLine = deriveMoneyLine(snapshot);
   const panel: PrizePoolPanel = {
@@ -96,20 +133,21 @@ export function derivePrizePool(input: MesaPanelsInput): PrizePoolSlice {
     rankingFund: pool.rankingFund,
     bountyAllocated: isBountyBuilder(tournament) ? pool.bountyAllocated : null,
     prizePool: pool.prizePool,
-    prizesPaid: hasPrizesPaid(snapshot)
+    prizesPaid: paid
       ? { total: financialSummary.prize, balance: computeSaldo(pool.prizePool, financialSummary.prize) }
       : null,
-    structure: buildStructureSection(estimated),
+    structure: paid ? null : buildStructureSection(estimated),
+    paidPrizes: paid ? derivePaidPrizes(snapshot) : null,
     moneyLine,
     nextOut: deriveNextOut(moneyLine, estimated),
     prizedPositionsAboveBuyIns: derivePrizedPositionsAboveBuyIns(input),
   };
-  const first = panel.structure?.positions.find((p) => p.position === 1);
+  const firstPrize = deriveFirstPrize(panel);
   return {
     card: {
       label: "Prize pool",
       value: formatCurrency(panel.prizePool),
-      supportLines: first ? [`1º ${formatCurrency(first.estimatedPrize)}`] : [],
+      supportLines: firstPrize === null ? [] : [`1º ${formatCurrency(firstPrize)}`],
     },
     panel,
   };

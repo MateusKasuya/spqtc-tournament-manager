@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { confirmBuyIn, eliminatePlayer, addRebuy } from "@/actions/participants";
+import { confirmBuyIn, eliminatePlayer, addRebuy, distributePayouts } from "@/actions/participants";
 import { updateBlindStructure, updatePrizeStructure } from "@/actions/tournaments";
 import { getMesaLiveData } from "@/actions/mesa";
 import { seedTournament, seedPlayer, seedParticipant, makeLevels } from "@/test/setup";
@@ -151,6 +151,52 @@ describe("getMesaLiveData", () => {
       { position: 2, percentage: 30 },
       { position: 3, percentage: 20 },
     ]);
+  });
+
+  it("devolve os Premios pagos por Participante depois de Distribuir premios", async () => {
+    const t = await seedTournament({ buyInAmount: 100 });
+    const { players, parts } = await setupPlaying(t, 3);
+    expect(
+      await distributePayouts(t, [
+        { playerId: players[2], amount: 180, position: 1 },
+        { playerId: players[0], amount: 120, position: 2 },
+      ])
+    ).not.toHaveProperty("error");
+
+    const { paidPrizes } = await getMesaLiveData(t);
+
+    expect(paidPrizes).toEqual(
+      expect.arrayContaining([
+        { participantId: parts[2], amount: 180 },
+        { participantId: parts[0], amount: 120 },
+      ])
+    );
+    expect(paidPrizes).toHaveLength(2);
+  });
+
+  it("depois de uma redistribuicao que tira alguem da lista, o Premio dessa pessoa nao aparece mais", async () => {
+    const t = await seedTournament({ buyInAmount: 100 });
+    const { players, parts } = await setupPlaying(t, 3);
+    expect(
+      await distributePayouts(t, [
+        { playerId: players[0], amount: 200, position: 1 },
+        { playerId: players[1], amount: 100, position: 2 },
+      ])
+    ).not.toHaveProperty("error");
+
+    expect(await distributePayouts(t, [{ playerId: players[0], amount: 300, position: 1 }])).not.toHaveProperty(
+      "error"
+    );
+
+    const { paidPrizes } = await getMesaLiveData(t);
+    expect(paidPrizes).toEqual([{ participantId: parts[0], amount: 300 }]);
+  });
+
+  it("sem distribuicao nao ha Premios pagos", async () => {
+    const t = await seedTournament();
+    await setupPlaying(t, 2);
+
+    expect((await getMesaLiveData(t)).paidPrizes).toEqual([]);
   });
 
   it("sem Estrutura de premios devolve a Estrutura vazia", async () => {

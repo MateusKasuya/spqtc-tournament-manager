@@ -1,6 +1,6 @@
 import { db } from "@/db";
-import { transactions, players } from "@/db/schema";
-import { eq, sum } from "drizzle-orm";
+import { transactions, players, participants } from "@/db/schema";
+import { and, eq, sum } from "drizzle-orm";
 import type { LedgerExecutor } from "@/db/ledger/knockout-ledger";
 
 export async function getTransactions(tournamentId: number) {
@@ -38,4 +38,21 @@ export async function getTournamentFinancialSummary(tournamentId: number, execut
     }
   }
   return summary;
+}
+
+// Prêmios pagos a cada Participante, lidos dos registros de Prêmio (refazer a
+// distribuição os substitui). Nunca do Prêmio guardado no participante, que fica
+// velho quando uma redistribuição tira alguém da lista.
+export async function getPaidPrizesByParticipant(tournamentId: number) {
+  const rows = await db
+    .select({ participantId: participants.id, amount: sum(transactions.amount) })
+    .from(transactions)
+    .innerJoin(
+      participants,
+      and(eq(participants.tournamentId, transactions.tournamentId), eq(participants.playerId, transactions.playerId))
+    )
+    .where(and(eq(transactions.tournamentId, tournamentId), eq(transactions.type, "prize")))
+    .groupBy(participants.id)
+    .orderBy(participants.id);
+  return rows.map((r) => ({ participantId: r.participantId, amount: Number(r.amount ?? 0) }));
 }
