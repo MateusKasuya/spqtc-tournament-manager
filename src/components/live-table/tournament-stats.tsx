@@ -1,93 +1,79 @@
-import { formatChips, formatCurrency } from "@/lib/format";
-import { computePrizePool } from "@/lib/prize-pool";
-import type { MesaFinancialSummary, MesaParticipant, MesaTournament } from "@/db/queries/mesa";
+import type { CardFace, MesaPanelId, MesaPanelsView } from "@/lib/mesa-panels";
 import { Users, BarChart2, Layers, Trophy, Target } from "lucide-react";
 
 interface TournamentStatsProps {
-  participants: Pick<
-    MesaParticipant,
-    "status" | "buyInPaid" | "rebuyCount" | "addonCount" | "bonusChipUsed" | "currentBounty" | "bountiesCollected"
-  >[];
-  tournament: Pick<
-    MesaTournament,
-    "initialChips" | "rebuyChips" | "addonChips" | "bonusChipAmount" | "rankingFeeAmount" | "tournamentType"
-  >;
-  financialSummary: Pick<MesaFinancialSummary, "buy_in" | "rebuy" | "addon">;
+  view: MesaPanelsView;
+  onOpenPanel: (panel: MesaPanelId) => void;
 }
 
 interface StatCardProps {
   icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub?: string;
+  face: CardFace;
+  // Presente quando o card tem painel: o card vira botão que abre a gaveta.
+  onOpen?: () => void;
 }
 
-function StatCard({ icon, label, value, sub }: StatCardProps) {
-  return (
-    <div className="flex flex-col gap-1 rounded-lg border p-3">
+function StatCard({ icon, face, onOpen }: StatCardProps) {
+  const body = (
+    <>
       <div className="flex items-center gap-1.5 text-muted-foreground">
         {icon}
-        <span className="text-sm font-medium">{label}</span>
+        <span className="text-sm font-medium">{face.label}</span>
       </div>
-      <p className="text-xl font-bold tabular-nums">{value}</p>
-      {sub && <p className="text-sm text-muted-foreground">{sub}</p>}
-    </div>
+      <p className="text-xl font-bold tabular-nums">{face.value}</p>
+      {face.sub && <p className="text-sm text-muted-foreground">{face.sub}</p>}
+    </>
+  );
+
+  if (!onOpen) {
+    return <div className="flex flex-col gap-1 rounded-lg border p-3">{body}</div>;
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-haspopup="dialog"
+      aria-label={`${face.label}: ${face.value}. Ver detalhes`}
+      className="flex flex-col gap-1 rounded-lg border p-3 text-left transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {body}
+    </button>
   );
 }
 
-export function TournamentStats({ participants, tournament, financialSummary }: TournamentStatsProps) {
-  const playingCount = participants.filter((p) => p.status === "playing").length;
-  const paidCount = participants.filter((p) => p.buyInPaid).length;
-  const totalRebuys = participants.reduce((sum, p) => sum + p.rebuyCount, 0);
-  const totalAddons = participants.reduce((sum, p) => sum + p.addonCount, 0);
-  const totalBonusChips = participants.filter((p) => p.bonusChipUsed).length;
-
-  const totalChips =
-    paidCount * tournament.initialChips +
-    totalRebuys * tournament.rebuyChips +
-    totalAddons * tournament.addonChips +
-    totalBonusChips * tournament.bonusChipAmount;
-
-  const avgStack = playingCount > 0 ? Math.round(totalChips / playingCount) : 0;
-
-  const isBounty = tournament.tournamentType === "bounty_builder";
-  const { prizePool } = computePrizePool({ rules: tournament, collected: financialSummary, participants });
-
-  const activeBountyPool = isBounty
-    ? participants.reduce((sum, p) => sum + p.currentBounty, 0)
-    : 0;
-
-  const cols = isBounty ? "sm:grid-cols-5" : "sm:grid-cols-4";
+export function TournamentStats({ view, onOpenPanel }: TournamentStatsProps) {
+  const { players, averageStack, chipsInPlay, prizePool, bounty } = view;
+  const opener = (panel: MesaPanelId, model: unknown) => (model === null ? undefined : () => onOpenPanel(panel));
+  const cols = bounty ? "sm:grid-cols-5" : "sm:grid-cols-4";
 
   return (
     <div className={`grid grid-cols-2 gap-2 ${cols}`}>
       <StatCard
         icon={<Users className="h-3.5 w-3.5" />}
-        label="Jogadores"
-        value={`${playingCount}`}
-        sub={`de ${paidCount} pagos`}
+        face={players.card}
+        onOpen={opener("players", players.panel)}
       />
       <StatCard
         icon={<BarChart2 className="h-3.5 w-3.5" />}
-        label="Stack medio"
-        value={formatChips(avgStack)}
+        face={averageStack.card}
+        onOpen={opener("averageStack", averageStack.panel)}
       />
       <StatCard
         icon={<Layers className="h-3.5 w-3.5" />}
-        label="Fichas em jogo"
-        value={formatChips(totalChips)}
+        face={chipsInPlay.card}
+        onOpen={opener("chipsInPlay", chipsInPlay.panel)}
       />
       <StatCard
         icon={<Trophy className="h-3.5 w-3.5" />}
-        label="Prize pool"
-        value={formatCurrency(prizePool)}
+        face={prizePool.card}
+        onOpen={opener("prizePool", prizePool.panel)}
       />
-      {isBounty && (
+      {bounty && (
         <StatCard
           icon={<Target className="h-3.5 w-3.5" />}
-          label="Bounty pool"
-          value={formatCurrency(activeBountyPool)}
-          sub="em jogo"
+          face={bounty.card}
+          onOpen={opener("bounty", bounty.panel)}
         />
       )}
     </div>
