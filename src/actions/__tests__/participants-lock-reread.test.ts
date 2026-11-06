@@ -283,6 +283,18 @@ describe("undoBuyIn relê torneio e participante dentro do lock", () => {
     expect((await participantRow(part)).bonusChipUsed).toBe(true);
   });
 
+  it("Bounty recolhido no banco devolve erro e mantém o buy-in", async () => {
+    const { t, player, part } = await paidParticipant();
+    await testDb.update(participants).set({ bountiesCollected: 1 }).where(eq(participants.id, part));
+    const spy = staleParticipant(await participantRow(part), { bountiesCollected: 0 });
+
+    const res = await undoBuyIn(part);
+
+    expect(spy).toHaveBeenCalled();
+    expect(res).toEqual({ error: BLOCKED });
+    await expectBuyInKept(t, player, part);
+  });
+
   it("participante eliminado no banco devolve erro e mantém eliminação e buy_in", async () => {
     const t = await seedTournament({ buyInAmount: 100 });
     const players = [await seedPlayer("A"), await seedPlayer("B"), await seedPlayer("C")];

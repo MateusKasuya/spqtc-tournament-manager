@@ -9,7 +9,7 @@ import type { participants, tournaments } from "@/db/schema";
 type Participant = typeof participants.$inferSelect;
 type Tournament = typeof tournaments.$inferSelect;
 
-type Refusal = { error: string } | null;
+export type Refusal = { error: string } | null;
 
 export function checkConfirmBuyIn(participant: Pick<Participant, "buyInPaid">): Refusal {
   if (participant.buyInPaid) return { error: "Buy-in ja confirmado" };

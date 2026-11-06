@@ -20,6 +20,7 @@ import {
   checkUndoAddon,
   checkUndoBonusChip,
   checkUndoBuyIn,
+  type Refusal,
 } from "@/lib/participant-entries";
 import { z } from "zod";
 
@@ -197,7 +198,7 @@ async function lockAndReload(
   tournamentId: number,
   participantId: number,
   rule: StatusRule,
-  check: (participant: Participant, tournament: Tournament) => { error: string } | null
+  check: (participant: Participant, tournament: Tournament) => Refusal
 ) {
   await lockTournament(tx, tournamentId);
   const [tournament] = await tx.select().from(tournaments).where(eq(tournaments.id, tournamentId));
