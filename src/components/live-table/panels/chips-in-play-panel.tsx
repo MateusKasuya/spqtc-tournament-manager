@@ -1,5 +1,9 @@
-import { formatChips } from "@/lib/format";
-import type { ChipSource, ChipsInPlayPanel as ChipsInPlayPanelModel } from "@/lib/mesa-panels";
+import { formatChips, formatCurrency } from "@/lib/format";
+import type {
+  ChipSource,
+  ChipsInPlayEntryRules,
+  ChipsInPlayPanel as ChipsInPlayPanelModel,
+} from "@/lib/mesa-panels";
 
 const SOURCE_LABEL: Record<ChipSource, string> = {
   buyIn: "Buy-ins",
@@ -33,6 +37,43 @@ export function ChipsInPlayPanel({ panel }: { panel: ChipsInPlayPanelModel }) {
       <p className="text-sm text-muted-foreground">
         Nenhuma ficha sai do jogo; as fichas de quem caiu continuam na mesa.
       </p>
+      <EntryRules rules={panel.entryRules} />
     </div>
+  );
+}
+
+// "Ainda da Rebuy?": as entradas que o torneio permite, com valor, fichas e limite.
+function EntryRules({ rules }: { rules: ChipsInPlayEntryRules }) {
+  const items: { label: string; text: string }[] = [];
+  if (rules.rebuy) {
+    const limit = rules.rebuy.maxPerPlayer === null ? "ilimitado" : `ate ${rules.rebuy.maxPerPlayer} por pessoa`;
+    items.push({
+      label: "Rebuy",
+      text: `${formatCurrency(rules.rebuy.amount)} → ${formatChips(rules.rebuy.chips)} fichas, ${limit}`,
+    });
+  }
+  if (rules.addon) {
+    items.push({
+      label: "Add-on",
+      text: `${formatCurrency(rules.addon.amount)} → ${formatChips(rules.addon.chips)} fichas`,
+    });
+  }
+  if (rules.bonus) {
+    items.push({ label: "Bonus", text: `${formatChips(rules.bonus.chips)} fichas, uma vez por pessoa, sem custo` });
+  }
+  if (items.length === 0) return null;
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h3 className="text-sm font-semibold">Regras de entrada</h3>
+      <dl className="flex flex-col gap-1 text-sm">
+        {items.map((item) => (
+          <div key={item.label} className="flex gap-2">
+            <dt className="font-medium">{item.label}</dt>
+            <dd className="text-muted-foreground">{item.text}</dd>
+          </div>
+        ))}
+      </dl>
+    </section>
   );
 }

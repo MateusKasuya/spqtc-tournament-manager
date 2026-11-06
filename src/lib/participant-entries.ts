@@ -11,6 +11,20 @@ type Tournament = typeof tournaments.$inferSelect;
 
 export type Refusal = { error: string } | null;
 
+// Regras de entrada do torneio: o que ele permite, sem olhar participante. As
+// mesmas condições valem no servidor, nas Ações rápidas e no painel Fichas em jogo.
+export function allowsRebuy(tournament: Pick<Tournament, "rebuyAmount">): boolean {
+  return tournament.rebuyAmount > 0;
+}
+
+export function allowsAddon(tournament: Pick<Tournament, "allowAddon">): boolean {
+  return tournament.allowAddon;
+}
+
+export function allowsBonusChip(tournament: Pick<Tournament, "bonusChipAmount">): boolean {
+  return tournament.bonusChipAmount > 0;
+}
+
 export function checkConfirmBuyIn(participant: Pick<Participant, "buyInPaid">): Refusal {
   if (participant.buyInPaid) return { error: "Buy-in ja confirmado" };
   return null;
@@ -40,7 +54,7 @@ export function checkAddAddon(
   tournament: Pick<Tournament, "allowAddon">
 ): Refusal {
   if (!participant.buyInPaid) return { error: "Jogador ainda nao pagou buy-in" };
-  if (!tournament.allowAddon) return { error: "Torneio nao permite add-on" };
+  if (!allowsAddon(tournament)) return { error: "Torneio nao permite add-on" };
   return null;
 }
 
@@ -55,7 +69,7 @@ export function checkAddBonusChip(
 ): Refusal {
   if (participant.status !== "playing") return { error: "Participante nao esta em jogo" };
   if (participant.bonusChipUsed) return { error: "Bonus chip ja utilizado" };
-  if (tournament.bonusChipAmount === 0) return { error: "Torneio nao permite bonus chip" };
+  if (!allowsBonusChip(tournament)) return { error: "Torneio nao permite bonus chip" };
   return null;
 }
 

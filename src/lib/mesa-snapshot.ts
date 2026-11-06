@@ -19,6 +19,7 @@ export const MESA_CONFIG_COLUMNS = {
   bonusChipAmount: "bonus_chip_amount",
   allowAddon: "allow_addon",
   rankingFeeAmount: "ranking_fee_amount",
+  maxRebuys: "max_rebuys",
 } as const;
 
 export type MesaConfigKey = keyof typeof MESA_CONFIG_COLUMNS;
