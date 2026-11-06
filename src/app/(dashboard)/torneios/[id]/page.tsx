@@ -60,6 +60,7 @@ export default async function TorneioPage({ params }: PageProps) {
   const isAdmin = profile?.role === "admin";
   const canEdit = isAdmin && statusAllows(STATUS_RULES.tournamentData, tournament.status);
   const isActive = statusAllows(STATUS_RULES.registration, tournament.status);
+  const canEditStructures = isAdmin && statusAllows(STATUS_RULES.structures, tournament.status);
 
   const prizeData = prizePositions.map((p) => ({
     position: p.position,
@@ -236,7 +237,7 @@ export default async function TorneioPage({ params }: PageProps) {
 
         {/* Blinds */}
         <TabsContent value="blinds" className="mt-4 space-y-4">
-          {isAdmin && (
+          {canEditStructures && (
             <div className="flex justify-end">
               <BlindStructureEditor
                 tournamentId={tournamentId}
@@ -259,7 +260,7 @@ export default async function TorneioPage({ params }: PageProps) {
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-2">
               <h3 className="text-sm font-semibold">Estrutura de premios</h3>
-              {isAdmin && tournament.status !== "finished" && (
+              {canEditStructures && (
                 <div className="flex gap-2">
                   {prizeData.length > 0 && (
                     <DeletePrizeStructureButton tournamentId={tournamentId} />

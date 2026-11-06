@@ -5,7 +5,7 @@ import { participants, transactions, tournaments } from "@/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { requireAdmin } from "@/lib/require-admin";
 import { revalidateTournament } from "@/lib/revalidate-tournament";
-import { STATUS_RULES } from "@/lib/tournament-status";
+import { STATUS_RULES, statusAllows, type StatusRule } from "@/lib/tournament-status";
 import { clockStateColumns, getTournamentRequiringStatus } from "@/db/queries/tournaments";
 import { getParticipantById, getParticipantByPlayerAndTournament } from "@/db/queries/participants";
 import { checkKnockout, checkUndo, initialBounty, KnockoutLedgerError, type KnockoutEvent, type UndoRequest } from "@/lib/knockout-ledger";
@@ -87,25 +87,32 @@ export async function confirmBuyIn(participantId: number) {
   if (!participant) return { error: "Participante nao encontrado" };
   const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.registration);
   if ("error" in loaded) return loaded;
-  const { tournament } = loaded;
   if (participant.buyInPaid) return { error: "Buy-in ja confirmado" };
 
-  await db.transaction(async (tx) => {
-    await lockTournament(tx, participant.tournamentId);
+  const failed = await runLedger(async (tx) => {
+    const { tournament, participant: current } = await lockAndReload(
+      tx,
+      participant.tournamentId,
+      participantId,
+      STATUS_RULES.registration
+    );
+    if (current.buyInPaid) throw new ParticipantRefusal("Buy-in ja confirmado");
+
     await tx
       .update(participants)
       .set({ buyInPaid: true, status: "playing", currentBounty: initialBounty(tournament) })
       .where(eq(participants.id, participantId));
 
     await tx.insert(transactions).values({
-      tournamentId: participant.tournamentId,
-      playerId: participant.playerId,
+      tournamentId: current.tournamentId,
+      playerId: current.playerId,
       type: "buy_in",
       amount: tournament.buyInAmount,
     });
 
-    await renumberFinalPositions(tx, participant.tournamentId);
+    await renumberFinalPositions(tx, current.tournamentId);
   });
+  if (failed) return failed;
 
   revalidateTournament(participant.tournamentId);
   return { success: true };
@@ -170,14 +177,32 @@ async function loadKnockoutContext(participantId: number) {
   return { participant, snapshot };
 }
 
-// Roda a operação do ledger e do Saldo na transação; recusa esperada (Knockout ou Saldo) vira
-// { error } no contrato da action, bug/infra continua lançando.
+// Recusa de uma precondição relida dentro do lock; aborta a transação e vira
+// { error } em runLedger, com a mesma mensagem da checagem de fora.
+class ParticipantRefusal extends Error {}
+
+// Trava o torneio e relê torneio e participante: a decisão e os valores
+// gravados saem desta leitura, não da feita fora da transação.
+async function lockAndReload(tx: Tx, tournamentId: number, participantId: number, rule: StatusRule) {
+  await lockTournament(tx, tournamentId);
+  const [tournament] = await tx.select().from(tournaments).where(eq(tournaments.id, tournamentId));
+  if (!tournament) throw new ParticipantRefusal("Torneio nao encontrado");
+  if (!statusAllows(rule, tournament.status)) throw new ParticipantRefusal(rule.error);
+  const [participant] = await tx.select().from(participants).where(eq(participants.id, participantId));
+  if (!participant) throw new ParticipantRefusal("Participante nao encontrado");
+  return { tournament, participant };
+}
+
+// Roda a operação do ledger e do Saldo na transação; recusa esperada (Knockout, Saldo ou
+// precondição relida no lock) vira { error } no contrato da action, bug/infra continua lançando.
 async function runLedger(work: (tx: Tx) => Promise<unknown>) {
   try {
     await db.transaction(work);
     return null;
   } catch (e) {
-    if (e instanceof KnockoutLedgerError || e instanceof SaldoNegativoError) return { error: e.message };
+    if (e instanceof KnockoutLedgerError || e instanceof SaldoNegativoError || e instanceof ParticipantRefusal) {
+      return { error: e.message };
+    }
     throw e;
   }
 }
@@ -218,23 +243,32 @@ export async function addAddon(participantId: number) {
   if (!participant) return { error: "Participante nao encontrado" };
   const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.live);
   if ("error" in loaded) return loaded;
-  const { tournament } = loaded;
   if (!participant.buyInPaid) return { error: "Jogador ainda nao pagou buy-in" };
-  if (!tournament.allowAddon) return { error: "Torneio nao permite add-on" };
+  if (!loaded.tournament.allowAddon) return { error: "Torneio nao permite add-on" };
 
-  await db.transaction(async (tx) => {
+  const failed = await runLedger(async (tx) => {
+    const { tournament, participant: current } = await lockAndReload(
+      tx,
+      participant.tournamentId,
+      participantId,
+      STATUS_RULES.live
+    );
+    if (!current.buyInPaid) throw new ParticipantRefusal("Jogador ainda nao pagou buy-in");
+    if (!tournament.allowAddon) throw new ParticipantRefusal("Torneio nao permite add-on");
+
     await tx
       .update(participants)
-      .set({ addonCount: participant.addonCount + 1 })
+      .set({ addonCount: current.addonCount + 1 })
       .where(eq(participants.id, participantId));
 
     await tx.insert(transactions).values({
-      tournamentId: participant.tournamentId,
-      playerId: participant.playerId,
+      tournamentId: current.tournamentId,
+      playerId: current.playerId,
       type: "addon",
       amount: tournament.addonAmount,
     });
   });
+  if (failed) return failed;
 
   revalidateTournament(participant.tournamentId);
   return { success: true };
@@ -271,31 +305,37 @@ export async function undoAddon(participantId: number) {
   if ("error" in loaded) return loaded;
   if (participant.addonCount <= 0) return { error: "Nenhum add-on para desfazer" };
 
-  const [lastAddonTx] = await db
-    .select({ id: transactions.id })
-    .from(transactions)
-    .where(
-      and(
-        eq(transactions.playerId, participant.playerId),
-        eq(transactions.tournamentId, participant.tournamentId),
-        eq(transactions.type, "addon")
-      )
-    )
-    .orderBy(desc(transactions.createdAt))
-    .limit(1);
-
   const failed = await runLedger(async (tx) => {
-    await lockTournament(tx, participant.tournamentId);
+    const { participant: current } = await lockAndReload(
+      tx,
+      participant.tournamentId,
+      participantId,
+      STATUS_RULES.live
+    );
+    if (current.addonCount <= 0) throw new ParticipantRefusal("Nenhum add-on para desfazer");
+
+    const [lastAddonTx] = await tx
+      .select({ id: transactions.id })
+      .from(transactions)
+      .where(
+        and(
+          eq(transactions.playerId, current.playerId),
+          eq(transactions.tournamentId, current.tournamentId),
+          eq(transactions.type, "addon")
+        )
+      )
+      .orderBy(desc(transactions.createdAt))
+      .limit(1);
     if (lastAddonTx) {
       await tx.delete(transactions).where(eq(transactions.id, lastAddonTx.id));
     }
 
     await tx
       .update(participants)
-      .set({ addonCount: participant.addonCount - 1 })
+      .set({ addonCount: current.addonCount - 1 })
       .where(eq(participants.id, participantId));
 
-    await assertSaldoNaoNegativo(tx, participant.tournamentId);
+    await assertSaldoNaoNegativo(tx, current.tournamentId);
   });
   if (failed) return failed;
 
