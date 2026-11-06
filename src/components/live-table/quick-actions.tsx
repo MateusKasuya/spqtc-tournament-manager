@@ -6,6 +6,7 @@ import { useQuickActionRunner } from "@/hooks/use-quick-action-runner";
 import { Skull, RefreshCw, Plus, RotateCcw, CheckCircle, Zap, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/format";
+import { displayName } from "@/lib/display-name";
 import {
   Dialog,
   DialogContent,
@@ -24,10 +25,6 @@ interface QuickActionsProps {
   participants: MesaParticipant[];
   tournament: Tournament;
   onMutated: () => Promise<void>;
-}
-
-function displayName(p: { name: string; nickname: string | null }) {
-  return p.nickname ?? p.name;
 }
 
 function buildSummary(p: MesaParticipant, totalPaid: number, isBounty: boolean): string {
