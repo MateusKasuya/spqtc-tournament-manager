@@ -15,10 +15,10 @@ export function PrizePoolPanel({ panel }: { panel: PrizePoolPanelModel }) {
       <Account panel={panel} />
       <section className="flex flex-col gap-3">
         <h3 className="text-sm font-semibold">Estrutura de premios</h3>
-        {panel.paidPositionsAboveBuyIns && (
+        {panel.prizedPositionsAboveBuyIns && (
           <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm">
-            A Estrutura paga {panel.paidPositionsAboveBuyIns.paidPositions} posicoes e so ha{" "}
-            {panel.paidPositionsAboveBuyIns.buyIns} participantes com buy-in. A mesa nao muda a Estrutura.
+            A Estrutura paga {panel.prizedPositionsAboveBuyIns.prizedPositions} posicoes e so ha{" "}
+            {panel.prizedPositionsAboveBuyIns.buyIns} participantes com buy-in. A mesa nao muda a Estrutura.
           </p>
         )}
         {panel.moneyLine && <MoneyLineSummary moneyLine={panel.moneyLine} />}
@@ -80,7 +80,7 @@ function MoneyLineSummary({ moneyLine }: { moneyLine: MoneyLine }) {
         <p className="text-sm font-medium">Faltam {remaining} Eliminacoes para o dinheiro</p>
       )}
       <p className="text-sm text-muted-foreground tabular-nums">
-        Pagam {moneyLine.paidPositions} · {moneyLine.playing} em jogo · faltam {remaining}
+        Pagam {moneyLine.prizedPositions} · {moneyLine.playing} em jogo · faltam {remaining}
       </p>
     </div>
   );

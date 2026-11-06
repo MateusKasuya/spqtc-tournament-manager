@@ -4,7 +4,7 @@ import { computePrizePool, computeSaldo } from "@/lib/prize-pool";
 import { calculateRoundedPrizeAmounts } from "@/lib/prize";
 import type { MesaSnapshot } from "@/db/queries/mesa";
 import type { CardFace, MesaPanelsInput } from "./types";
-import { countPaidPositions, deriveMoneyLine, type MoneyLine } from "./money-line";
+import { countPrizedPositions, deriveMoneyLine, isPrizedPosition, type MoneyLine } from "./money-line";
 
 // A conta do Prize pool (CONTEXT.md, cluster Prêmios), em centavos. Os valores de
 // cada origem são o que entrou de fato no torneio (o resumo financeiro), nunca a
@@ -27,7 +27,7 @@ export interface PrizePoolPanel {
   // Só No dinheiro com 2 ou mais Em jogo.
   nextOut: { position: number; prize: number } | null;
   // Aviso só para o admin. A mesa só avisa: não recorta nem renormaliza a Estrutura.
-  paidPositionsAboveBuyIns: { paidPositions: number; buyIns: number } | null;
+  prizedPositionsAboveBuyIns: { prizedPositions: number; buyIns: number } | null;
 }
 
 export interface EstimatedPrizePosition {
@@ -54,12 +54,11 @@ export function estimatePrizes(
 }
 
 function buildStructureSection(positions: EstimatedPrizePosition[]): PrizeStructureSection | null {
-  const paid = positions.filter((p) => p.percentage > 0);
-  if (paid.length === 0) return null;
-  return { positions, paysThroughPosition: paid[paid.length - 1].position };
+  const prized = positions.filter(isPrizedPosition);
+  if (prized.length === 0) return null;
+  return { positions, paysThroughPosition: prized[prized.length - 1].position };
 }
 
-// O próximo a cair termina na posição igual ao número de Em jogo.
 function deriveNextOut(moneyLine: MoneyLine | null, positions: EstimatedPrizePosition[]) {
   if (moneyLine?.state !== "inTheMoney" || moneyLine.playing < 2) return null;
   const position = moneyLine.playing;
@@ -78,11 +77,11 @@ export interface PrizePoolSlice {
   panel: PrizePoolPanel;
 }
 
-function derivePaidPositionsAboveBuyIns({ snapshot, isAdmin }: MesaPanelsInput) {
+function derivePrizedPositionsAboveBuyIns({ snapshot, isAdmin }: MesaPanelsInput) {
   if (!isAdmin) return null;
-  const paidPositions = countPaidPositions(snapshot.prizeStructure);
+  const prizedPositions = countPrizedPositions(snapshot.prizeStructure);
   const buyIns = snapshot.participants.filter((p) => p.buyInPaid).length;
-  return paidPositions > buyIns ? { paidPositions, buyIns } : null;
+  return prizedPositions > buyIns ? { prizedPositions, buyIns } : null;
 }
 
 export function derivePrizePool(input: MesaPanelsInput): PrizePoolSlice {
@@ -109,7 +108,7 @@ export function derivePrizePool(input: MesaPanelsInput): PrizePoolSlice {
     structure: buildStructureSection(estimated),
     moneyLine,
     nextOut: deriveNextOut(moneyLine, estimated),
-    paidPositionsAboveBuyIns: derivePaidPositionsAboveBuyIns(input),
+    prizedPositionsAboveBuyIns: derivePrizedPositionsAboveBuyIns(input),
   };
   const first = panel.structure?.positions.find((p) => p.position === 1);
   return {

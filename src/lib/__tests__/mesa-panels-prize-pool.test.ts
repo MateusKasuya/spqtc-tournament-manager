@@ -56,7 +56,7 @@ describe("painel Prize pool", () => {
       structure: null,
       moneyLine: null,
       nextOut: null,
-      paidPositionsAboveBuyIns: null,
+      prizedPositionsAboveBuyIns: null,
     });
   });
 
@@ -174,7 +174,7 @@ describe("painel Prize pool: linha de dinheiro", () => {
     });
 
     expect(prizePool(snapshot).panel.moneyLine).toEqual({
-      paidPositions: 2,
+      prizedPositions: 2,
       playing: 4,
       remaining: 2,
       state: "beforeMoney",
@@ -183,7 +183,7 @@ describe("painel Prize pool: linha de dinheiro", () => {
 
   it("com Em jogo uma acima das Posições premiadas é Bolha", () => {
     expect(prizePool(withStructure({ playing: 4 })).panel.moneyLine).toEqual({
-      paidPositions: 3,
+      prizedPositions: 3,
       playing: 4,
       remaining: 1,
       state: "bubble",
@@ -303,19 +303,19 @@ describe("painel Prize pool: aviso de Posições premiadas acima dos Participant
   it("aparece para o admin", () => {
     const { panel } = buildMesaPanels(makeInput({ snapshot: overpaid(), isAdmin: true })).prizePool;
 
-    expect(panel.paidPositionsAboveBuyIns).toEqual({ paidPositions: 3, buyIns: 2 });
+    expect(panel.prizedPositionsAboveBuyIns).toEqual({ prizedPositions: 3, buyIns: 2 });
   });
 
   it("não aparece para o jogador", () => {
     const { panel } = buildMesaPanels(makeInput({ snapshot: overpaid(), isAdmin: false })).prizePool;
 
-    expect(panel.paidPositionsAboveBuyIns).toBeNull();
+    expect(panel.prizedPositionsAboveBuyIns).toBeNull();
   });
 
   it("não aparece quando as Posições premiadas não passam dos Participantes com buy-in", () => {
     const { panel } = buildMesaPanels(makeInput({ snapshot: withStructure({ playing: 3 }), isAdmin: true })).prizePool;
 
-    expect(panel.paidPositionsAboveBuyIns).toBeNull();
+    expect(panel.prizedPositionsAboveBuyIns).toBeNull();
   });
 
   it("não muda a Estrutura e a linha de dinheiro segue as Posições premiadas da Estrutura", () => {
@@ -326,7 +326,7 @@ describe("painel Prize pool: aviso de Posições premiadas acima dos Participant
       { position: 2, percentage: 30, estimatedPrize: 9500 },
       { position: 3, percentage: 20, estimatedPrize: 6000 },
     ]);
-    expect(panel.moneyLine).toEqual({ paidPositions: 3, playing: 2, remaining: -1, state: "inTheMoney" });
+    expect(panel.moneyLine).toEqual({ prizedPositions: 3, playing: 2, remaining: -1, state: "inTheMoney" });
     expect(panel.nextOut).toEqual({ position: 2, prize: 9500 });
   });
 });
