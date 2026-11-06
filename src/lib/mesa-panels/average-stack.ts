@@ -2,6 +2,7 @@ import { formatChips } from "@/lib/format";
 import type { MesaLevel, MesaSnapshot } from "@/db/queries/mesa";
 import { computeChipsInPlay } from "./chips-in-play";
 import { findCurrentLevel } from "@/lib/tournament-clock";
+import { countPlaying } from "./playing";
 import { findNextPlayLevel, findReturnLevel } from "./level";
 import type { CardFace, MesaPanelsInput } from "./types";
 
@@ -46,7 +47,7 @@ export function formatAverageInBigBlinds(average: number | null, bigBlind: numbe
 }
 
 export function deriveAverageStack({ snapshot }: MesaPanelsInput): AverageStackSlice {
-  const playingCount = snapshot.participants.filter((p) => p.status === "playing").length;
+  const playingCount = countPlaying(snapshot.participants);
   const { total } = computeChipsInPlay(snapshot);
   const average = playingCount > 0 ? total / playingCount : null;
   const reference = referenceLevel(snapshot);

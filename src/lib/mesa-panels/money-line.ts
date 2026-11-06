@@ -1,4 +1,5 @@
 import type { MesaParticipant, MesaPrizePosition } from "@/db/queries/mesa";
+import { countPlaying } from "./playing";
 
 // A Fronteira do dinheiro (CONTEXT.md: Posições premiadas, Bolha, No dinheiro), a
 // única conta dela: o painel do Prize pool e o Jogadores (#84) a leem daqui.
@@ -45,7 +46,7 @@ export function deriveMoneyLine({ participants, prizeStructure }: {
   participants: MesaParticipant[];
   prizeStructure: MesaPrizePosition[];
 }): MoneyLine | null {
-  const playing = participants.filter((p) => p.status === "playing").length;
+  const playing = countPlaying(participants);
   const paysThrough = moneyBoundary(prizeStructure);
   if (playing === 0 || paysThrough === 0) return null;
   const remaining = playing - paysThrough;

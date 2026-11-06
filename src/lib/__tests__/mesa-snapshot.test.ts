@@ -18,6 +18,7 @@ const PREV = {
   bonusChipAmount: 0,
   allowAddon: true,
   rankingFeeAmount: 1000,
+  maxRebuys: 0,
   currentBlindLevel: 1,
   timerRunning: false,
   timerRemainingSecs: 900,
@@ -60,9 +61,15 @@ describe("Mesa ao vivo: aplicar evento do torneio", () => {
     expect(next).toEqual({ ...PREV, rebuyAmount: 6000 });
   });
 
+  it("o limite de Rebuys do evento atualiza a configuracao", () => {
+    const next = applyTournamentEvent(PREV, { max_rebuys: 3 });
+
+    expect(next).toEqual({ ...PREV, maxRebuys: 3 });
+  });
+
   it("coluna fora da projecao e ignorada", () => {
     const next = applyTournamentEvent(PREV, {
-      max_rebuys: 3,
+      bounty_percentage: 70,
       created_by: "00000000-0000-0000-0000-000000000001",
       updated_at: NOW.toISOString(),
       id: 99,
@@ -88,6 +95,7 @@ describe("Mesa ao vivo: aplicar evento do torneio", () => {
     expect(TOURNAMENT_RAW_COLUMNS).toContain("id");
     expect(TOURNAMENT_RAW_COLUMNS).toContain("rebuy_amount");
     expect(TOURNAMENT_RAW_COLUMNS).toContain("timer_started_at");
-    expect(TOURNAMENT_RAW_COLUMNS).not.toContain("max_rebuys");
+    expect(TOURNAMENT_RAW_COLUMNS).toContain("max_rebuys");
+    expect(TOURNAMENT_RAW_COLUMNS).not.toContain("bounty_percentage");
   });
 });

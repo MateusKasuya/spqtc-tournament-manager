@@ -37,6 +37,7 @@ Persistência de eventos (hoje: o Ledger de Knockout, `knockout-ledger.ts`). Cat
 
 - Status do torneio: a regra do `CONTEXT.md` mora em `STATUS_RULES` (`src/lib/tournament-status.ts`), um grupo por linha da regra, com uma mensagem de recusa por grupo. A action carrega o torneio com `getTournamentRequiringStatus(id, STATUS_RULES.<grupo>)`; ação que parte de um participante carrega o participante e depois o torneio dele pela mesma função.
 - Precondição de entrada de participante fora do Ledger de Knockout (buy-in, add-on, bônus e os Desfazer): função pura em `src/lib/participant-entries.ts` que devolve `{ error } | null`. A action roda a mesma função na leitura de fora (resposta rápida) e de novo em `lockAndReload`, depois de travar o torneio e reler torneio e participante; só a releitura decide e fornece os valores gravados, e a recusa dela repete a mensagem da checagem de fora.
+- Entrada que o torneio permite (Rebuy, add-on, bônus e o limite de Rebuys, com 0 = ilimitado): predicado puro em `src/lib/tournament-entries.ts`. O Ledger de Knockout, `participant-entries.ts`, as Ações rápidas e o painel Fichas em jogo leem dali, em vez de repetir a condição.
 - Toda action que muda um torneio atualiza as telas com `revalidateTournament(id)` (detalhe, edição e mesa ao vivo), além das listagens e do ranking que ela afetar.
 - Toda action de admin entra na tabela de `src/actions/__tests__/authorization.test.ts`; o teste falha se uma action exportada ficar fora.
 

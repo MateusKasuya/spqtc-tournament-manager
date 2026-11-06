@@ -1,5 +1,6 @@
 import { formatChips } from "@/lib/format";
-import type { MesaSnapshot } from "@/db/queries/mesa";
+import { allowsAddon, allowsBonusChip, allowsRebuy, rebuyLimit } from "@/lib/tournament-entries";
+import type { MesaSnapshot, MesaTournament } from "@/db/queries/mesa";
 import type { CardFace, MesaPanelsInput } from "./types";
 
 export type ChipSource = "buyIn" | "rebuy" | "addon" | "bonus";
@@ -11,10 +12,21 @@ export interface ChipsInPlayLine {
   chips: number;
 }
 
+// Entradas que o torneio permite ("ainda dá Rebuy?"): null quando não permite.
+export interface ChipsInPlayAllowedEntries {
+  // maxPerPlayer null = ilimitado (limite de Rebuys 0).
+  rebuy: { amount: number; chips: number; maxPerPlayer: number | null } | null;
+  // Add-on não tem limite por pessoa.
+  addon: { amount: number; chips: number } | null;
+  // Bônus: uma vez por pessoa, sem custo.
+  bonus: { chips: number } | null;
+}
+
 export interface ChipsInPlayPanel {
   // Só as linhas que somam fichas: zeradas ou não permitidas pelo torneio ficam de fora.
   lines: ChipsInPlayLine[];
   total: number;
+  allowedEntries: ChipsInPlayAllowedEntries;
 }
 
 export interface ChipsInPlaySlice {
@@ -24,7 +36,7 @@ export interface ChipsInPlaySlice {
 
 // Fichas em jogo (CONTEXT.md): tudo o que entrou por buy-ins confirmados, Rebuys
 // (o Rebuy duplo já conta 2 no rebuyCount), add-ons e bônus. Nenhuma ficha sai do jogo.
-export function computeChipsInPlay({ tournament, participants }: Pick<MesaSnapshot, "tournament" | "participants">): ChipsInPlayPanel {
+export function computeChipsInPlay({ tournament, participants }: Pick<MesaSnapshot, "tournament" | "participants">): Pick<ChipsInPlayPanel, "lines" | "total"> {
   const counts: Record<ChipSource, number> = {
     buyIn: participants.filter((p) => p.buyInPaid).length,
     rebuy: participants.reduce((sum, p) => sum + p.rebuyCount, 0),
@@ -48,8 +60,22 @@ export function computeChipsInPlay({ tournament, participants }: Pick<MesaSnapsh
   return { lines, total: lines.reduce((sum, line) => sum + line.chips, 0) };
 }
 
+function allowedEntries(tournament: MesaTournament): ChipsInPlayAllowedEntries {
+  return {
+    rebuy: allowsRebuy(tournament)
+      ? {
+          amount: tournament.rebuyAmount,
+          chips: tournament.rebuyChips,
+          maxPerPlayer: rebuyLimit(tournament),
+        }
+      : null,
+    addon: allowsAddon(tournament) ? { amount: tournament.addonAmount, chips: tournament.addonChips } : null,
+    bonus: allowsBonusChip(tournament) ? { chips: tournament.bonusChipAmount } : null,
+  };
+}
+
 export function deriveChipsInPlay({ snapshot }: MesaPanelsInput): ChipsInPlaySlice {
-  const panel = computeChipsInPlay(snapshot);
+  const panel = { ...computeChipsInPlay(snapshot), allowedEntries: allowedEntries(snapshot.tournament) };
   return {
     card: { label: "Fichas em jogo", value: formatChips(panel.total), supportLines: [] },
     panel,

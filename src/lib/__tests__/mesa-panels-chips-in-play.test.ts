@@ -77,3 +77,57 @@ describe("painel Fichas em jogo", () => {
     expect(card.supportLines).toEqual([]);
   });
 });
+
+describe("painel Fichas em jogo: entradas permitidas", () => {
+  function allowedEntries(overrides: Parameters<typeof makeTournament>[0]) {
+    return chipsInPlay([makeParticipant()], makeTournament(overrides)).panel.allowedEntries;
+  }
+
+  it("Rebuy limitado mostra valor, fichas e o limite por pessoa", () => {
+    expect(allowedEntries({ rebuyAmount: 5000, rebuyChips: 8000, maxRebuys: 2 }).rebuy).toEqual({
+      amount: 5000,
+      chips: 8000,
+      maxPerPlayer: 2,
+    });
+  });
+
+  it("limite de Rebuys 0 é Rebuy ilimitado", () => {
+    expect(allowedEntries({ rebuyAmount: 5000, rebuyChips: 8000, maxRebuys: 0 }).rebuy).toEqual({
+      amount: 5000,
+      chips: 8000,
+      maxPerPlayer: null,
+    });
+  });
+
+  it("sem valor de Rebuy a regra do Rebuy não aparece, mesmo com limite", () => {
+    expect(allowedEntries({ rebuyAmount: 0, maxRebuys: 2 }).rebuy).toBeNull();
+  });
+
+  it("add-on permitido mostra valor e fichas", () => {
+    expect(allowedEntries({ allowAddon: true, addonAmount: 7000, addonChips: 15000 }).addon).toEqual({
+      amount: 7000,
+      chips: 15000,
+    });
+  });
+
+  it("add-on não permitido não aparece, mesmo com valor", () => {
+    expect(allowedEntries({ allowAddon: false, addonAmount: 7000 }).addon).toBeNull();
+  });
+
+  it("bônus aparece com as fichas de bônus", () => {
+    expect(allowedEntries({ bonusChipAmount: 2000 }).bonus).toEqual({ chips: 2000 });
+  });
+
+  it("sem fichas de bônus a regra do bônus não aparece", () => {
+    expect(allowedEntries({ bonusChipAmount: 0 }).bonus).toBeNull();
+  });
+
+  it("as regras não dependem de alguém já ter entrado", () => {
+    const { panel } = chipsInPlay([], makeTournament({ rebuyAmount: 5000, maxRebuys: 1, allowAddon: true }));
+
+    expect(panel.lines).toEqual([]);
+    expect(panel.allowedEntries.rebuy).not.toBeNull();
+    expect(panel.allowedEntries.addon).not.toBeNull();
+    expect(panel.allowedEntries.bonus).not.toBeNull();
+  });
+});
