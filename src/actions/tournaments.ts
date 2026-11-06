@@ -19,7 +19,7 @@ import { z } from "zod";
 import { clockStateColumns, getTournamentRequiringStatus } from "@/db/queries/tournaments";
 import { hasAddon, hasConfirmedBuyIn } from "@/db/queries/participants";
 import { alwaysChanges, applyClockTransition } from "@/db/ledger/tournament-clock";
-import { lockedFieldError } from "@/lib/tournament-edit";
+import { buyInBelowRankingFeeError, lockedFieldError } from "@/lib/tournament-edit";
 import { DEFAULT_BLIND_STRUCTURE, DEFAULT_PRIZE_STRUCTURE } from "@/lib/tournament-defaults";
 import {
   startTimer as startClockTimer,
@@ -114,6 +114,8 @@ export async function createTournament(formData: FormData) {
   });
 
   if (!parsed.success) return { error: parsed.error.issues[0].message };
+  const belowFee = buyInBelowRankingFeeError(parsed.data);
+  if (belowFee) return { error: belowFee };
 
   const tournament = await db.transaction(async (tx) => {
     const [created] = await tx
@@ -187,6 +189,8 @@ export async function updateTournament(id: number, formData: FormData) {
     const facts = { hasConfirmedBuyIn: await hasConfirmedBuyIn(id, tx), hasAddon: await hasAddon(id, tx) };
     const locked = lockedFieldError(current, facts, parsed.data);
     if (locked) return locked;
+    const belowFee = buyInBelowRankingFeeError(parsed.data, current);
+    if (belowFee) return belowFee;
 
     await tx
       .update(tournaments)

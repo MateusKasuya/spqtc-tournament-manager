@@ -68,3 +68,27 @@ export function lockedFieldError(
   }
   return null;
 }
+
+export const BUY_IN_BELOW_RANKING_FEE_ERROR = "Buy-in nao pode ser menor que a taxa de ranking";
+
+// Tudo o que entra no Bounty inicial: (buy-in - taxa) x percentual, em Bounty Builder.
+interface BountyRules {
+  buyInAmount: number;
+  rankingFeeAmount: number;
+  tournamentType: string;
+  bountyPercentage: number;
+}
+
+const BOUNTY_RULE_FIELDS = ["buyInAmount", "rankingFeeAmount", "tournamentType", "bountyPercentage"] as const;
+
+// Buy-in ≥ taxa de ranking (a diferença é o que sobra para Bounty e Prize pool).
+// Sem `current` é a criação e a regra vale sempre. Na edição só vale quando muda
+// algo que entra no Bounty inicial (buy-in, taxa, tipo ou percentual): assim um
+// torneio antigo gravado abaixo da taxa continua editável nos outros campos, mas
+// não vira Bounty Builder nem muda o percentual sem corrigir o buy-in, o que
+// gravaria um Bounty negativo no primeiro buy-in.
+export function buyInBelowRankingFeeError(next: BountyRules, current?: BountyRules): string | null {
+  if (next.buyInAmount >= next.rankingFeeAmount) return null;
+  const unchanged = current !== undefined && BOUNTY_RULE_FIELDS.every((f) => current[f] === next[f]);
+  return unchanged ? null : BUY_IN_BELOW_RANKING_FEE_ERROR;
+}

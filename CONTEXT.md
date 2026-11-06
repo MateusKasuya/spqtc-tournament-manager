@@ -47,6 +47,8 @@ Pendente (inscrições, antes de começar), Rodando, Encerrado ou Cancelado. Enc
 - editar os valores de buy-in, Rebuy e add-on, a taxa de ranking, o tipo do torneio e o percentual de Bounty: só Pendente e só enquanto nenhum buy-in foi confirmado. O Bounty inicial é fixado no buy-in, e as telas de total pago multiplicam os valores do torneio pelas contagens de buy-in, Rebuy e add-on de cada participante, então mudá-los depois do primeiro buy-in reescreveria o passado. Desfazer o buy-in exige desfazer antes os Rebuys e add-ons, então sem buy-in confirmado também não há Rebuy nem add-on registrado. Exceção: o valor do add-on continua livre enquanto o add-on não é permitido e ninguém fez add-on, porque não há total pago a reescrever; assim dá para ligar o add-on, com valor, depois de começar;
 - cancelar o torneio: de Pendente ou Rodando;
 - excluir o torneio: só Pendente ou Cancelado. Um torneio Rodando é cancelado antes; um Encerrado não é excluído porque carrega o histórico e os pontos do ranking da temporada.
+
+Independente do Status, o buy-in não pode ser menor que a taxa de ranking (igual pode, e o Bounty inicial de um Bounty Builder fica zero). A regra vale sempre ao criar o torneio. Ao editar, vale quando muda algo que entra no Bounty inicial (buy-in, taxa, tipo do torneio ou percentual de Bounty), para que um torneio antigo gravado com buy-in abaixo da taxa continue editável nos outros campos sem virar Bounty Builder com Bounty negativo.
 _Avoid_: finalizado, ativo
 
 ### Fichas
