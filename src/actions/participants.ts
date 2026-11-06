@@ -13,6 +13,15 @@ import { assertPremiosCabemNoPrizePool, assertSaldoNaoNegativo } from "@/db/ledg
 import { SaldoNegativoError } from "@/lib/prize-pool";
 import { applyKnockout, undoKnockout, loadKnockoutSnapshot, lockTournament, renumberFinalPositions } from "@/db/ledger/knockout-ledger";
 import { pauseTimer } from "@/lib/tournament-clock";
+import {
+  checkAddAddon,
+  checkAddBonusChip,
+  checkConfirmBuyIn,
+  checkUndoAddon,
+  checkUndoBonusChip,
+  checkUndoBuyIn,
+  type Refusal,
+} from "@/lib/participant-entries";
 import { z } from "zod";
 
 export async function addParticipant(tournamentId: number, playerId: number) {
@@ -87,16 +96,17 @@ export async function confirmBuyIn(participantId: number) {
   if (!participant) return { error: "Participante nao encontrado" };
   const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.registration);
   if ("error" in loaded) return loaded;
-  if (participant.buyInPaid) return { error: "Buy-in ja confirmado" };
+  const refused = checkConfirmBuyIn(participant);
+  if (refused) return refused;
 
   const failed = await runLedger(async (tx) => {
     const { tournament, participant: current } = await lockAndReload(
       tx,
       participant.tournamentId,
       participantId,
-      STATUS_RULES.registration
+      STATUS_RULES.registration,
+      checkConfirmBuyIn
     );
-    if (current.buyInPaid) throw new ParticipantRefusal("Buy-in ja confirmado");
 
     await tx
       .update(participants)
@@ -126,25 +136,22 @@ export async function undoBuyIn(participantId: number) {
   if (!participant) return { error: "Participante nao encontrado" };
   const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.registration);
   if ("error" in loaded) return loaded;
-  if (!participant.buyInPaid) return { error: "Buy-in nao confirmado" };
-  if (participant.status !== "playing") {
-    return { error: "Desfaca a eliminacao antes de remover o buy-in" };
-  }
-  if (
-    participant.rebuyCount > 0 ||
-    participant.addonCount > 0 ||
-    participant.bonusChipUsed ||
-    participant.bountiesCollected > 0
-  ) {
-    return { error: "Desfaca rebuys, add-ons, bonus e bounties antes de remover o buy-in" };
-  }
+  const refused = checkUndoBuyIn(participant);
+  if (refused) return refused;
 
   const failed = await runLedger(async (tx) => {
-    await lockTournament(tx, participant.tournamentId);
+    const { participant: current } = await lockAndReload(
+      tx,
+      participant.tournamentId,
+      participantId,
+      STATUS_RULES.registration,
+      checkUndoBuyIn
+    );
+
     await tx.delete(transactions).where(
       and(
-        eq(transactions.playerId, participant.playerId),
-        eq(transactions.tournamentId, participant.tournamentId),
+        eq(transactions.playerId, current.playerId),
+        eq(transactions.tournamentId, current.tournamentId),
         eq(transactions.type, "buy_in")
       )
     );
@@ -154,8 +161,8 @@ export async function undoBuyIn(participantId: number) {
       .set({ buyInPaid: false, status: "registered", currentBounty: 0 })
       .where(eq(participants.id, participantId));
 
-    await renumberFinalPositions(tx, participant.tournamentId);
-    await assertSaldoNaoNegativo(tx, participant.tournamentId);
+    await renumberFinalPositions(tx, current.tournamentId);
+    await assertSaldoNaoNegativo(tx, current.tournamentId);
   });
   if (failed) return failed;
 
@@ -164,6 +171,8 @@ export async function undoBuyIn(participantId: number) {
 }
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+type Participant = typeof participants.$inferSelect;
+type Tournament = typeof tournaments.$inferSelect;
 
 // Contexto de um Knockout ou Desfazer: o participante e o snapshot do torneio
 // lido fora da transação, para a precondição responder ao admin. Só Rodando.
@@ -181,15 +190,24 @@ async function loadKnockoutContext(participantId: number) {
 // { error } em runLedger, com a mesma mensagem da checagem de fora.
 class ParticipantRefusal extends Error {}
 
-// Trava o torneio e relê torneio e participante: a decisão e os valores
-// gravados saem desta leitura, não da feita fora da transação.
-async function lockAndReload(tx: Tx, tournamentId: number, participantId: number, rule: StatusRule) {
+// Trava o torneio, relê torneio e participante e roda nessa releitura a mesma
+// precondição da checagem de fora: a decisão e os valores gravados saem desta
+// leitura, não da feita fora da transação.
+async function lockAndReload(
+  tx: Tx,
+  tournamentId: number,
+  participantId: number,
+  rule: StatusRule,
+  check: (participant: Participant, tournament: Tournament) => Refusal
+) {
   await lockTournament(tx, tournamentId);
   const [tournament] = await tx.select().from(tournaments).where(eq(tournaments.id, tournamentId));
   if (!tournament) throw new ParticipantRefusal("Torneio nao encontrado");
   if (!statusAllows(rule, tournament.status)) throw new ParticipantRefusal(rule.error);
   const [participant] = await tx.select().from(participants).where(eq(participants.id, participantId));
   if (!participant) throw new ParticipantRefusal("Participante nao encontrado");
+  const refused = check(participant, tournament);
+  if (refused) throw new ParticipantRefusal(refused.error);
   return { tournament, participant };
 }
 
@@ -243,18 +261,17 @@ export async function addAddon(participantId: number) {
   if (!participant) return { error: "Participante nao encontrado" };
   const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.live);
   if ("error" in loaded) return loaded;
-  if (!participant.buyInPaid) return { error: "Jogador ainda nao pagou buy-in" };
-  if (!loaded.tournament.allowAddon) return { error: "Torneio nao permite add-on" };
+  const refused = checkAddAddon(participant, loaded.tournament);
+  if (refused) return refused;
 
   const failed = await runLedger(async (tx) => {
     const { tournament, participant: current } = await lockAndReload(
       tx,
       participant.tournamentId,
       participantId,
-      STATUS_RULES.live
+      STATUS_RULES.live,
+      checkAddAddon
     );
-    if (!current.buyInPaid) throw new ParticipantRefusal("Jogador ainda nao pagou buy-in");
-    if (!tournament.allowAddon) throw new ParticipantRefusal("Torneio nao permite add-on");
 
     await tx
       .update(participants)
@@ -303,16 +320,17 @@ export async function undoAddon(participantId: number) {
   if (!participant) return { error: "Participante nao encontrado" };
   const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.live);
   if ("error" in loaded) return loaded;
-  if (participant.addonCount <= 0) return { error: "Nenhum add-on para desfazer" };
+  const refused = checkUndoAddon(participant);
+  if (refused) return refused;
 
   const failed = await runLedger(async (tx) => {
     const { participant: current } = await lockAndReload(
       tx,
       participant.tournamentId,
       participantId,
-      STATUS_RULES.live
+      STATUS_RULES.live,
+      checkUndoAddon
     );
-    if (current.addonCount <= 0) throw new ParticipantRefusal("Nenhum add-on para desfazer");
 
     const [lastAddonTx] = await tx
       .select({ id: transactions.id })
@@ -351,15 +369,17 @@ export async function addBonusChip(participantId: number) {
   if (!participant) return { error: "Participante nao encontrado" };
   const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.live);
   if ("error" in loaded) return loaded;
-  const { tournament } = loaded;
-  if (participant.status !== "playing") return { error: "Participante nao esta em jogo" };
-  if (participant.bonusChipUsed) return { error: "Bonus chip ja utilizado" };
-  if (tournament.bonusChipAmount === 0) return { error: "Torneio nao permite bonus chip" };
+  const refused = checkAddBonusChip(participant, loaded.tournament);
+  if (refused) return refused;
 
-  await db
-    .update(participants)
-    .set({ bonusChipUsed: true })
-    .where(eq(participants.id, participantId));
+  const failed = await runLedger(async (tx) => {
+    await lockAndReload(tx, participant.tournamentId, participantId, STATUS_RULES.live, checkAddBonusChip);
+    await tx
+      .update(participants)
+      .set({ bonusChipUsed: true })
+      .where(eq(participants.id, participantId));
+  });
+  if (failed) return failed;
 
   revalidateTournament(participant.tournamentId);
   return { success: true };
@@ -373,12 +393,17 @@ export async function undoBonusChip(participantId: number) {
   if (!participant) return { error: "Participante nao encontrado" };
   const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.live);
   if ("error" in loaded) return loaded;
-  if (!participant.bonusChipUsed) return { error: "Bonus chip nao foi utilizado" };
+  const refused = checkUndoBonusChip(participant);
+  if (refused) return refused;
 
-  await db
-    .update(participants)
-    .set({ bonusChipUsed: false })
-    .where(eq(participants.id, participantId));
+  const failed = await runLedger(async (tx) => {
+    await lockAndReload(tx, participant.tournamentId, participantId, STATUS_RULES.live, checkUndoBonusChip);
+    await tx
+      .update(participants)
+      .set({ bonusChipUsed: false })
+      .where(eq(participants.id, participantId));
+  });
+  if (failed) return failed;
 
   revalidateTournament(participant.tournamentId);
   return { success: true };
