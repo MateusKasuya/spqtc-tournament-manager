@@ -57,6 +57,7 @@ export function makeSnapshot(overrides: Partial<MesaSnapshot> = {}): MesaSnapsho
     blindLevels: [],
     participants: [],
     financialSummary: { buy_in: 0, rebuy: 0, addon: 0, prize: 0, bounty_earned: 0 },
+    prizeStructure: [],
     ...overrides,
   };
 }

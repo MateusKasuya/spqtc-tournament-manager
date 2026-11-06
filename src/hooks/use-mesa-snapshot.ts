@@ -9,7 +9,10 @@ import type { MesaSnapshot } from "@/db/queries/mesa";
 const TOURNAMENT_SELECT = TOURNAMENT_RAW_COLUMNS.join(", ");
 
 // Tabelas cuja mudança dispara nova busca da parte ao vivo.
-const LIVE_TABLES = ["participants", "blind_structures"] as const;
+// Editar a Estrutura de prêmios apaga e reinsere as posições: as inserções disparam
+// a busca. Limpar a Estrutura só apaga, e o realtime pode não entregar apagamentos a
+// um canal filtrado por torneio; aí a mesa só vê a limpeza no próximo evento.
+const LIVE_TABLES = ["participants", "blind_structures", "prize_structures"] as const;
 
 function liveOf(snapshot: MesaSnapshot) {
   const { tournament, ...live } = snapshot;
@@ -20,8 +23,8 @@ function liveOf(snapshot: MesaSnapshot) {
 // Mantém o snapshot da mesa em dia no cliente, com duas estratégias:
 // - UPDATE do torneio (Relógio, Status, configuração) aplicado direto do evento,
 //   sem nova busca, para o Relógio não engasgar;
-// - mudança em participantes ou na estrutura de blinds dispara nova busca da
-//   parte ao vivo, coalescida.
+// - mudança em participantes ou nas estruturas de blinds e de prêmios dispara nova
+//   busca da parte ao vivo, coalescida.
 export function useMesaSnapshot(initial: MesaSnapshot) {
   const tournamentId = initial.tournament.id;
   const [tournament, setTournament] = useState(initial.tournament);

@@ -93,12 +93,16 @@ _Avoid_: prêmio previsto, projeção
 Posições da Estrutura de prêmios com percentual maior que zero.
 _Avoid_: posições pagas
 
+**Fronteira do dinheiro**:
+Última posição com Prêmio garantido: o fim da sequência contínua de Posições premiadas a partir do 1º, que para na primeira posição com 0%. Para no buraco porque quem cai numa posição de 0% não leva Prêmio, então nenhuma posição abaixo dele é garantida (com 70/30/0/10, a fronteira é o 2º, e o 4º fica fora dela). Sem posição de 0% no meio, é o número de Posições premiadas; com o 1º em 0%, não há fronteira.
+_Avoid_: bolha (para a posição; Bolha é o momento)
+
 **No dinheiro**:
-Momento em que todos os Participantes em jogo já têm Prêmio garantido: Em jogo não passa das Posições premiadas.
+Momento em que todos os Participantes em jogo já têm Prêmio garantido: Em jogo não passa da Fronteira do dinheiro.
 _Avoid_: ITM, zona de prêmio
 
 **Bolha**:
-Momento em que falta uma Eliminação para o dinheiro (Em jogo é uma a mais que as Posições premiadas); quem cai ali não leva Prêmio.
+Momento em que falta uma Eliminação para o dinheiro (Em jogo é uma a mais que a Fronteira do dinheiro); quem cai ali não leva Prêmio.
 _Avoid_: bubble
 
 **Distribuir prêmios**:
