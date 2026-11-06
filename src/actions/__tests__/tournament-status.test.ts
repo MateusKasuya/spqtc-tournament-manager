@@ -240,7 +240,7 @@ describe("exclusao: Pendente ou Cancelado", () => {
 
   // Torneio com participante, buy-in, estruturas de blinds e de prêmios: tudo
   // que o cascade apagaria.
-  async function seedFull(status: TournamentStatus) {
+  async function seedTournamentWithChildren(status: TournamentStatus) {
     const t = await seedTournament({ status: "running" });
     await clockRunning(t);
     expect(await updatePrizeStructure(t, [{ position: 1, percentage: 100 }])).not.toHaveProperty("error");
@@ -275,7 +275,7 @@ describe("exclusao: Pendente ou Cancelado", () => {
   });
 
   it.each(forbidden)("deleteTournament com torneio %s e recusado sem apagar nada", async (status) => {
-    const t = await seedFull(status);
+    const t = await seedTournamentWithChildren(status);
     const before = await dumpDb();
 
     expect(await deleteTournament(t)).toEqual({ error: STATUS_RULES.deletion.error });
@@ -284,8 +284,8 @@ describe("exclusao: Pendente ou Cancelado", () => {
   });
 
   it.each(allowed)("deleteTournament com torneio %s apaga o torneio e as linhas filhas", async (status) => {
-    const t = await seedFull(status);
-    const other = await seedFull("pending");
+    const t = await seedTournamentWithChildren(status);
+    const other = await seedTournamentWithChildren("pending");
     const both = [t, other].sort(byId);
     expect(await tournamentsWithRows()).toEqual({ tournaments: both, children: [both, both, both, both] });
 
@@ -303,7 +303,7 @@ describe("exclusao: Pendente ou Cancelado", () => {
   // O pglite tem uma conexão só, então a corrida não se reproduz: a leitura de
   // fora do lock devolve Pendente enquanto o banco já está Encerrado.
   it("deleteTournament rele o Status dentro do lock e recusa se o torneio foi encerrado no meio", async () => {
-    const t = await seedFull("finished");
+    const t = await seedTournamentWithChildren("finished");
     const [row] = await testDb.select().from(tournaments).where(eq(tournaments.id, t));
     vi.spyOn(tournamentQueries, "getTournamentRequiringStatus").mockResolvedValueOnce({
       tournament: { ...row, status: "pending" },
