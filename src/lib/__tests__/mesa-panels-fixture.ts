@@ -2,7 +2,7 @@
 // Sem `.test` no nome: o vitest não o roda sozinho.
 
 import type { MesaPanelsInput } from "@/lib/mesa-panels";
-import type { MesaParticipant, MesaSnapshot, MesaTournament } from "@/db/queries/mesa";
+import type { MesaLevel, MesaParticipant, MesaSnapshot, MesaTournament } from "@/db/queries/mesa";
 
 export function makeTournament(overrides: Partial<MesaTournament> = {}): MesaTournament {
   return {
@@ -63,4 +63,20 @@ export function makeSnapshot(overrides: Partial<MesaSnapshot> = {}): MesaSnapsho
 
 export function makeInput(overrides: Partial<MesaPanelsInput> = {}): MesaPanelsInput {
   return { snapshot: makeSnapshot(), remainingSeconds: 0, isAdmin: false, ...overrides };
+}
+
+// Nível da estrutura de blinds: só o número é obrigatório; os blinds saem dele
+// (Nível 3 → 300/600) para os testes conferirem de onde veio cada big blind.
+export function makeLevel(level: number, overrides: Partial<MesaLevel> = {}): MesaLevel {
+  return {
+    level,
+    smallBlind: level * 100,
+    bigBlind: level * 200,
+    ante: 0,
+    durationMinutes: 20,
+    isBreak: false,
+    isAddonLevel: false,
+    isBigAnte: false,
+    ...overrides,
+  };
 }
