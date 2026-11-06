@@ -54,7 +54,7 @@ describe("painel Prize pool", () => {
       prizePool: 31000,
       prizesPaid: null,
       structure: null,
-      paidPrizes: null,
+      paidPrizesByPosition: null,
       moneyLine: null,
       nextOut: null,
       prizedPositionsAboveBuyIns: null,
@@ -430,7 +430,7 @@ describe("painel Prize pool: Prêmios pagos", () => {
       ])
     );
 
-    expect(panel.paidPrizes).toEqual([
+    expect(panel.paidPrizesByPosition).toEqual([
       { participantId: bigode.id, name: "Bigode", finishPosition: 1, amount: 16000 },
       { participantId: ana.id, name: "Ana Souza", finishPosition: 2, amount: 9000 },
       { participantId: caio.id, name: "Caio", finishPosition: 3, amount: 6000 },
@@ -452,7 +452,7 @@ describe("painel Prize pool: Prêmios pagos", () => {
       ])
     );
 
-    expect(panel.paidPrizes?.map((p) => [p.name, p.finishPosition])).toEqual([
+    expect(panel.paidPrizesByPosition?.map((p) => [p.name, p.finishPosition])).toEqual([
       ["Primeiro", 1],
       ["Segundo", 2],
       ["Desfeito", null],
@@ -474,7 +474,7 @@ describe("painel Prize pool: Prêmios pagos", () => {
       ])
     );
 
-    expect(panel.paidPrizes?.map((p) => [p.name, p.finishPosition])).toEqual([
+    expect(panel.paidPrizesByPosition?.map((p) => [p.name, p.finishPosition])).toEqual([
       ["Rui", 1],
       ["Zeca", 2],
       ["Abel", 2],
@@ -494,7 +494,7 @@ describe("painel Prize pool: Prêmios pagos", () => {
       ])
     );
 
-    expect(panel.paidPrizes).toHaveLength(3);
+    expect(panel.paidPrizesByPosition).toHaveLength(3);
     expect(panel.structure).toBeNull();
     expect(panel.moneyLine).toBeNull();
     expect(panel.nextOut).toBeNull();
@@ -507,7 +507,7 @@ describe("painel Prize pool: Prêmios pagos", () => {
 
     const { panel, card } = prizePool(payPrizes(snapshot, [[champion, 31000]]));
 
-    expect(panel.paidPrizes).toEqual([
+    expect(panel.paidPrizesByPosition).toEqual([
       { participantId: champion.id, name: "Campeao", finishPosition: 1, amount: 31000 },
     ]);
     expect(panel.prizesPaid).toEqual({ total: 31000, balance: 0 });
@@ -529,7 +529,7 @@ describe("painel Prize pool: Prêmios pagos", () => {
   });
 
   it("sem Prêmios pagos não há lista de pagos", () => {
-    expect(prizePool(withStructure({ playing: 4 })).panel.paidPrizes).toBeNull();
+    expect(prizePool(withStructure({ playing: 4 })).panel.paidPrizesByPosition).toBeNull();
   });
 });
 

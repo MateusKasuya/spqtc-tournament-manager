@@ -59,7 +59,7 @@ export function makeSnapshot(overrides: Partial<MesaSnapshot> = {}): MesaSnapsho
     participants: [],
     financialSummary: { buy_in: 0, rebuy: 0, addon: 0, prize: 0, bounty_earned: 0 },
     prizeStructure: [],
-    paidPrizes: [],
+    paidPrizesByParticipant: [],
     ...overrides,
   };
 }
@@ -89,7 +89,7 @@ export function makeLevel(level: number, overrides: Partial<MesaLevel> = {}): Me
 export function payPrizes(snapshot: MesaSnapshot, paid: [MesaParticipant, number][]): MesaSnapshot {
   return {
     ...snapshot,
-    paidPrizes: paid.map(([p, amount]) => ({ participantId: p.id, amount })),
+    paidPrizesByParticipant: paid.map(([p, amount]) => ({ participantId: p.id, amount })),
     financialSummary: {
       ...snapshot.financialSummary,
       prize: paid.reduce((total, [, amount]) => total + amount, 0),

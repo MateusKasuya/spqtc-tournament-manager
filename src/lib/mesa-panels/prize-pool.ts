@@ -8,6 +8,7 @@ import type { CardFace, MesaPanelsInput } from "./types";
 import { countPrizedPositions, deriveMoneyLine, moneyBoundary, type MoneyLine } from "./money-line";
 import { hasPrizesPaid } from "./prizes-paid";
 import { countWithBuyIn } from "./playing";
+import { compareFinishPosition } from "./finish-position";
 
 // A conta do Prize pool (CONTEXT.md, cluster Prêmios), em centavos. Os valores de
 // cada origem são o que entrou de fato no torneio (o resumo financeiro), nunca a
@@ -28,7 +29,7 @@ export interface PrizePoolPanel {
   // substitui) ou, sem eles, o estado vazio: sem Estrutura ou sem Posições premiadas.
   structure: PrizeStructureSection | null;
   // Só quando há Prêmios pagos: substituem a tabela de Prêmios estimados.
-  paidPrizes: PaidPrizeEntry[] | null;
+  paidPrizesByPosition: PaidPrizeEntry[] | null;
   moneyLine: MoneyLine | null;
   // Só No dinheiro com 2 ou mais Em jogo.
   nextOut: { position: number; prize: number } | null;
@@ -79,11 +80,10 @@ function deriveNextOut(moneyLine: MoneyLine | null, positions: EstimatedPrizePos
   return { position, prize: positions.find((p) => p.position === position)?.estimatedPrize ?? 0 };
 }
 
-// Pela Posição final, quem está sem ela no fim. O sort é estável e parte da ordem
-// da leitura da mesa (ordem de inscrição), como as Eliminações do Jogadores.
-function derivePaidPrizes({ participants, paidPrizes }: MesaSnapshot): PaidPrizeEntry[] {
-  const amountByParticipant = new Map(paidPrizes.map((p) => [p.participantId, p.amount]));
-  const order = (e: PaidPrizeEntry) => e.finishPosition ?? Number.MAX_SAFE_INTEGER;
+// Parte da ordem da leitura da mesa (ordem de inscrição), o desempate de
+// `compareFinishPosition`.
+function derivePaidPrizesByPosition({ participants, paidPrizesByParticipant }: MesaSnapshot): PaidPrizeEntry[] {
+  const amountByParticipant = new Map(paidPrizesByParticipant.map((p) => [p.participantId, p.amount]));
   return participants
     .filter((p) => amountByParticipant.has(p.id))
     .map((p) => ({
@@ -92,7 +92,7 @@ function derivePaidPrizes({ participants, paidPrizes }: MesaSnapshot): PaidPrize
       finishPosition: p.finishPosition,
       amount: amountByParticipant.get(p.id) ?? 0,
     }))
-    .sort((a, b) => order(a) - order(b));
+    .sort(compareFinishPosition);
 }
 
 export interface PrizePoolSlice {
@@ -109,8 +109,8 @@ function derivePrizedPositionsAboveBuyIns({ snapshot, isAdmin }: MesaPanelsInput
 
 // Face "1º R$ X": com Prêmios pagos, o de quem tem Posição final 1 (nunca o
 // estimado); sem eles, o Prêmio estimado da 1ª posição. `null` esconde a linha.
-function deriveFirstPrize({ paidPrizes, structure }: PrizePoolPanel): number | null {
-  if (paidPrizes) return paidPrizes.find((p) => p.finishPosition === 1)?.amount ?? null;
+function deriveFirstPrize({ paidPrizesByPosition, structure }: PrizePoolPanel): number | null {
+  if (paidPrizesByPosition) return paidPrizesByPosition.find((p) => p.finishPosition === 1)?.amount ?? null;
   return structure?.positions.find((p) => p.position === 1)?.estimatedPrize ?? null;
 }
 
@@ -137,7 +137,7 @@ export function derivePrizePool(input: MesaPanelsInput): PrizePoolSlice {
       ? { total: financialSummary.prize, balance: computeSaldo(pool.prizePool, financialSummary.prize) }
       : null,
     structure: paid ? null : buildStructureSection(estimated),
-    paidPrizes: paid ? derivePaidPrizes(snapshot) : null,
+    paidPrizesByPosition: paid ? derivePaidPrizesByPosition(snapshot) : null,
     moneyLine,
     nextOut: deriveNextOut(moneyLine, estimated),
     prizedPositionsAboveBuyIns: derivePrizedPositionsAboveBuyIns(input),

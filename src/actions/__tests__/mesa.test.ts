@@ -163,15 +163,15 @@ describe("getMesaLiveData", () => {
       ])
     ).not.toHaveProperty("error");
 
-    const { paidPrizes } = await getMesaLiveData(t);
+    const { paidPrizesByParticipant } = await getMesaLiveData(t);
 
-    expect(paidPrizes).toEqual(
+    expect(paidPrizesByParticipant).toEqual(
       expect.arrayContaining([
         { participantId: parts[2], amount: 180 },
         { participantId: parts[0], amount: 120 },
       ])
     );
-    expect(paidPrizes).toHaveLength(2);
+    expect(paidPrizesByParticipant).toHaveLength(2);
   });
 
   it("depois de uma redistribuicao que tira alguem da lista, o Premio dessa pessoa nao aparece mais", async () => {
@@ -188,15 +188,15 @@ describe("getMesaLiveData", () => {
       "error"
     );
 
-    const { paidPrizes } = await getMesaLiveData(t);
-    expect(paidPrizes).toEqual([{ participantId: parts[0], amount: 300 }]);
+    const { paidPrizesByParticipant } = await getMesaLiveData(t);
+    expect(paidPrizesByParticipant).toEqual([{ participantId: parts[0], amount: 300 }]);
   });
 
   it("sem distribuicao nao ha Premios pagos", async () => {
     const t = await seedTournament();
     await setupPlaying(t, 2);
 
-    expect((await getMesaLiveData(t)).paidPrizes).toEqual([]);
+    expect((await getMesaLiveData(t)).paidPrizesByParticipant).toEqual([]);
   });
 
   it("sem Estrutura de premios devolve a Estrutura vazia", async () => {

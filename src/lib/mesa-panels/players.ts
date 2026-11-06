@@ -1,6 +1,7 @@
 import { displayName } from "@/lib/display-name";
 import { isBountyBuilder } from "@/lib/knockout-ledger";
 import { countWithBuyIn, isPlaying } from "./playing";
+import { compareFinishPosition } from "./finish-position";
 import { deriveMoneyLine, type MoneyLine } from "./money-line";
 import type { MesaParticipant } from "@/db/queries/mesa";
 import type { CardFace, MesaPanelsInput } from "./types";
@@ -63,12 +64,6 @@ function toNamedEntry(p: MesaParticipant): PlayersNamedEntry {
   return { id: p.id, name: displayName(p) };
 }
 
-// A mais recente primeiro; sem posição (não deveria ocorrer) vai para o fim. O
-// sort é estável: no empate fica a ordem da leitura da mesa (ordem de inscrição).
-function positionOrder(finishPosition: number | null): number {
-  return finishPosition ?? Number.MAX_SAFE_INTEGER;
-}
-
 // Na face só os estados antes do dinheiro; No dinheiro ela não diz nada disso.
 function moneyLineSupportLine(moneyLine: MoneyLine | null): string | null {
   if (moneyLine?.state === "bubble") return "Bolha";
@@ -111,7 +106,8 @@ export function derivePlayers({ snapshot }: MesaPanelsInput): PlayersSlice {
         .sort(byDisplayName),
       eliminations: eliminated
         .map((p) => ({ ...toNamedEntry(p), finishPosition: p.finishPosition }))
-        .sort((a, b) => positionOrder(a.finishPosition) - positionOrder(b.finishPosition)),
+        // A mais recente primeiro; sem posição (não deveria ocorrer) vai para o fim.
+        .sort(compareFinishPosition),
       champion: champion ? toNamedEntry(champion) : null,
       awaitingBuyIn: awaiting.map(toNamedEntry).sort(byDisplayName),
       moneyLine,
