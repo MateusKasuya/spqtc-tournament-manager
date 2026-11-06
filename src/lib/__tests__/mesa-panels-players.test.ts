@@ -167,44 +167,61 @@ const PAYS_THREE = [
   { position: 3, percentage: 20 },
 ];
 
-function withPlaying(playing: number, prizeStructure: MesaPrizePosition[] = PAYS_THREE) {
+function playersSlice(participants: MesaParticipant[], prizeStructure: MesaPrizePosition[] = PAYS_THREE) {
+  return buildMesaPanels(makeInput({ snapshot: makeSnapshot({ participants, prizeStructure }) })).players;
+}
+
+// N Em jogo e mais uma Eliminação, que conta no "com buy-in".
+function playersWithPlaying(playing: number, prizeStructure?: MesaPrizePosition[]) {
   const participants = [
     ...Array.from({ length: playing }, () => makeParticipant()),
     makeParticipant({ status: "eliminated", finishPosition: playing + 1 }),
   ];
-  return buildMesaPanels(makeInput({ snapshot: makeSnapshot({ participants, prizeStructure }) })).players;
+  return playersSlice(participants, prizeStructure);
 }
+
+const beforeFirstBuyIn = () => [
+  makeParticipant({ status: "registered", buyInPaid: false }),
+  makeParticipant({ status: "registered", buyInPaid: false }),
+];
+
+const afterCoronation = () => [
+  makeParticipant({ status: "finished", finishPosition: 1 }),
+  makeParticipant({ status: "eliminated", finishPosition: 2 }),
+  makeParticipant({ status: "eliminated", finishPosition: 3 }),
+];
 
 describe("card Jogadores: linha de dinheiro", () => {
   it("antes do dinheiro mostra quantas Eliminações faltam", () => {
-    expect(withPlaying(5).card.supportLines).toEqual(["de 6 com buy-in", "faltam 2 p/ o dinheiro"]);
+    expect(playersWithPlaying(5).card.supportLines).toEqual(["de 6 com buy-in", "faltam 2 p/ o dinheiro"]);
   });
 
   it("na Bolha mostra Bolha", () => {
-    expect(withPlaying(4).card.supportLines).toEqual(["de 5 com buy-in", "Bolha"]);
+    expect(playersWithPlaying(4).card.supportLines).toEqual(["de 5 com buy-in", "Bolha"]);
   });
 
   it("No dinheiro não mostra nada da linha", () => {
-    expect(withPlaying(3).card.supportLines).toEqual(["de 4 com buy-in"]);
+    expect(playersWithPlaying(3).card.supportLines).toEqual(["de 4 com buy-in"]);
   });
 
   it("com 1 Em jogo não mostra nada da linha", () => {
-    expect(withPlaying(1).card.supportLines).toEqual(["de 2 com buy-in"]);
+    expect(playersWithPlaying(1).card.supportLines).toEqual(["de 2 com buy-in"]);
   });
 
-  it("sem ninguém Em jogo não mostra a linha", () => {
-    expect(withPlaying(0).card.supportLines).toEqual(["de 1 com buy-in"]);
+  it("antes do primeiro buy-in e depois da Coroação não mostra a linha", () => {
+    expect(playersSlice(beforeFirstBuyIn()).card.supportLines).toEqual(["de 0 com buy-in"]);
+    expect(playersSlice(afterCoronation()).card.supportLines).toEqual(["de 3 com buy-in"]);
   });
 
   it("sem Posições premiadas não mostra a linha", () => {
-    expect(withPlaying(5, []).card.supportLines).toEqual(["de 6 com buy-in"]);
-    expect(withPlaying(5, [{ position: 1, percentage: 0 }]).card.supportLines).toEqual(["de 6 com buy-in"]);
+    expect(playersWithPlaying(5, []).card.supportLines).toEqual(["de 6 com buy-in"]);
+    expect(playersWithPlaying(5, [{ position: 1, percentage: 0 }]).card.supportLines).toEqual(["de 6 com buy-in"]);
   });
 });
 
 describe("painel Jogadores: linha de dinheiro", () => {
-  it("antes do dinheiro", () => {
-    expect(withPlaying(5).panel.moneyLine).toEqual({
+  it("antes do dinheiro diz quantas Eliminações faltam e até onde paga", () => {
+    expect(playersWithPlaying(5).panel.moneyLine).toEqual({
       paysThrough: 3,
       playing: 5,
       remaining: 2,
@@ -212,30 +229,32 @@ describe("painel Jogadores: linha de dinheiro", () => {
     });
   });
 
-  it("na Bolha", () => {
-    expect(withPlaying(4).panel.moneyLine).toMatchObject({ remaining: 1, state: "bubble" });
+  it("com uma Eliminação para o dinheiro está na Bolha", () => {
+    expect(playersWithPlaying(4).panel.moneyLine).toMatchObject({ remaining: 1, state: "bubble" });
   });
 
-  it("No dinheiro", () => {
-    expect(withPlaying(3).panel.moneyLine).toMatchObject({ remaining: 0, state: "inTheMoney" });
+  it("com Em jogo igual à fronteira está No dinheiro", () => {
+    expect(playersWithPlaying(3).panel.moneyLine).toMatchObject({ remaining: 0, state: "inTheMoney" });
   });
 
   it("com 1 Em jogo está No dinheiro", () => {
-    expect(withPlaying(1).panel.moneyLine).toMatchObject({ playing: 1, state: "inTheMoney" });
+    expect(playersWithPlaying(1).panel.moneyLine).toMatchObject({ playing: 1, state: "inTheMoney" });
   });
 
   it("é a mesma do painel do Prize pool", () => {
     const participants = [makeParticipant(), makeParticipant(), makeParticipant(), makeParticipant()];
-    const view = buildMesaPanels(makeInput({ snapshot: makeSnapshot({ participants, prizeStructure: PAYS_THREE }) }));
+    const snapshot = makeSnapshot({ participants, prizeStructure: PAYS_THREE });
+    const view = buildMesaPanels(makeInput({ snapshot }));
     expect(view.players.panel.moneyLine).toEqual(view.prizePool.panel.moneyLine);
   });
 
-  it("sem ninguém Em jogo não há linha", () => {
-    expect(withPlaying(0).panel.moneyLine).toBeNull();
+  it("antes do primeiro buy-in e depois da Coroação não há linha", () => {
+    expect(playersSlice(beforeFirstBuyIn()).panel.moneyLine).toBeNull();
+    expect(playersSlice(afterCoronation()).panel.moneyLine).toBeNull();
   });
 
   it("sem Posições premiadas não há linha", () => {
-    expect(withPlaying(5, []).panel.moneyLine).toBeNull();
-    expect(withPlaying(5, [{ position: 1, percentage: 0 }]).panel.moneyLine).toBeNull();
+    expect(playersWithPlaying(5, []).panel.moneyLine).toBeNull();
+    expect(playersWithPlaying(5, [{ position: 1, percentage: 0 }]).panel.moneyLine).toBeNull();
   });
 });

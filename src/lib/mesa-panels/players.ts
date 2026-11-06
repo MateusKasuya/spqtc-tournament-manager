@@ -65,15 +65,15 @@ function toNamedEntry(p: MesaParticipant): PlayersNamedEntry {
 
 // A mais recente primeiro; sem posição (não deveria ocorrer) vai para o fim. O
 // sort é estável: no empate fica a ordem da leitura da mesa (ordem de inscrição).
+function positionOrder(finishPosition: number | null): number {
+  return finishPosition ?? Number.MAX_SAFE_INTEGER;
+}
+
 // Na face só os estados antes do dinheiro; No dinheiro ela não diz nada disso.
 function moneyLineSupportLine(moneyLine: MoneyLine | null): string | null {
   if (moneyLine?.state === "bubble") return "Bolha";
   if (moneyLine?.state === "beforeMoney") return `faltam ${moneyLine.remaining} p/ o dinheiro`;
   return null;
-}
-
-function positionOrder(finishPosition: number | null): number {
-  return finishPosition ?? Number.MAX_SAFE_INTEGER;
 }
 
 export function derivePlayers({ snapshot }: MesaPanelsInput): PlayersSlice {
