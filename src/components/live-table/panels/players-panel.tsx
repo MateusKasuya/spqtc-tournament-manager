@@ -53,7 +53,7 @@ export function PlayersPanel({ panel }: { panel: PlayersPanelModel }) {
 function Header({ counts }: { counts: PlayersCounts }) {
   return (
     <p className="text-sm font-medium tabular-nums">
-      {counts.playing} em jogo · {counts.buyIn} com buy-in · {counts.eliminated}{" "}
+      {counts.playing} em jogo · {counts.withBuyIn} com buy-in · {counts.eliminated}{" "}
       {counts.eliminated === 1 ? "Eliminacao" : "Eliminacoes"}
     </p>
   );

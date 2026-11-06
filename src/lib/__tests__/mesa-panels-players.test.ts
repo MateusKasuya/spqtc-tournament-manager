@@ -33,7 +33,7 @@ describe("painel Jogadores: contagens", () => {
       makeParticipant({ status: "registered", buyInPaid: false }),
     ]);
 
-    expect(panel.counts).toEqual({ playing: 2, buyIn: 4, eliminated: 2, awaitingBuyIn: 1 });
+    expect(panel.counts).toEqual({ playing: 2, withBuyIn: 4, eliminated: 2, awaitingBuyIn: 1 });
   });
 
   it("Participante Em jogo com Posição final gravada por distribuição continua Em jogo", () => {
@@ -43,7 +43,7 @@ describe("painel Jogadores: contagens", () => {
       makeParticipant({ name: "Caio", status: "eliminated", finishPosition: 3 }),
     ]);
 
-    expect(panel.counts).toEqual({ playing: 2, buyIn: 3, eliminated: 1, awaitingBuyIn: 0 });
+    expect(panel.counts).toEqual({ playing: 2, withBuyIn: 3, eliminated: 1, awaitingBuyIn: 0 });
     expect(panel.playing.map((p) => p.name)).toEqual(["Ana", "Bia"]);
     expect(panel.eliminations.map((p) => p.name)).toEqual(["Caio"]);
   });
@@ -135,9 +135,13 @@ describe("painel Jogadores: campeão e Aguardando buy-in", () => {
   });
 
   it("o destaque some quando a Coroação é desfeita e o Participante volta a ficar Em jogo", () => {
+    const ana = makeParticipant({ name: "Ana", status: "finished", finishPosition: 1 });
+    const bia = makeParticipant({ name: "Bia", status: "eliminated", finishPosition: 2 });
+    expect(playersPanel([ana, bia]).champion).toEqual(expect.objectContaining({ name: "Ana" }));
+
     const panel = playersPanel([
-      makeParticipant({ name: "Ana", status: "playing", finishPosition: null }),
-      makeParticipant({ name: "Bia", status: "playing", finishPosition: null }),
+      { ...ana, status: "playing", finishPosition: null },
+      { ...bia, status: "playing", finishPosition: null },
     ]);
 
     expect(panel.champion).toBeNull();

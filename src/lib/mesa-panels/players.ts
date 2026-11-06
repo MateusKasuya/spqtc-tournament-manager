@@ -4,33 +4,15 @@ import { isPlaying } from "./playing";
 import type { MesaParticipant } from "@/db/queries/mesa";
 import type { CardFace, MesaPanelsInput } from "./types";
 
-// Painel Jogadores. Quem é quem sai só do status do Participante (CONTEXT.md):
-// Em jogo `playing`, Aguardando buy-in `registered`, Eliminação `eliminated`,
-// campeão `finished`; com buy-in é o buy-in confirmado. Nunca pela Posição final,
-// que uma distribuição de prêmios grava até em quem ainda está Em jogo.
+// Painel Jogadores. Quem é quem sai só do status do Participante (CONTEXT.md),
+// nunca da Posição final: Em jogo `playing`, Aguardando buy-in `registered`,
+// Eliminação `eliminated`, campeão `finished`; com buy-in é o buy-in confirmado.
 
 export interface PlayersCounts {
   playing: number;
-  buyIn: number;
+  withBuyIn: number;
   eliminated: number;
   awaitingBuyIn: number;
-}
-
-export interface PlayersPlayingEntry {
-  id: number;
-  name: string;
-  rebuys: number;
-  addons: number;
-  bonus: boolean;
-  // Só em Bounty Builder; `null` em torneio normal.
-  bounty: number | null;
-}
-
-export interface PlayersEliminationEntry {
-  id: number;
-  name: string;
-  // Como está gravada: repetida (#71) não é escondida nem corrigida.
-  finishPosition: number | null;
 }
 
 export interface PlayersNamedEntry {
@@ -38,14 +20,26 @@ export interface PlayersNamedEntry {
   name: string;
 }
 
+export interface PlayersPlayingEntry extends PlayersNamedEntry {
+  rebuys: number;
+  addons: number;
+  bonus: boolean;
+  // Só em Bounty Builder; `null` em torneio normal.
+  bounty: number | null;
+}
+
+export interface PlayersEliminationEntry extends PlayersNamedEntry {
+  // Como está gravada: repetida (#71) não é escondida nem corrigida.
+  finishPosition: number | null;
+}
+
 export interface PlayersPanel {
   counts: PlayersCounts;
-  // Em ordem alfabética pelo nome de exibição.
+  // Esta lista e a de Aguardando buy-in: em ordem alfabética pelo nome de exibição.
   playing: PlayersPlayingEntry[];
   eliminations: PlayersEliminationEntry[];
   // Depois da Coroação; `null` antes dela ou quando ela é desfeita.
   champion: PlayersNamedEntry | null;
-  // Em ordem alfabética pelo nome de exibição.
   awaitingBuyIn: PlayersNamedEntry[];
 }
 
@@ -61,7 +55,7 @@ function byDisplayName(a: { name: string }, b: { name: string }): number {
   return collator.compare(a.name, b.name);
 }
 
-function named(p: MesaParticipant): PlayersNamedEntry {
+function toNamedEntry(p: MesaParticipant): PlayersNamedEntry {
   return { id: p.id, name: displayName(p) };
 }
 
@@ -81,17 +75,17 @@ export function derivePlayers({ snapshot }: MesaPanelsInput): PlayersSlice {
   const champion = participants.find((p) => p.status === "finished");
   const counts: PlayersCounts = {
     playing: playing.length,
-    buyIn: participants.filter((p) => p.buyInPaid).length,
+    withBuyIn: participants.filter((p) => p.buyInPaid).length,
     eliminated: eliminated.length,
     awaitingBuyIn: awaiting.length,
   };
   return {
-    card: { label: "Jogadores", value: `${counts.playing}`, supportLines: [`de ${counts.buyIn} com buy-in`] },
+    card: { label: "Jogadores", value: `${counts.playing}`, supportLines: [`de ${counts.withBuyIn} com buy-in`] },
     panel: {
       counts,
       playing: playing
         .map((p) => ({
-          ...named(p),
+          ...toNamedEntry(p),
           rebuys: p.rebuyCount,
           addons: p.addonCount,
           bonus: p.bonusChipUsed,
@@ -99,10 +93,10 @@ export function derivePlayers({ snapshot }: MesaPanelsInput): PlayersSlice {
         }))
         .sort(byDisplayName),
       eliminations: eliminated
-        .map((p) => ({ ...named(p), finishPosition: p.finishPosition }))
+        .map((p) => ({ ...toNamedEntry(p), finishPosition: p.finishPosition }))
         .sort((a, b) => positionOrder(a.finishPosition) - positionOrder(b.finishPosition)),
-      champion: champion ? named(champion) : null,
-      awaitingBuyIn: awaiting.map(named).sort(byDisplayName),
+      champion: champion ? toNamedEntry(champion) : null,
+      awaitingBuyIn: awaiting.map(toNamedEntry).sort(byDisplayName),
     },
   };
 }
