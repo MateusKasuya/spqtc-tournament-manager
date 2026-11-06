@@ -97,6 +97,16 @@ export async function getMesaLevels(tournamentId: number) {
     .orderBy(blindStructures.level);
 }
 
+// Estrutura de prêmios da mesa: o percentual vem do banco como texto (numeric).
+export async function getMesaPrizeStructure(tournamentId: number) {
+  const rows = await db
+    .select({ position: prizeStructures.position, percentage: prizeStructures.percentage })
+    .from(prizeStructures)
+    .where(eq(prizeStructures.tournamentId, tournamentId))
+    .orderBy(prizeStructures.position);
+  return rows.map((r) => ({ position: r.position, percentage: Number(r.percentage) }));
+}
+
 // Níveis como o núcleo do Relógio os recebe (`ClockLevel`).
 export async function getClockLevels(tournamentId: number) {
   return db

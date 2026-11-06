@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { confirmBuyIn, eliminatePlayer, addRebuy } from "@/actions/participants";
-import { updateBlindStructure } from "@/actions/tournaments";
+import { updateBlindStructure, updatePrizeStructure } from "@/actions/tournaments";
 import { getMesaLiveData } from "@/actions/mesa";
 import { seedTournament, seedPlayer, seedParticipant, makeLevels } from "@/test/setup";
 
@@ -106,5 +106,56 @@ describe("getMesaLiveData", () => {
       isAddonLevel: false,
       isBigAnte: false,
     });
+  });
+
+  it("devolve a Estrutura de premios com percentuais numericos em ordem de posicao", async () => {
+    const t = await seedTournament();
+    expect(
+      await updatePrizeStructure(t, [
+        { position: 3, percentage: 12.5 },
+        { position: 1, percentage: 60 },
+        { position: 2, percentage: 27.5 },
+      ])
+    ).not.toHaveProperty("error");
+
+    const { prizeStructure } = await getMesaLiveData(t);
+
+    expect(prizeStructure).toEqual([
+      { position: 1, percentage: 60 },
+      { position: 2, percentage: 27.5 },
+      { position: 3, percentage: 12.5 },
+    ]);
+  });
+
+  it("depois de editar a Estrutura de premios, a proxima chamada traz a Estrutura nova", async () => {
+    const t = await seedTournament();
+    expect(
+      await updatePrizeStructure(t, [
+        { position: 1, percentage: 70 },
+        { position: 2, percentage: 30 },
+      ])
+    ).not.toHaveProperty("error");
+    expect((await getMesaLiveData(t)).prizeStructure).toHaveLength(2);
+
+    expect(
+      await updatePrizeStructure(t, [
+        { position: 1, percentage: 50 },
+        { position: 2, percentage: 30 },
+        { position: 3, percentage: 20 },
+      ])
+    ).not.toHaveProperty("error");
+
+    const { prizeStructure } = await getMesaLiveData(t);
+    expect(prizeStructure).toEqual([
+      { position: 1, percentage: 50 },
+      { position: 2, percentage: 30 },
+      { position: 3, percentage: 20 },
+    ]);
+  });
+
+  it("sem Estrutura de premios devolve a Estrutura vazia", async () => {
+    const t = await seedTournament();
+
+    expect((await getMesaLiveData(t)).prizeStructure).toEqual([]);
   });
 });
