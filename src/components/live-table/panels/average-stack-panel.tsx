@@ -11,12 +11,16 @@ export function AverageStackPanel({ panel }: { panel: AverageStackPanelModel }) 
   const average = formatAverageStack(panel.average);
   return (
     <div className="flex flex-col gap-4">
-      <p className="text-2xl font-bold tabular-nums">
-        {panel.average === null ? average : `${average} fichas`}{" "}
-        <span className="text-lg font-semibold text-muted-foreground">
-          {formatAverageInBigBlinds(panel.average, panel.bigBlind)}
-        </span>
-      </p>
+      {panel.average === null ? (
+        <p className="text-2xl font-bold">{average}</p>
+      ) : (
+        <p className="text-2xl font-bold tabular-nums">
+          {average} fichas{" "}
+          <span className="text-lg font-semibold text-muted-foreground">
+            {formatAverageInBigBlinds(panel.average, panel.bigBlind)}
+          </span>
+        </p>
+      )}
       <table className="w-full text-sm tabular-nums">
         <tbody>
           <tr className="border-b">
@@ -46,7 +50,7 @@ export function AverageStackPanel({ panel }: { panel: AverageStackPanelModel }) 
         </tfoot>
       </table>
       <p className="text-sm text-muted-foreground">
-        E uma media; o stack de cada um nao e registrado.
+        Valor medio: o stack de cada jogador nao fica registrado.
       </p>
     </div>
   );

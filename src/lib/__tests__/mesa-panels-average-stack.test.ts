@@ -109,14 +109,14 @@ describe("card Stack médio", () => {
   it("sem ninguém Em jogo mostra — no valor e nos big blinds", () => {
     const { card } = averageStack({ participants: [makeParticipant({ status: "registered", buyInPaid: false })] });
 
-    expect(card).toEqual({ label: "Stack medio", value: "—", supportLines: ["— BB"] });
+    expect(card).toEqual({ label: "Stack medio", value: "—", supportLines: ["—"] });
   });
 
   it("sem Nível válido mostra o Stack médio em fichas e — nos big blinds", () => {
     const { card } = averageStack({ participants: twoPlayingOf40k(), blindLevels: [] });
 
     expect(card.value).toBe(formatChips(20000));
-    expect(card.supportLines).toEqual(["— BB"]);
+    expect(card.supportLines).toEqual(["—"]);
   });
 });
 
@@ -162,7 +162,7 @@ describe("painel Stack médio", () => {
     expect(panel.playingCount).toBe(0);
     expect(panel.average).toBeNull();
     expect(formatAverageStack(panel.average)).toBe("—");
-    expect(formatAverageInBigBlinds(panel.average, panel.bigBlind)).toBe("— BB");
+    expect(formatAverageInBigBlinds(panel.average, panel.bigBlind)).toBe("—");
   });
 
   it("num Intervalo da estrutura usa o big blind do próximo Nível", () => {
@@ -194,7 +194,7 @@ describe("painel Stack médio", () => {
     });
 
     expect(panel.bigBlind).toBeNull();
-    expect(card.supportLines).toEqual(["— BB"]);
+    expect(card.supportLines).toEqual(["—"]);
   });
 
   it("no último Nível não tem próximo Nível", () => {
