@@ -3,8 +3,8 @@ import type { TournamentStatus } from "@/lib/tournament-status";
 
 const STATUS_MAP = {
   pending: { label: "Pendente", variant: "outline" },
-  running: { label: "Em andamento", variant: "default" },
-  finished: { label: "Finalizado", variant: "secondary" },
+  running: { label: "Rodando", variant: "default" },
+  finished: { label: "Encerrado", variant: "secondary" },
   cancelled: { label: "Cancelado", variant: "destructive" },
 } as const satisfies Record<TournamentStatus, { label: string; variant: string }>;
 

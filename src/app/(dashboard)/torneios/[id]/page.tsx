@@ -59,7 +59,7 @@ export default async function TorneioPage({ params }: PageProps) {
   const season = tournament.seasonId ? seasonsList.find((s) => s.id === tournament.seasonId) ?? null : null;
   const isAdmin = profile?.role === "admin";
   const canEdit = isAdmin && statusAllows(STATUS_RULES.tournamentData, tournament.status);
-  const isActive = statusAllows(STATUS_RULES.registration, tournament.status);
+  const canManageParticipants = isAdmin && statusAllows(STATUS_RULES.registration, tournament.status);
   const canEditStructures = isAdmin && statusAllows(STATUS_RULES.structures, tournament.status);
 
   const prizeData = prizePositions.map((p) => ({
@@ -211,7 +211,7 @@ export default async function TorneioPage({ params }: PageProps) {
 
         {/* Jogadores */}
         <TabsContent value="players" className="mt-4 space-y-4">
-          {isAdmin && isActive && (
+          {canManageParticipants && (
             <div className="flex justify-end">
               <AddParticipantDialog
                 tournamentId={tournamentId}
@@ -225,7 +225,7 @@ export default async function TorneioPage({ params }: PageProps) {
               status: p.status as string,
               finishPosition: p.finishPosition ?? null,
             }))}
-            isAdmin={isAdmin && isActive}
+            isAdmin={canManageParticipants}
             allowAddon={tournament.allowAddon}
             bonusChipAmount={tournament.bonusChipAmount}
             buyInAmount={tournament.buyInAmount}

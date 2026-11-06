@@ -42,7 +42,7 @@ export default async function DashboardPage() {
           <Card className="border-primary bg-primary/5 hover:bg-primary/10 transition-colors cursor-pointer">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-primary">
-                Torneio em andamento
+                Torneio rodando
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -117,7 +117,7 @@ export default async function DashboardPage() {
                 <StatusBadge status="finished" />
               </Link>
             ) : (
-              <p className="text-sm text-muted-foreground">Nenhum torneio finalizado</p>
+              <p className="text-sm text-muted-foreground">Nenhum torneio encerrado</p>
             )}
           </CardContent>
         </Card>
