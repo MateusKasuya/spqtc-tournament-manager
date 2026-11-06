@@ -5,25 +5,12 @@
 // "participante nao encontrado" ficam com quem carrega as leituras.
 
 import type { participants, tournaments } from "@/db/schema";
+import { allowsAddon, allowsBonusChip } from "@/lib/tournament-entries";
 
 type Participant = typeof participants.$inferSelect;
 type Tournament = typeof tournaments.$inferSelect;
 
 export type Refusal = { error: string } | null;
-
-// Regras de entrada do torneio: o que ele permite, sem olhar participante. As
-// mesmas condições valem no servidor, nas Ações rápidas e no painel Fichas em jogo.
-export function allowsRebuy(tournament: Pick<Tournament, "rebuyAmount">): boolean {
-  return tournament.rebuyAmount > 0;
-}
-
-export function allowsAddon(tournament: Pick<Tournament, "allowAddon">): boolean {
-  return tournament.allowAddon;
-}
-
-export function allowsBonusChip(tournament: Pick<Tournament, "bonusChipAmount">): boolean {
-  return tournament.bonusChipAmount > 0;
-}
 
 export function checkConfirmBuyIn(participant: Pick<Participant, "buyInPaid">): Refusal {
   if (participant.buyInPaid) return { error: "Buy-in ja confirmado" };

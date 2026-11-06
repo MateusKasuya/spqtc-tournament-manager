@@ -1,5 +1,5 @@
 import { formatChips } from "@/lib/format";
-import { allowsAddon, allowsBonusChip, allowsRebuy } from "@/lib/participant-entries";
+import { allowsAddon, allowsBonusChip, allowsRebuy, rebuyLimit } from "@/lib/tournament-entries";
 import type { MesaSnapshot, MesaTournament } from "@/db/queries/mesa";
 import type { CardFace, MesaPanelsInput } from "./types";
 
@@ -12,8 +12,8 @@ export interface ChipsInPlayLine {
   chips: number;
 }
 
-// Regras de entrada ("ainda dá Rebuy?"): null quando o torneio não permite a entrada.
-export interface ChipsInPlayEntryRules {
+// Entradas que o torneio permite ("ainda dá Rebuy?"): null quando não permite.
+export interface ChipsInPlayAllowedEntries {
   // maxPerPlayer null = ilimitado (limite de Rebuys 0).
   rebuy: { amount: number; chips: number; maxPerPlayer: number | null } | null;
   // Add-on não tem limite por pessoa.
@@ -26,7 +26,7 @@ export interface ChipsInPlayPanel {
   // Só as linhas que somam fichas: zeradas ou não permitidas pelo torneio ficam de fora.
   lines: ChipsInPlayLine[];
   total: number;
-  entryRules: ChipsInPlayEntryRules;
+  allowedEntries: ChipsInPlayAllowedEntries;
 }
 
 export interface ChipsInPlaySlice {
@@ -60,13 +60,13 @@ export function computeChipsInPlay({ tournament, participants }: Pick<MesaSnapsh
   return { lines, total: lines.reduce((sum, line) => sum + line.chips, 0) };
 }
 
-function entryRules(tournament: MesaTournament): ChipsInPlayEntryRules {
+function allowedEntries(tournament: MesaTournament): ChipsInPlayAllowedEntries {
   return {
     rebuy: allowsRebuy(tournament)
       ? {
           amount: tournament.rebuyAmount,
           chips: tournament.rebuyChips,
-          maxPerPlayer: tournament.maxRebuys > 0 ? tournament.maxRebuys : null,
+          maxPerPlayer: rebuyLimit(tournament),
         }
       : null,
     addon: allowsAddon(tournament) ? { amount: tournament.addonAmount, chips: tournament.addonChips } : null,
@@ -75,7 +75,7 @@ function entryRules(tournament: MesaTournament): ChipsInPlayEntryRules {
 }
 
 export function deriveChipsInPlay({ snapshot }: MesaPanelsInput): ChipsInPlaySlice {
-  const panel = { ...computeChipsInPlay(snapshot), entryRules: entryRules(snapshot.tournament) };
+  const panel = { ...computeChipsInPlay(snapshot), allowedEntries: allowedEntries(snapshot.tournament) };
   return {
     card: { label: "Fichas em jogo", value: formatChips(panel.total), supportLines: [] },
     panel,

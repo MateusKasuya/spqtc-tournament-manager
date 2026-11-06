@@ -1,7 +1,7 @@
 import { formatChips, formatCurrency } from "@/lib/format";
 import type {
   ChipSource,
-  ChipsInPlayEntryRules,
+  ChipsInPlayAllowedEntries,
   ChipsInPlayPanel as ChipsInPlayPanelModel,
 } from "@/lib/mesa-panels";
 
@@ -37,29 +37,29 @@ export function ChipsInPlayPanel({ panel }: { panel: ChipsInPlayPanelModel }) {
       <p className="text-sm text-muted-foreground">
         Nenhuma ficha sai do jogo; as fichas de quem caiu continuam na mesa.
       </p>
-      <EntryRules rules={panel.entryRules} />
+      <AllowedEntries entries={panel.allowedEntries} />
     </div>
   );
 }
 
 // "Ainda da Rebuy?": as entradas que o torneio permite, com valor, fichas e limite.
-function EntryRules({ rules }: { rules: ChipsInPlayEntryRules }) {
+function AllowedEntries({ entries }: { entries: ChipsInPlayAllowedEntries }) {
   const items: { label: string; text: string }[] = [];
-  if (rules.rebuy) {
-    const limit = rules.rebuy.maxPerPlayer === null ? "ilimitado" : `ate ${rules.rebuy.maxPerPlayer} por pessoa`;
+  if (entries.rebuy) {
+    const limit = entries.rebuy.maxPerPlayer === null ? "ilimitado" : `ate ${entries.rebuy.maxPerPlayer} por pessoa`;
     items.push({
       label: "Rebuy",
-      text: `${formatCurrency(rules.rebuy.amount)} → ${formatChips(rules.rebuy.chips)} fichas, ${limit}`,
+      text: `${formatCurrency(entries.rebuy.amount)} → ${formatChips(entries.rebuy.chips)} fichas, ${limit}`,
     });
   }
-  if (rules.addon) {
+  if (entries.addon) {
     items.push({
       label: "Add-on",
-      text: `${formatCurrency(rules.addon.amount)} → ${formatChips(rules.addon.chips)} fichas`,
+      text: `${formatCurrency(entries.addon.amount)} → ${formatChips(entries.addon.chips)} fichas, sem limite por pessoa`,
     });
   }
-  if (rules.bonus) {
-    items.push({ label: "Bonus", text: `${formatChips(rules.bonus.chips)} fichas, uma vez por pessoa, sem custo` });
+  if (entries.bonus) {
+    items.push({ label: "Bonus", text: `${formatChips(entries.bonus.chips)} fichas, uma vez por pessoa, sem custo` });
   }
   if (items.length === 0) return null;
 

@@ -7,7 +7,7 @@ import { Skull, RefreshCw, Plus, RotateCcw, CheckCircle, Zap, ChevronRight } fro
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/format";
 import { displayName } from "@/lib/display-name";
-import { allowsAddon, allowsBonusChip, allowsRebuy } from "@/lib/participant-entries";
+import { allowsAddon, allowsBonusChip, allowsRebuy } from "@/lib/tournament-entries";
 import {
   Dialog,
   DialogContent,
