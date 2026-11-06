@@ -54,7 +54,10 @@ function centsToReais(cents: number): string {
   return (cents / 100).toFixed(2);
 }
 
-const NO_LOCKS: EditLocks = { chips: false, entryRules: false };
+const NO_LOCKS: EditLocks = { chips: false, entryRules: false, addonAmount: false };
+
+// Valores em R$ no formulário; vão em centavos para o servidor.
+const MONEY_FIELDS = ["buyInAmount", "rebuyAmount", "addonAmount", "rankingFeeAmount"] as const;
 
 export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: TournamentFormProps) {
   const action = initialData
@@ -126,7 +129,7 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
     }
 
     // Converter R$ para centavos
-    for (const field of ["buyInAmount", "rebuyAmount", "addonAmount", "rankingFeeAmount"]) {
+    for (const field of MONEY_FIELDS) {
       const val = raw.get(field) as string;
       if (val !== null && val !== "") {
         raw.set(field, String(Math.round(parseFloat(val.replace(",", ".")) * 100)));
@@ -140,9 +143,10 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
         raw.set(field, String(initialData[field]));
       }
     }
-    if (initialData && locks.entryRules) {
-      for (const field of ["buyInAmount", "rebuyAmount", "addonAmount", "rankingFeeAmount"] as const) {
-        raw.set(field, String(initialData[field]));
+    if (initialData) {
+      for (const field of MONEY_FIELDS) {
+        const locked = field === "addonAmount" ? locks.addonAmount : locks.entryRules;
+        if (locked) raw.set(field, String(initialData[field]));
       }
     }
 
@@ -238,7 +242,7 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
 
         {locks.entryRules && (
           <p className="text-xs text-muted-foreground">
-            Modalidade, % Bounty, valores e taxa de ranking so mudam com o torneio pendente e antes do primeiro buy-in confirmado.
+            Modalidade, % Bounty e taxa de ranking so mudam com o torneio pendente e antes do primeiro buy-in confirmado.
           </p>
         )}
 
@@ -385,7 +389,9 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
         </h2>
         {locks.entryRules && (
           <p className="text-xs text-muted-foreground">
-            Os valores so mudam com o torneio pendente e antes do primeiro buy-in confirmado.
+            {locks.addonAmount
+              ? "Os valores so mudam com o torneio pendente e antes do primeiro buy-in confirmado."
+              : "Buy-in e Rebuy so mudam com o torneio pendente e antes do primeiro buy-in confirmado. O valor do add-on pode ser definido ao ligar o add-on."}
           </p>
         )}
 
@@ -431,7 +437,7 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
                 placeholder="0,00"
                 value={addonAmount}
                 onChange={(e) => setAddonAmount(e.target.value)}
-                disabled={locks.entryRules}
+                disabled={locks.addonAmount}
               />
             </div>
           )}

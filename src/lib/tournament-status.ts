@@ -44,7 +44,8 @@ export const STATUS_RULES = {
   // Valores de buy-in, Rebuy e add-on, taxa de ranking, tipo e percentual de
   // Bounty. Alem do Status, exigem que nenhum buy-in tenha sido confirmado: o
   // Bounty inicial e fixado no buy-in, e as telas de total pago multiplicam os
-  // valores do torneio pelas contagens de cada participante.
+  // valores do torneio pelas contagens de cada participante. O valor do add-on
+  // fica livre enquanto o add-on nao e permitido e ninguem fez add-on.
   entryRules: {
     allowed: ["pending"],
     error:
