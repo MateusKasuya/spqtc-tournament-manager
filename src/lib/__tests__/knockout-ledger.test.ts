@@ -10,12 +10,15 @@ import {
   rebuyBounty,
   LedgerUndoBlockedError,
   LedgerInvariantError,
+  LedgerStateChangedError,
   type LedgerSnapshot,
   type LedgerParticipant,
   type LedgerRow,
   type KnockoutPlan,
   type LedgerRules,
+  type KnockoutEvent,
 } from "@/lib/knockout-ledger";
+import { STATUS_RULES, type TournamentStatus } from "@/lib/tournament-status";
 
 const RULES: LedgerRules = {
   tournamentType: "bounty_builder",
@@ -42,7 +45,7 @@ function makeSnapshot(bounties: number[], overrides: Partial<LedgerRules> = {}):
     eliminatedByIds: [],
     eliminatedAt: null,
   }));
-  return { rules: { ...RULES, ...overrides }, participants, rows: [], now: NOW };
+  return { tournamentStatus: "running", rules: { ...RULES, ...overrides }, participants, rows: [], now: NOW };
 }
 
 // Simula o adapter: aplica o plano sobre o snapshot e devolve o snapshot resultante.
@@ -501,5 +504,50 @@ describe("Ledger de Knockout: Posição final renumerada (#71)", () => {
     const healed = renumberedFinalPositions([fell(1, "2026-09-22T12:00:00Z"), fell(2, "2026-09-22T12:05:00Z"), ...playing]);
 
     expect(Object.fromEntries(healed)).toEqual({ 1: 7, 2: 6 });
+  });
+});
+
+// O snapshot relido dentro do lock traz o Status do torneio: um Encerrar ou
+// Cancelar que entrou antes do lock recusa o Knockout ou o Desfazer.
+describe("Ledger de Knockout: Status do torneio", () => {
+  const NOT_RUNNING: TournamentStatus[] = ["pending", "finished", "cancelled"];
+  const elimination: KnockoutEvent = { kind: "elimination", victimId: 1, eliminatorPlayerIds: [101] };
+  const rebuy: KnockoutEvent = { kind: "rebuy", victimId: 1, eliminatorPlayerIds: [101], count: 1 };
+
+  // Vítima 1 eliminada por 101, Vítima 2 com um Rebuy: tem o que desfazer nos dois tipos.
+  function withHistory(): LedgerSnapshot {
+    const s = makeSnapshot([40, 40, 40, 40]);
+    const s1 = applyPlan(s, planKnockout(s, { kind: "rebuy", victimId: 2, eliminatorPlayerIds: [102], count: 1 }), "2026-09-22 12:00:01+00");
+    return applyPlan(s1, planKnockout(s1, elimination), "2026-09-22 12:00:02+00");
+  }
+
+  it.each(NOT_RUNNING)("checkKnockout com torneio %s recusa Eliminação e Rebuy com a mensagem do Status", (status) => {
+    const s = { ...makeSnapshot([40, 40, 40]), tournamentStatus: status };
+    expect(checkKnockout(s, elimination)).toEqual({ error: STATUS_RULES.live.error });
+    expect(checkKnockout(s, rebuy)).toEqual({ error: STATUS_RULES.live.error });
+  });
+
+  it.each(NOT_RUNNING)("checkUndo com torneio %s recusa os dois Desfazer com a mensagem do Status", (status) => {
+    const s = { ...withHistory(), tournamentStatus: status };
+    expect(checkUndo(s, { kind: "elimination", victimId: 1 })).toEqual({ error: STATUS_RULES.live.error });
+    expect(checkUndo(s, { kind: "rebuy", victimId: 2 })).toEqual({ error: STATUS_RULES.live.error });
+  });
+
+  it("com torneio Rodando as precondições continuam as mesmas", () => {
+    const s = makeSnapshot([40, 40, 40]);
+    expect(checkKnockout(s, elimination)).toBeNull();
+    expect(checkKnockout(s, rebuy)).toBeNull();
+    const history = withHistory();
+    expect(checkUndo(history, { kind: "elimination", victimId: 1 })).toBeNull();
+    expect(checkUndo(history, { kind: "rebuy", victimId: 2 })).toBeNull();
+  });
+
+  it("planKnockout e planUndo com torneio Encerrado lançam sem produzir plano", () => {
+    const s = { ...makeSnapshot([40, 40, 40]), tournamentStatus: "finished" as const };
+    expect(() => planKnockout(s, elimination)).toThrow(LedgerStateChangedError);
+    expect(() => planKnockout(s, rebuy)).toThrow(LedgerStateChangedError);
+    const history = { ...withHistory(), tournamentStatus: "finished" as const };
+    expect(() => planUndo(history, { kind: "elimination", victimId: 1 })).toThrow(LedgerStateChangedError);
+    expect(() => planUndo(history, { kind: "rebuy", victimId: 2 })).toThrow(LedgerStateChangedError);
   });
 });

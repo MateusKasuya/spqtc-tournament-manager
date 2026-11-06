@@ -18,8 +18,9 @@ import {
 export type LedgerExecutor = PgDatabase<PgQueryResultHKT, typeof schema>;
 
 export async function loadKnockoutSnapshot(executor: LedgerExecutor, tournamentId: number): Promise<LedgerSnapshot | null> {
-  const [rules] = await executor
+  const [tournament] = await executor
     .select({
+      status: tournaments.status,
       tournamentType: tournaments.tournamentType,
       buyInAmount: tournaments.buyInAmount,
       rankingFeeAmount: tournaments.rankingFeeAmount,
@@ -29,7 +30,8 @@ export async function loadKnockoutSnapshot(executor: LedgerExecutor, tournamentI
     })
     .from(tournaments)
     .where(eq(tournaments.id, tournamentId));
-  if (!rules) return null;
+  if (!tournament) return null;
+  const { status: tournamentStatus, ...rules } = tournament;
 
   const parts = await executor
     .select({
@@ -64,13 +66,20 @@ export async function loadKnockoutSnapshot(executor: LedgerExecutor, tournamentI
     .where(and(eq(transactions.tournamentId, tournamentId), inArray(transactions.type, ["bounty_earned", "rebuy"])))
     .orderBy(transactions.id);
 
-  return { rules, participants: parts, rows, now: new Date() };
+  return { tournamentStatus, rules, participants: parts, rows, now: new Date() };
 }
 
 // Serializa os Knockouts de um torneio: dois admins disparando a mesma
 // eliminação entram aqui em fila, e o segundo relê o snapshot já alterado.
 export async function lockTournament(tx: LedgerExecutor, tournamentId: number) {
   await tx.select({ id: tournaments.id }).from(tournaments).where(eq(tournaments.id, tournamentId)).for("update");
+}
+
+// Trava o torneio e relê a linha na mesma consulta: quem decide pelo Status
+// do torneio (ou por outro campo dele) decide por esta leitura, não pela de fora.
+export async function lockAndReadTournament(tx: LedgerExecutor, tournamentId: number) {
+  const [tournament] = await tx.select().from(tournaments).where(eq(tournaments.id, tournamentId)).for("update");
+  return tournament ?? null;
 }
 
 // Carimbo único do evento, estritamente maior que qualquer linha já gravada no

@@ -11,7 +11,7 @@ import { getParticipantById, getParticipantByPlayerAndTournament } from "@/db/qu
 import { checkKnockout, checkUndo, initialBounty, KnockoutLedgerError, type KnockoutEvent, type UndoRequest } from "@/lib/knockout-ledger";
 import { assertPremiosCabemNoPrizePool, assertSaldoNaoNegativo } from "@/db/ledger/saldo";
 import { SaldoNegativoError } from "@/lib/prize-pool";
-import { applyKnockout, undoKnockout, loadKnockoutSnapshot, lockTournament, renumberFinalPositions } from "@/db/ledger/knockout-ledger";
+import { applyKnockout, undoKnockout, loadKnockoutSnapshot, lockAndReadTournament, lockTournament, renumberFinalPositions } from "@/db/ledger/knockout-ledger";
 import { pauseTimer } from "@/lib/tournament-clock";
 import {
   checkAddAddon,
@@ -200,8 +200,7 @@ async function lockAndReload(
   rule: StatusRule,
   check: (participant: Participant, tournament: Tournament) => Refusal
 ) {
-  await lockTournament(tx, tournamentId);
-  const [tournament] = await tx.select().from(tournaments).where(eq(tournaments.id, tournamentId));
+  const tournament = await lockAndReadTournament(tx, tournamentId);
   if (!tournament) throw new ParticipantRefusal("Torneio nao encontrado");
   if (!statusAllows(rule, tournament.status)) throw new ParticipantRefusal(rule.error);
   const [participant] = await tx.select().from(participants).where(eq(participants.id, participantId));

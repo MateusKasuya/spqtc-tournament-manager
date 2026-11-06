@@ -9,7 +9,10 @@ import {
   addBonusChip,
   undoBonusChip,
   eliminatePlayer,
+  undoElimination,
 } from "@/actions/participants";
+import { updateTournamentStatus } from "@/actions/tournaments";
+import * as knockoutLedger from "@/db/ledger/knockout-ledger";
 import * as participantQueries from "@/db/queries/participants";
 import * as tournamentQueries from "@/db/queries/tournaments";
 import { testDb } from "@/test/db";
@@ -410,5 +413,56 @@ describe("addBonusChip e undoBonusChip releem torneio e participante dentro do l
     expect(spy).toHaveBeenCalled();
     expect(res).toEqual({ error: STATUS_RULES.live.error });
     expect((await participantRow(part)).bonusChipUsed).toBe(true);
+  });
+});
+
+// Encerrar entre a checagem de fora e o lock: a leitura de fora (torneio e
+// snapshot do Ledger) ainda vê Rodando, o banco já está Encerrado com os pontos
+// calculados. O Knockout ou o Desfazer é recusado e nada muda nos pontos.
+describe("Knockout e Desfazer releem o Status do torneio dentro do lock", () => {
+  async function knockoutRows(t: number) {
+    const parts = await testDb.select().from(participants).where(eq(participants.tournamentId, t)).orderBy(participants.id);
+    return { parts, rows: await allTransactions(t) };
+  }
+
+  // Três em jogo com Rebuy permitido; `prepare` monta o estado com o torneio Rodando.
+  const cases: {
+    label: string;
+    prepare: (ids: number[]) => Promise<unknown>;
+    call: (ids: number[]) => Promise<unknown>;
+  }[] = [
+    { label: "eliminatePlayer", prepare: async () => {}, call: (ids) => eliminatePlayer(ids[0]) },
+    { label: "addRebuy", prepare: async () => {}, call: (ids) => addRebuy(ids[0]) },
+    {
+      label: "undoElimination",
+      prepare: async (ids) => expect(await eliminatePlayer(ids[0])).not.toHaveProperty("error"),
+      call: (ids) => undoElimination(ids[0]),
+    },
+  ];
+
+  it.each(cases)("$label com o torneio Encerrado no banco devolve erro e não grava nada", async ({ prepare, call }) => {
+    const t = await seedTournament({ status: "running", rebuyAmount: 50 });
+    const ids: number[] = [];
+    for (const name of ["P0", "P1", "P2"]) {
+      ids.push(await seedParticipant(t, await seedPlayer(name), { status: "playing", buyInPaid: true }));
+    }
+    await prepare(ids);
+
+    const staleRow = await tournamentRow(t);
+    const staleSnapshot = await knockoutLedger.loadKnockoutSnapshot(testDb, t);
+    expect(await updateTournamentStatus(t, "finished")).toEqual({ success: true });
+    const before = await knockoutRows(t);
+
+    const tournamentSpy = staleTournament(staleRow, {});
+    const snapshotSpy = vi.spyOn(knockoutLedger, "loadKnockoutSnapshot").mockResolvedValueOnce(staleSnapshot);
+
+    const res = await call(ids);
+
+    expect(tournamentSpy).toHaveBeenCalled();
+    expect(snapshotSpy).toHaveBeenCalled();
+    // Mensagem do LedgerStateChangedError: a recusa veio de dentro do lock.
+    expect(res).toEqual({ error: "A mesa mudou, recarregue e tente de novo" });
+    expect(await knockoutRows(t)).toEqual(before);
+    expect((await tournamentRow(t)).status).toBe("finished");
   });
 });
