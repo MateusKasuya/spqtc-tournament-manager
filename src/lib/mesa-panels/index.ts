@@ -6,8 +6,8 @@
 // tipo `XxxSlice` e a função `deriveXxx`. Este arquivo já liga os seis: um painel
 // novo só edita o próprio arquivo. `panel: null` quer dizer que o painel ainda não
 // existe e o card não abre gaveta. Conta que mais de um painel usa mora num arquivo
-// próprio, sem slice: `money-line.ts` (a fronteira do dinheiro) e `prizes-paid.ts`
-// (há Prêmios pagos).
+// próprio, sem slice: `money-line.ts` (a fronteira do dinheiro), `prizes-paid.ts`
+// (há Prêmios pagos) e `playing.ts` (Em jogo).
 
 import { deriveAverageStack, type AverageStackSlice } from "./average-stack";
 import { deriveBounty, type BountySlice } from "./bounty";
@@ -30,6 +30,8 @@ export * from "./prize-pool";
 export * from "./money-line";
 
 export * from "./prizes-paid";
+
+export * from "./playing";
 
 export * from "./bounty";
 
