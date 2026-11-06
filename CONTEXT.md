@@ -48,7 +48,7 @@ Pendente (inscrições, antes de começar), Rodando, Encerrado ou Cancelado. Enc
 - cancelar o torneio: de Pendente ou Rodando;
 - excluir o torneio: só Pendente ou Cancelado. Um torneio Rodando é cancelado antes; um Encerrado não é excluído porque carrega o histórico e os pontos do ranking da temporada.
 
-Independente do Status, o buy-in não pode ser menor que a taxa de ranking (igual pode, e o Bounty inicial de um Bounty Builder fica zero). A regra vale sempre ao criar o torneio; ao editar, só quando o buy-in ou a taxa mudam, para que um torneio antigo gravado com buy-in abaixo da taxa continue editável nos outros campos.
+Independente do Status, o buy-in não pode ser menor que a taxa de ranking (igual pode, e o Bounty inicial de um Bounty Builder fica zero). A regra vale sempre ao criar o torneio. Ao editar, vale quando muda algo que entra no Bounty inicial (buy-in, taxa, tipo do torneio ou percentual de Bounty), para que um torneio antigo gravado com buy-in abaixo da taxa continue editável nos outros campos sem virar Bounty Builder com Bounty negativo.
 _Avoid_: finalizado, ativo
 
 ### Fichas

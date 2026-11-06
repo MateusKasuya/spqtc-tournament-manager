@@ -246,6 +246,18 @@ describe("buy-in e taxa de ranking", () => {
     expect((await tournamentRow(t)).rankingFeeAmount).toBe(100);
   });
 
+  it.each<{ label: string; changes: Record<string, string | number> }>([
+    { label: "trocar o tipo para Bounty Builder", changes: { tournamentType: "bounty_builder" } },
+    { label: "mudar o percentual de Bounty", changes: { bountyPercentage: 60 } },
+  ])("$label em torneio ja gravado com buy-in menor que a taxa e recusado e nao grava nada", async ({ changes }) => {
+    const t = await seed({ status: "pending", buyInAmount: 100, rankingFeeAmount: 200 });
+    const form = await formFor(t, { ...changes, name: "Outro nome" });
+    const before = await dumpDb();
+
+    expect(await updateTournament(t, form)).toEqual({ error: BUY_IN_BELOW_RANKING_FEE_ERROR });
+    expect(await dumpDb()).toEqual(before);
+  });
+
   it("torneio ja gravado com buy-in menor que a taxa continua editavel nos outros campos", async () => {
     const t = await seed({ status: "pending", buyInAmount: 100, rankingFeeAmount: 200 });
 

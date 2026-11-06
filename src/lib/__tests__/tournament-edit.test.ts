@@ -125,37 +125,46 @@ describe("lockedFieldError: ligar o add-on depois do primeiro buy-in", () => {
 });
 
 describe("buyInBelowRankingFeeError", () => {
+  const rules = { tournamentType: "normal", bountyPercentage: 50 };
+
   it.each([
     { label: "menor que a taxa e recusado", buyInAmount: 1000, expected: BUY_IN_BELOW_RANKING_FEE_ERROR },
     { label: "igual a taxa passa (Bounty zero)", buyInAmount: 2000, expected: null },
     { label: "maior que a taxa passa", buyInAmount: 5000, expected: null },
   ])("ao criar, buy-in $label", ({ buyInAmount, expected }) => {
-    expect(buyInBelowRankingFeeError({ buyInAmount, rankingFeeAmount: 2000 })).toBe(expected);
+    expect(buyInBelowRankingFeeError({ ...rules, buyInAmount, rankingFeeAmount: 2000 })).toBe(expected);
   });
 
-  const old = { buyInAmount: 100, rankingFeeAmount: 200 };
+  const valid = { ...rules, buyInAmount: 5000, rankingFeeAmount: 2000 };
+  // Torneio antigo gravado antes da regra, com buy-in abaixo da taxa.
+  const old = { ...rules, buyInAmount: 100, rankingFeeAmount: 200 };
 
-  it("ao editar, torneio gravado com buy-in menor que a taxa passa se nenhum dos dois muda", () => {
+  it("ao editar, torneio gravado com buy-in menor que a taxa passa se buy-in, taxa, tipo e percentual nao mudam", () => {
     expect(buyInBelowRankingFeeError({ ...old }, old)).toBeNull();
   });
 
   it("ao editar, mudar o buy-in para baixo da taxa e recusado", () => {
-    expect(buyInBelowRankingFeeError({ buyInAmount: 1000, rankingFeeAmount: 2000 }, { buyInAmount: 5000, rankingFeeAmount: 2000 })).toBe(
-      BUY_IN_BELOW_RANKING_FEE_ERROR
-    );
+    expect(buyInBelowRankingFeeError({ ...valid, buyInAmount: 1000 }, valid)).toBe(BUY_IN_BELOW_RANKING_FEE_ERROR);
   });
 
   it("ao editar, mudar a taxa para acima do buy-in e recusado", () => {
-    expect(buyInBelowRankingFeeError({ buyInAmount: 5000, rankingFeeAmount: 6000 }, { buyInAmount: 5000, rankingFeeAmount: 2000 })).toBe(
-      BUY_IN_BELOW_RANKING_FEE_ERROR
-    );
+    expect(buyInBelowRankingFeeError({ ...valid, rankingFeeAmount: 6000 }, valid)).toBe(BUY_IN_BELOW_RANKING_FEE_ERROR);
+  });
+
+  // O Bounty inicial sai de (buy-in - taxa) x percentual: num Bounty Builder com
+  // buy-in abaixo da taxa, o primeiro buy-in gravaria um Bounty negativo.
+  it.each([
+    { label: "trocar o tipo para Bounty Builder", change: { tournamentType: "bounty_builder" } },
+    { label: "mudar o percentual de Bounty", change: { bountyPercentage: 60 } },
+  ])("ao editar, $label em torneio gravado com buy-in menor que a taxa e recusado", ({ change }) => {
+    expect(buyInBelowRankingFeeError({ ...old, ...change }, old)).toBe(BUY_IN_BELOW_RANKING_FEE_ERROR);
   });
 
   it("ao editar, torneio gravado com buy-in menor que a taxa continua recusado se a mudanca nao resolve", () => {
-    expect(buyInBelowRankingFeeError({ buyInAmount: 150, rankingFeeAmount: 200 }, old)).toBe(BUY_IN_BELOW_RANKING_FEE_ERROR);
+    expect(buyInBelowRankingFeeError({ ...old, buyInAmount: 150 }, old)).toBe(BUY_IN_BELOW_RANKING_FEE_ERROR);
   });
 
   it("ao editar, corrigir um torneio antigo para buy-in maior ou igual a taxa passa", () => {
-    expect(buyInBelowRankingFeeError({ buyInAmount: 200, rankingFeeAmount: 200 }, old)).toBeNull();
+    expect(buyInBelowRankingFeeError({ ...old, buyInAmount: 200, tournamentType: "bounty_builder" }, old)).toBeNull();
   });
 });
