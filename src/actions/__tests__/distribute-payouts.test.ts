@@ -14,11 +14,13 @@ import {
 import { getParticipantByPlayerAndTournament } from "@/db/queries/participants";
 import { getTournamentFinancialSummary } from "@/db/queries/transactions";
 import { getMesaLiveData } from "@/actions/mesa";
+import { updateTournamentStatus } from "@/actions/tournaments";
+import { getPlayerStats } from "@/db/queries/ranking";
 import { loadPrizePool } from "@/db/ledger/saldo";
 import { computeSaldo } from "@/lib/prize-pool";
 import { derivePrizesPaid } from "@/lib/mesa-panels/prizes-paid";
 import { seedTournament, seedPlayer, seedParticipant } from "@/test/setup";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { testDb } from "@/test/db";
 import { tournaments, transactions } from "@/db/schema";
 
@@ -375,5 +377,188 @@ describe("cenario do Premio orfao (#123)", () => {
     expect(page.prizesPaid).toBe(50);
     expect(mesa?.total).toBe(50);
     expect(computeSaldo(page.prizePool, page.prizesPaid)).toBe(150);
+  });
+});
+
+const ORPHAN_PRIZE_QUERY = `
+SELECT p.id AS participant_id, p.tournament_id, tour.name AS tournament, tour.status AS tournament_status,
+  p.player_id, pl.name AS player, p.prize_amount, COALESCE(SUM(t.amount), 0) AS premio_pago
+FROM participants p
+JOIN tournaments tour ON tour.id = p.tournament_id
+JOIN players pl ON pl.id = p.player_id
+LEFT JOIN transactions t ON t.tournament_id = p.tournament_id AND t.player_id = p.player_id AND t.type = 'prize'
+GROUP BY p.id, tour.name, tour.status, pl.name
+HAVING p.prize_amount <> COALESCE(SUM(t.amount), 0)
+ORDER BY p.tournament_id, p.player_id;`;
+
+const REPEATED_POSITION_QUERY = `
+SELECT p.tournament_id, tour.name AS tournament, tour.status AS tournament_status, p.finish_position,
+  string_agg(pl.name || ' (' || p.status || ', ' || p.points_earned || ' pts)', ', ' ORDER BY pl.name) AS participantes
+FROM participants p
+JOIN tournaments tour ON tour.id = p.tournament_id
+JOIN players pl ON pl.id = p.player_id
+WHERE p.finish_position IS NOT NULL
+GROUP BY p.tournament_id, tour.name, tour.status, p.finish_position
+HAVING COUNT(*) > 1
+ORDER BY p.tournament_id, p.finish_position;`;
+
+// Refazer a distribuição substitui o acordo inteiro: quem fica fora da lista nova
+// perde o Prêmio e volta à Posição final que a mesa dá (#124).
+describe("refazer a distribuicao tira Premio e posicao de quem sai do acordo (#124)", () => {
+  // Prize pool 300 (3 buy-ins de 100, sem taxa).
+  async function setupThree(overrides: TournamentOverrides = {}) {
+    const t = await seedTournament({ status: "running", buyInAmount: 100, rankingFeeAmount: 0, ...overrides });
+    const { players, parts } = await setupPlayers(t, 3);
+    return { t, players, parts };
+  }
+
+  const participantOf = (playerId: number, t: number) => getParticipantByPlayerAndTournament(playerId, t);
+
+  // As duas consultas de detecção do brief, como vão no corpo do PR. O banco
+  // de teste é zerado a cada teste, então elas só enxergam o torneio do teste.
+  async function detectionRows() {
+    const orphanPrizes = await testDb.execute(sql.raw(ORPHAN_PRIZE_QUERY));
+    const repeatedPositions = await testDb.execute(sql.raw(REPEATED_POSITION_QUERY));
+    return { orphanPrizes: orphanPrizes.rows, repeatedPositions: repeatedPositions.rows };
+  }
+
+  it("quem sai da lista fica sem Premio, e getPlayerStats deixa de contar esse Premio", async () => {
+    const { t, players } = await setupThree();
+    const [a, b, c] = players;
+    await distributePayouts(t, [
+      { playerId: a, amount: 200, position: 1 },
+      { playerId: b, amount: 100, position: 2 },
+    ]);
+
+    expect(
+      await distributePayouts(t, [
+        { playerId: a, amount: 200, position: 1 },
+        { playerId: c, amount: 100, position: 2 },
+      ])
+    ).toEqual({ success: true });
+
+    expect((await participantOf(b, t))?.prizeAmount).toBe(0);
+    expect((await participantOf(c, t))?.prizeAmount).toBe(100);
+    expect((await participantOf(a, t))?.prizeAmount).toBe(200);
+    await updateTournamentStatus(t, "finished");
+    expect(Number((await getPlayerStats(b))?.totalPrize ?? 0)).toBe(0);
+  });
+
+  it("quem sai da lista Em jogo fica sem posicao, e o Encerrar nao lhe da pontos de posicao", async () => {
+    const { t, players } = await setupThree();
+    const [a, b, c] = players;
+    await distributePayouts(t, [
+      { playerId: a, amount: 200, position: 1 },
+      { playerId: b, amount: 100, position: 2 },
+    ]);
+    await distributePayouts(t, [
+      { playerId: a, amount: 200, position: 1 },
+      { playerId: c, amount: 100, position: 2 },
+    ]);
+
+    expect((await participantOf(b, t))?.finishPosition).toBeNull();
+    expect(await updateTournamentStatus(t, "finished")).toEqual({ success: true });
+
+    expect(Number((await participantOf(a, t))?.pointsEarned)).toBe(12);
+    expect(Number((await participantOf(c, t))?.pointsEarned)).toBe(10);
+    expect(Number((await participantOf(b, t))?.pointsEarned)).toBe(0);
+    expect(await detectionRows()).toEqual({ orphanPrizes: [], repeatedPositions: [] });
+  });
+
+  it("quem sai da lista depois de cair volta a Posicao final da Eliminacao, mesmo com o acordo anterior fora da ordem", async () => {
+    const t = await seedTournament({ status: "running", buyInAmount: 100, rankingFeeAmount: 0 });
+    const { players, parts } = await setupPlayers(t, 4);
+    const [a, b, d, e] = players;
+    await eliminatePlayer(parts[3]); // E cai primeiro: 4º
+    await eliminatePlayer(parts[2]); // D cai depois: 3º
+    await distributePayouts(t, [
+      { playerId: a, amount: 200, position: 1 },
+      { playerId: e, amount: 100, position: 2 },
+    ]);
+
+    await distributePayouts(t, [
+      { playerId: a, amount: 200, position: 1 },
+      { playerId: b, amount: 100, position: 2 },
+    ]);
+
+    expect((await participantOf(e, t))?.finishPosition).toBe(4);
+    expect((await participantOf(d, t))?.finishPosition).toBe(3);
+    expect((await participantOf(e, t))?.prizeAmount).toBe(0);
+    expect(await detectionRows()).toEqual({ orphanPrizes: [], repeatedPositions: [] });
+  });
+
+  it("quem saiu da lista depois de cair nao repete a posicao que o acordo deu a outro", async () => {
+    const t = await seedTournament({ status: "running", buyInAmount: 100, rankingFeeAmount: 0 });
+    const { players, parts } = await setupPlayers(t, 4);
+    const [a, b, d, e] = players;
+    await eliminatePlayer(parts[3]); // E: 4º
+    await eliminatePlayer(parts[2]); // D: 3º
+    await distributePayouts(t, [
+      { playerId: a, amount: 200, position: 1 },
+      { playerId: d, amount: 100, position: 3 },
+    ]);
+
+    // O acordo novo leva E ao 3º; D, fora dele, não pode ficar também em 3º.
+    await distributePayouts(t, [
+      { playerId: a, amount: 200, position: 1 },
+      { playerId: b, amount: 100, position: 2 },
+      { playerId: e, amount: 50, position: 3 },
+    ]);
+
+    expect((await participantOf(e, t))?.finishPosition).toBe(3);
+    expect((await participantOf(d, t))?.finishPosition).toBe(4);
+    expect(await detectionRows()).toEqual({ orphanPrizes: [], repeatedPositions: [] });
+  });
+
+  it("redistribuir num torneio Encerrado recalcula os pontos de quem mudou de posicao", async () => {
+    const { t, players } = await setupThree();
+    const [a, b, c] = players;
+    await distributePayouts(t, [
+      { playerId: a, amount: 200, position: 1 },
+      { playerId: b, amount: 100, position: 2 },
+      { playerId: c, amount: 0, position: 3 },
+    ]);
+    await updateTournamentStatus(t, "finished");
+    expect(Number((await participantOf(c, t))?.pointsEarned)).toBe(8);
+
+    expect(
+      await distributePayouts(t, [
+        { playerId: a, amount: 200, position: 1 },
+        { playerId: c, amount: 100, position: 2 },
+      ])
+    ).toEqual({ success: true });
+
+    expect(Number((await participantOf(a, t))?.pointsEarned)).toBe(12);
+    expect(Number((await participantOf(c, t))?.pointsEarned)).toBe(10);
+    expect(Number((await participantOf(b, t))?.pointsEarned)).toBe(0);
+    expect(await detectionRows()).toEqual({ orphanPrizes: [], repeatedPositions: [] });
+  });
+
+  it("Bounty Builder Encerrado: o recalculo conta os Knockouts do Ledger, como o Encerrar", async () => {
+    const t = await seedTournament({
+      status: "running",
+      tournamentType: "bounty_builder",
+      buyInAmount: 100,
+      rankingFeeAmount: 0,
+      bountyPercentage: 50,
+    });
+    const { players, parts } = await setupPlayers(t, 3);
+    const [a, b, c] = players;
+    await eliminatePlayer(parts[1], [c]); // B cai para C: 3º, e C ganha um Knockout
+    await distributePayouts(t, [
+      { playerId: a, amount: 100, position: 1 },
+      { playerId: c, amount: 50, position: 2 },
+    ]);
+    await updateTournamentStatus(t, "finished");
+    expect(Number((await participantOf(c, t))?.pointsEarned)).toBe(10.25);
+
+    await distributePayouts(t, [
+      { playerId: c, amount: 100, position: 1 },
+      { playerId: a, amount: 50, position: 2 },
+    ]);
+
+    expect(Number((await participantOf(c, t))?.pointsEarned)).toBe(12.25);
+    expect(Number((await participantOf(a, t))?.pointsEarned)).toBe(10);
+    expect(Number((await participantOf(b, t))?.pointsEarned)).toBe(8);
   });
 });
