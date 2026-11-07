@@ -9,13 +9,18 @@ import {
   undoRebuy,
   undoAddon,
   distributePayouts,
+  removeParticipant,
 } from "@/actions/participants";
 import { getParticipantByPlayerAndTournament } from "@/db/queries/participants";
 import { getTournamentFinancialSummary } from "@/db/queries/transactions";
+import { getMesaLiveData } from "@/actions/mesa";
+import { loadPrizePool } from "@/db/ledger/saldo";
+import { computeSaldo } from "@/lib/prize-pool";
+import { derivePrizesPaid } from "@/lib/mesa-panels/prizes-paid";
 import { seedTournament, seedPlayer, seedParticipant } from "@/test/setup";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { testDb } from "@/test/db";
-import { tournaments } from "@/db/schema";
+import { tournaments, transactions } from "@/db/schema";
 
 type TournamentOverrides = Partial<typeof tournaments.$inferInsert>;
 
@@ -211,5 +216,164 @@ describe("Desfazer e o Saldo", () => {
     const res = await undoBuyIn(parts[2]);
     expect(res).not.toHaveProperty("error");
     expect((await getTournamentFinancialSummary(t)).buy_in).toBe(200);
+  });
+});
+
+// Só recebe Prêmio quem tem buy-in confirmado (Em jogo ou eliminado); um item
+// para quem não está inscrito ou ainda aguarda buy-in recusa a distribuição inteira.
+describe("distributePayouts e o buy-in confirmado", () => {
+  async function prizeRows(t: number) {
+    return testDb
+      .select()
+      .from(transactions)
+      .where(and(eq(transactions.tournamentId, t), eq(transactions.type, "prize")));
+  }
+
+  it("Jogador Aguardando buy-in recusa a distribuicao e nao grava nada de ninguem", async () => {
+    const { t, players } = await setupNormal();
+    const waiting = await seedPlayer("aguardando");
+    await seedParticipant(t, waiting);
+
+    const res = await distributePayouts(t, [
+      { playerId: players[0], amount: 50, position: 1 },
+      { playerId: waiting, amount: 100, position: 2 },
+    ]);
+
+    expect(res).toEqual({ error: "So recebe Premio quem tem buy-in confirmado" });
+    expect(await prizeRows(t)).toHaveLength(0);
+    for (const playerId of [players[0], waiting]) {
+      const row = await getParticipantByPlayerAndTournament(playerId, t);
+      expect(row?.prizeAmount).toBe(0);
+      expect(row?.finishPosition).toBeNull();
+    }
+  });
+
+  it("Jogador nao inscrito recusa a distribuicao em vez de ser descartado em silencio", async () => {
+    const { t, players } = await setupNormal();
+    const outsider = await seedPlayer("de fora");
+
+    const res = await distributePayouts(t, [
+      { playerId: players[0], amount: 50, position: 1 },
+      { playerId: outsider, amount: 100, position: 2 },
+    ]);
+
+    expect(res).toEqual({ error: "Jogador nao inscrito neste torneio" });
+    expect(await prizeRows(t)).toHaveLength(0);
+    expect((await getParticipantByPlayerAndTournament(players[0], t))?.prizeAmount).toBe(0);
+  });
+
+  it("recusa nao apaga a distribuicao anterior", async () => {
+    const { t, players } = await setupNormal();
+    const waiting = await seedPlayer("aguardando");
+    await seedParticipant(t, waiting);
+    expect(await distributePayouts(t, [{ playerId: players[0], amount: 200, position: 1 }])).toEqual({ success: true });
+
+    const res = await distributePayouts(t, [{ playerId: waiting, amount: 200, position: 1 }]);
+
+    expect(res).toHaveProperty("error");
+    expect((await prizeRows(t)).map((r) => [r.playerId, r.amount])).toEqual([[players[0], 200]]);
+  });
+
+  it("paga quem tem buy-in confirmado, Em jogo ou eliminado, e a redistribuicao substitui a anterior", async () => {
+    const { t, players, parts } = await setupNormal();
+    expect(await eliminatePlayer(parts[2])).toEqual({ success: true });
+
+    expect(
+      await distributePayouts(t, [
+        { playerId: players[0], amount: 200, position: 1 },
+        { playerId: players[2], amount: 100, position: 3 },
+      ])
+    ).toEqual({ success: true });
+    expect(await distributePayouts(t, [{ playerId: players[2], amount: 150, position: 3 }])).toEqual({ success: true });
+
+    expect((await prizeRows(t)).map((r) => [r.playerId, r.amount])).toEqual([[players[2], 150]]);
+    const eliminated = await getParticipantByPlayerAndTournament(players[2], t);
+    expect(eliminated?.prizeAmount).toBe(150);
+    expect(eliminated?.finishPosition).toBe(3);
+  });
+});
+
+// Prêmio pago só sai refazendo a distribuição: Desfazer o buy-in ou remover quem
+// tem Prêmio é recusado, para nenhuma transação prize ficar sem Participante.
+describe("Premio pago bloqueia Desfazer buy-in e Remover participante", () => {
+  const PRIZE_PAID = "Participante tem Premio pago: refaca a distribuicao de premios sem ele antes";
+
+  async function allRows(t: number) {
+    return testDb.select().from(transactions).where(eq(transactions.tournamentId, t)).orderBy(transactions.id);
+  }
+
+  it("undoBuyIn de quem tem Premio pago (acordo com o torneio Rodando) e recusado e nao muda nada", async () => {
+    const { t, players, parts } = await setupNormal();
+    expect(await distributePayouts(t, [{ playerId: players[2], amount: 50, position: 1 }])).toEqual({ success: true });
+    const before = await allRows(t);
+
+    const res = await undoBuyIn(parts[2]);
+
+    expect(res).toEqual({ error: PRIZE_PAID });
+    expect(await allRows(t)).toEqual(before);
+    const row = await getParticipantByPlayerAndTournament(players[2], t);
+    expect(row?.buyInPaid).toBe(true);
+    expect(row?.status).toBe("playing");
+  });
+
+  it("undoBuyIn de quem saiu da redistribuicao volta a ser aceito", async () => {
+    const { t, players, parts } = await setupNormal();
+    expect(await distributePayouts(t, [{ playerId: players[2], amount: 50, position: 1 }])).toEqual({ success: true });
+    expect(await distributePayouts(t, [{ playerId: players[0], amount: 50, position: 1 }])).toEqual({ success: true });
+
+    expect(await undoBuyIn(parts[2])).toEqual({ success: true });
+  });
+
+  it("removeParticipant de quem tem Premio pago e recusado e nao apaga nada", async () => {
+    const { t } = await setupNormal();
+    const waiting = await seedPlayer("aguardando");
+    const part = await seedParticipant(t, waiting);
+    // Prêmio gravado antes do #123, quando a distribuição ainda pagava quem aguardava buy-in.
+    await testDb.insert(transactions).values({ tournamentId: t, playerId: waiting, type: "prize", amount: 100 });
+    const before = await allRows(t);
+
+    const res = await removeParticipant(part);
+
+    expect(res).toEqual({ error: PRIZE_PAID });
+    expect(await getParticipantByPlayerAndTournament(waiting, t)).not.toBeNull();
+    expect(await allRows(t)).toEqual(before);
+  });
+
+  it("removeParticipant de quem aguarda buy-in sem Premio continua funcionando", async () => {
+    const { t, players } = await setupNormal();
+    await distributePayouts(t, [{ playerId: players[0], amount: 50, position: 1 }]);
+    const waiting = await seedPlayer("aguardando");
+    const part = await seedParticipant(t, waiting);
+
+    expect(await removeParticipant(part)).toEqual({ success: true });
+    expect(await getParticipantByPlayerAndTournament(waiting, t)).toBeNull();
+  });
+});
+
+// Cenário da triagem do #123: Rodando, A e B Em jogo (Prize pool 200) e C
+// aguardando buy-in. Antes, C recebia Prêmio, era removido e o prize ficava
+// órfão: a página somava 150 pagos e a mesa, 50.
+describe("cenario do Premio orfao (#123)", () => {
+  it("nao deixa prize sem Participante, e o Saldo da pagina bate com o da mesa", async () => {
+    const t = await seedTournament({ status: "running", buyInAmount: 100, rankingFeeAmount: 0 });
+    const { players } = await setupPlayers(t, 2);
+    const c = await seedPlayer("C");
+    const partC = await seedParticipant(t, c);
+
+    expect(
+      await distributePayouts(t, [
+        { playerId: players[0], amount: 50, position: 1 },
+        { playerId: c, amount: 100, position: 2 },
+      ])
+    ).toHaveProperty("error");
+    expect(await removeParticipant(partC)).toEqual({ success: true });
+    expect(await distributePayouts(t, [{ playerId: players[0], amount: 50, position: 1 }])).toEqual({ success: true });
+
+    const page = await loadPrizePool(testDb, t);
+    const mesa = derivePrizesPaid(await getMesaLiveData(t));
+    expect(page.prizePool).toBe(200);
+    expect(page.prizesPaid).toBe(50);
+    expect(mesa?.total).toBe(50);
+    expect(computeSaldo(page.prizePool, page.prizesPaid)).toBe(150);
   });
 });

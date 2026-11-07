@@ -83,7 +83,7 @@ Percentual do Prize pool que cabe a cada posição (padrão 45/25/15/10/5), ajus
 _Avoid_: distribuição de prêmios (quando se refere aos percentuais)
 
 **Prêmio**:
-Valor pago a um participante por sua posição final. A soma dos Prêmios nunca passa do Prize pool.
+Valor pago a um participante por sua posição final. Só recebe Prêmio quem tem buy-in confirmado (Em jogo ou eliminado). A soma dos Prêmios nunca passa do Prize pool. Quem tem Prêmio pago não pode ser removido nem ter o buy-in desfeito: antes, refaz-se a distribuição sem ele.
 
 **Prêmio estimado**:
 O que a Estrutura de prêmios daria a uma posição com o Prize pool atual. Muda a cada buy-in, Rebuy ou add-on e só vira Prêmio quando é distribuído.
@@ -106,7 +106,7 @@ Momento em que falta uma Eliminação para o dinheiro (Em jogo é uma a mais que
 _Avoid_: bubble
 
 **Distribuir prêmios**:
-Registrar os Prêmios pagos a cada posição. Pode ser feito com o torneio rodando (acordo na mesa final) ou encerrado, nunca em torneio cancelado; refazer substitui a distribuição anterior.
+Registrar os Prêmios pagos a cada posição. Pode ser feito com o torneio rodando (acordo na mesa final) ou encerrado, nunca em torneio cancelado; refazer substitui a distribuição anterior. Só entra quem tem buy-in confirmado: um Jogador não inscrito ou aguardando buy-in recusa a distribuição inteira. Refazer a distribuição sem um participante é o caminho para depois removê-lo ou desfazer o buy-in dele.
 _Avoid_: pagar payouts
 
 **Saldo**:

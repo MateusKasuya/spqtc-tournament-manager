@@ -56,3 +56,20 @@ export async function getPaidPrizesByParticipant(tournamentId: number) {
     .orderBy(participants.id);
   return rows.map((r) => ({ participantId: r.participantId, amount: Number(r.amount ?? 0) }));
 }
+
+// O Jogador tem Prêmio pago neste torneio, lido dos registros de Prêmio e não
+// do Prêmio guardado no participante (aceita a transação do chamador).
+export async function hasPaidPrize(tournamentId: number, playerId: number, executor: LedgerExecutor = db) {
+  const [row] = await executor
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(
+      and(
+        eq(transactions.tournamentId, tournamentId),
+        eq(transactions.playerId, playerId),
+        eq(transactions.type, "prize")
+      )
+    )
+    .limit(1);
+  return Boolean(row);
+}
