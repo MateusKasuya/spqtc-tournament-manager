@@ -14,6 +14,12 @@ describe("finalPositionsAfterPayout", () => {
     expect(positions).toEqual(new Map([[1, 1], [2, 2], [3, 3]] as [number, number | null][]));
   });
 
+  it("campeao coroado fora da lista, com o 1o do acordo para outro, recebe a posicao livre seguinte", () => {
+    const parts = [part(1, "finished", 1), part(2, "eliminated", 2, at(5)), part(3, "eliminated", 3, at(1))];
+    const positions = finalPositionsAfterPayout(parts, [{ playerId: 20, position: 1 }]);
+    expect(positions).toEqual(new Map([[1, 2], [2, 1], [3, 3]] as [number, number | null][]));
+  });
+
   it("Aguardando buy-in e Em jogo fora da lista ficam sem posicao", () => {
     const parts = [part(1, "playing", 1), part(2, "playing", 2), part(3, "registered", null)];
     const positions = finalPositionsAfterPayout(parts, [{ playerId: 10, position: 1 }]);

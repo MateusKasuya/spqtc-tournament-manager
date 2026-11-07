@@ -534,6 +534,50 @@ describe("refazer a distribuicao tira Premio e posicao de quem sai do acordo (#1
     expect(await detectionRows()).toEqual({ orphanPrizes: [], repeatedPositions: [] });
   });
 
+  it("Campeao coroado perde o 1o quando o acordo novo da o 1o a outro, sem repetir posicao", async () => {
+    const { t, players, parts } = await setupThree();
+    const [a, b, c] = players;
+    await eliminatePlayer(parts[2]); // C: 3º
+    await eliminatePlayer(parts[1]); // B: 2º, e A é coroado
+    expect((await participantOf(a, t))?.status).toBe("finished");
+    await distributePayouts(t, [
+      { playerId: a, amount: 200, position: 1 },
+      { playerId: b, amount: 100, position: 2 },
+    ]);
+    await updateTournamentStatus(t, "finished");
+    expect(Number((await participantOf(a, t))?.pointsEarned)).toBe(12);
+
+    await distributePayouts(t, [
+      { playerId: b, amount: 200, position: 1 },
+      { playerId: c, amount: 100, position: 2 },
+    ]);
+
+    expect((await participantOf(a, t))?.finishPosition).toBe(3);
+    expect(Number((await participantOf(a, t))?.pointsEarned)).toBe(8);
+    expect(Number((await participantOf(b, t))?.pointsEarned)).toBe(12);
+    expect(Number((await participantOf(c, t))?.pointsEarned)).toBe(10);
+    expect(await detectionRows()).toEqual({ orphanPrizes: [], repeatedPositions: [] });
+  });
+
+  it("quem caiu e sai da lista mantem posicao, mas getPlayerStats deixa de contar o Premio dele", async () => {
+    const { t, players, parts } = await setupThree();
+    const [a, b, c] = players;
+    await eliminatePlayer(parts[1]); // B: 3º
+    await distributePayouts(t, [
+      { playerId: a, amount: 200, position: 1 },
+      { playerId: b, amount: 100, position: 3 },
+    ]);
+    await distributePayouts(t, [
+      { playerId: a, amount: 200, position: 1 },
+      { playerId: c, amount: 100, position: 2 },
+    ]);
+    await updateTournamentStatus(t, "finished");
+
+    const stats = await getPlayerStats(b);
+    expect(stats?.bestPosition).toBe(3);
+    expect(Number(stats?.totalPrize)).toBe(0);
+  });
+
   it("Bounty Builder Encerrado: o recalculo conta os Knockouts do Ledger, como o Encerrar", async () => {
     const t = await seedTournament({
       status: "running",

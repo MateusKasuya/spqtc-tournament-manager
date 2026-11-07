@@ -7,7 +7,7 @@ import type { LedgerExecutor } from "@/db/ledger/knockout-ledger";
 import { writeRankingPoints, type ScoredParticipant } from "@/db/ledger/ranking-points";
 
 // Grava só as posições que mudaram; em torneio Encerrado, recalcula os pontos
-// de quem mudou. Devolve se os pontos de ranking foram recalculados.
+// de quem mudou. Devolve se alguma posição ou ponto do Ranking mudou.
 export async function applyPayoutPositions(
   tx: LedgerExecutor,
   tournament: Pick<typeof tournaments.$inferSelect, "id" | "tournamentType" | "status">,
@@ -33,7 +33,7 @@ export async function applyPayoutPositions(
     moved.push({ id: p.id, playerId: p.playerId, finishPosition });
   }
 
-  if (tournament.status !== "finished") return { rankingChanged: false };
+  if (tournament.status !== "finished" || moved.length === 0) return { rankingChanged: false };
   await writeRankingPoints(tx, tournament, moved);
   return { rankingChanged: true };
 }
