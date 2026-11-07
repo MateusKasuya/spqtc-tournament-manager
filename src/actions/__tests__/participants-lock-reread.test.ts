@@ -10,6 +10,8 @@ import {
   undoBonusChip,
   eliminatePlayer,
   undoElimination,
+  removeParticipant,
+  distributePayouts,
 } from "@/actions/participants";
 import { updateTournamentStatus } from "@/actions/tournaments";
 import * as knockoutLedger from "@/db/ledger/knockout-ledger";
@@ -464,5 +466,53 @@ describe("Knockout e Desfazer releem o Status do torneio dentro do lock", () => 
     expect(res).toEqual({ error: "A mesa mudou, recarregue e tente de novo" });
     expect(await knockoutRows(t)).toEqual(before);
     expect((await tournamentRow(t)).status).toBe("finished");
+  });
+});
+
+describe("removeParticipant relê torneio e participante dentro do lock", () => {
+  it("participante que virou Em jogo no banco devolve erro e não é apagado", async () => {
+    const t = await seedTournament({ status: "running", buyInAmount: 100 });
+    const player = await seedPlayer();
+    const part = await seedParticipant(t, player);
+    expect(await confirmBuyIn(part)).not.toHaveProperty("error");
+    const spy = staleParticipant(await participantRow(part), { buyInPaid: false, status: "registered" });
+
+    const res = await removeParticipant(part);
+
+    expect(spy).toHaveBeenCalled();
+    expect(res).toEqual({ error: "Apenas jogadores com status 'registrado' podem ser removidos" });
+    expect((await participantRow(part)).status).toBe("playing");
+    expect(await playerTransactions(t, player, "buy_in")).toHaveLength(1);
+  });
+
+  it("torneio Cancelado no banco devolve a recusa do Status e não apaga nada", async () => {
+    const t = await seedTournament({ status: "cancelled" });
+    const part = await seedParticipant(t, await seedPlayer());
+    const spy = staleTournament(await tournamentRow(t), { status: "running" });
+
+    const res = await removeParticipant(part);
+
+    expect(spy).toHaveBeenCalled();
+    expect(res).toEqual({ error: STATUS_RULES.registration.error });
+    expect(await participantRow(part)).toBeDefined();
+  });
+});
+
+describe("distributePayouts relê o Status do torneio dentro do lock", () => {
+  it("torneio Cancelado no banco devolve a recusa do Status e não grava Prêmio", async () => {
+    const t = await seedTournament({ status: "running", buyInAmount: 100 });
+    const player = await seedPlayer();
+    const part = await seedParticipant(t, player);
+    expect(await confirmBuyIn(part)).not.toHaveProperty("error");
+    await testDb.update(tournaments).set({ status: "cancelled" }).where(eq(tournaments.id, t));
+    const spy = staleTournament(await tournamentRow(t), { status: "running" });
+
+    const res = await distributePayouts(t, [{ playerId: player, amount: 50, position: 1 }]);
+
+    expect(spy).toHaveBeenCalled();
+    expect(res).toEqual({ error: STATUS_RULES.payouts.error });
+    const prizes = (await allTransactions(t)).filter((tx) => tx.type === "prize");
+    expect(prizes).toHaveLength(0);
+    expect((await participantRow(part)).prizeAmount).toBe(0);
   });
 });

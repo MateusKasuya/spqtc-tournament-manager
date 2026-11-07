@@ -321,6 +321,7 @@ export default async function TorneioPage({ params }: PageProps) {
                     name: p.name,
                     nickname: p.nickname,
                     finishPosition: p.finishPosition ?? null,
+                    buyInPaid: p.buyInPaid,
                   }))}
                   totalBountiesCollected={isBountyTournament ? financialSummary.bounty_earned : undefined}
                 />

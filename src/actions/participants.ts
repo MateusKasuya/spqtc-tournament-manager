@@ -10,12 +10,15 @@ import { clockStateColumns, getTournamentRequiringStatus } from "@/db/queries/to
 import { getParticipantById, getParticipantByPlayerAndTournament } from "@/db/queries/participants";
 import { checkKnockout, checkUndo, initialBounty, KnockoutLedgerError, type KnockoutEvent, type UndoRequest } from "@/lib/knockout-ledger";
 import { assertPremiosCabemNoPrizePool, assertSaldoNaoNegativo } from "@/db/ledger/saldo";
+import { hasPaidPrize } from "@/db/queries/transactions";
 import { SaldoNegativoError } from "@/lib/prize-pool";
-import { applyKnockout, undoKnockout, loadKnockoutSnapshot, lockAndReadTournament, lockTournament, renumberFinalPositions } from "@/db/ledger/knockout-ledger";
+import { applyKnockout, undoKnockout, loadKnockoutSnapshot, lockAndReadTournament, renumberFinalPositions } from "@/db/ledger/knockout-ledger";
 import { pauseTimer } from "@/lib/tournament-clock";
 import {
   checkAddAddon,
   checkAddBonusChip,
+  checkPayoutRecipients,
+  checkRemoveParticipant,
   checkConfirmBuyIn,
   checkUndoAddon,
   checkUndoBonusChip,
@@ -78,11 +81,21 @@ export async function removeParticipant(participantId: number) {
   if (!participant) return { error: "Participante nao encontrado" };
   const loaded = await getTournamentRequiringStatus(participant.tournamentId, STATUS_RULES.registration);
   if ("error" in loaded) return loaded;
-  if (participant.status !== "registered") {
-    return { error: "Apenas jogadores com status 'registrado' podem ser removidos" };
-  }
+  const refused = checkRemoveParticipant(participant);
+  if (refused) return refused;
 
-  await db.delete(participants).where(eq(participants.id, participantId));
+  const failed = await runLedger(async (tx) => {
+    const { participant: current } = await lockAndReload(
+      tx,
+      participant.tournamentId,
+      participantId,
+      STATUS_RULES.registration,
+      checkRemoveParticipant
+    );
+    await refuseIfPrizePaid(tx, current);
+    await tx.delete(participants).where(eq(participants.id, participantId));
+  });
+  if (failed) return failed;
 
   revalidateTournament(participant.tournamentId);
   return { success: true };
@@ -147,6 +160,7 @@ export async function undoBuyIn(participantId: number) {
       STATUS_RULES.registration,
       checkUndoBuyIn
     );
+    await refuseIfPrizePaid(tx, current);
 
     await tx.delete(transactions).where(
       and(
@@ -190,6 +204,14 @@ async function loadKnockoutContext(participantId: number) {
 // { error } em runLedger, com a mesma mensagem da checagem de fora.
 class ParticipantRefusal extends Error {}
 
+// Trava o torneio, relê a linha e recusa se o Status relido não permitir a ação.
+async function lockTournamentRequiring(tx: Tx, tournamentId: number, rule: StatusRule) {
+  const tournament = await lockAndReadTournament(tx, tournamentId);
+  if (!tournament) throw new ParticipantRefusal("Torneio nao encontrado");
+  if (!statusAllows(rule, tournament.status)) throw new ParticipantRefusal(rule.error);
+  return tournament;
+}
+
 // Trava o torneio, relê torneio e participante e roda nessa releitura a mesma
 // precondição da checagem de fora: a decisão e os valores gravados saem desta
 // leitura, não da feita fora da transação.
@@ -200,14 +222,20 @@ async function lockAndReload(
   rule: StatusRule,
   check: (participant: Participant, tournament: Tournament) => Refusal
 ) {
-  const tournament = await lockAndReadTournament(tx, tournamentId);
-  if (!tournament) throw new ParticipantRefusal("Torneio nao encontrado");
-  if (!statusAllows(rule, tournament.status)) throw new ParticipantRefusal(rule.error);
+  const tournament = await lockTournamentRequiring(tx, tournamentId, rule);
   const [participant] = await tx.select().from(participants).where(eq(participants.id, participantId));
   if (!participant) throw new ParticipantRefusal("Participante nao encontrado");
   const refused = check(participant, tournament);
   if (refused) throw new ParticipantRefusal(refused.error);
   return { tournament, participant };
+}
+
+// Prêmio pago só sai refazendo a distribuição: remover o participante ou desfazer
+// o buy-in dele deixaria uma transação prize sem Participante. Chamar dentro do lock.
+async function refuseIfPrizePaid(tx: Tx, participant: Pick<Participant, "tournamentId" | "playerId">) {
+  if (await hasPaidPrize(participant.tournamentId, participant.playerId, tx)) {
+    throw new ParticipantRefusal("Participante tem Premio pago: refaca a distribuicao de premios sem ele antes");
+  }
 }
 
 // Roda a operação do ledger e do Saldo na transação; recusa esperada (Knockout, Saldo ou
@@ -494,30 +522,30 @@ export async function distributePayouts(
     return { error: "Mesmo jogador em mais de uma posicao" };
   }
 
-  const existing = ids.length
-    ? await db
-        .select({ playerId: participants.playerId })
-        .from(participants)
-        .where(and(eq(participants.tournamentId, tournamentId), inArray(participants.playerId, ids)))
-    : [];
-  const valid = new Set(existing.map((r) => r.playerId));
-  const allowed = items.filter((p) => valid.has(p.playerId));
-
   // Acordo na mesa final (Rodando) ou acerto no fim (Encerrado); Pendente e Cancelado não pagam.
   const loaded = await getTournamentRequiringStatus(tournamentId, STATUS_RULES.payouts);
   if ("error" in loaded) return loaded;
-  const total = allowed.reduce((sum, p) => sum + p.amount, 0);
+  const total = items.reduce((sum, p) => sum + p.amount, 0);
 
-  // Confere dentro do lock, para um Desfazer concorrente não furar a trava.
+  // Status, inscrição, buy-in e Prize pool decidem pela releitura dentro do lock,
+  // para um Desfazer, Remover ou Cancelar concorrente não furar a trava.
   const failed = await runLedger(async (tx) => {
-    await lockTournament(tx, tournamentId);
+    await lockTournamentRequiring(tx, tournamentId, STATUS_RULES.payouts);
+    const enrolled = ids.length
+      ? await tx
+          .select({ playerId: participants.playerId, buyInPaid: participants.buyInPaid })
+          .from(participants)
+          .where(and(eq(participants.tournamentId, tournamentId), inArray(participants.playerId, ids)))
+      : [];
+    const refused = checkPayoutRecipients(items, enrolled);
+    if (refused) throw new ParticipantRefusal(refused.error);
     await assertPremiosCabemNoPrizePool(tx, tournamentId, total);
 
     await tx
       .delete(transactions)
       .where(and(eq(transactions.tournamentId, tournamentId), eq(transactions.type, "prize")));
 
-    const transactionValues = allowed
+    const transactionValues = items
       .filter((p) => p.amount > 0)
       .map((p) => ({
         tournamentId,
@@ -531,7 +559,7 @@ export async function distributePayouts(
     }
 
     await Promise.all(
-      allowed.map((p) =>
+      items.map((p) =>
         tx
           .update(participants)
           .set({ prizeAmount: p.amount, finishPosition: p.position })

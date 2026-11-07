@@ -23,6 +23,7 @@ interface ParticipantOption {
   name: string;
   nickname: string | null;
   finishPosition: number | null;
+  buyInPaid: boolean;
 }
 
 interface PrizePosition {
@@ -48,12 +49,14 @@ export function PayoutDialog({
   tournamentId,
   prizePool,
   prizePositions,
-  participants,
+  participants: allParticipants,
   totalBountiesCollected,
 }: PayoutDialogProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
+  // Só recebe Prêmio quem tem buy-in confirmado (Em jogo ou eliminado).
+  const participants = allParticipants.filter((p) => p.buyInPaid);
   const ranked = [...participants]
     .filter((p) => p.finishPosition !== null)
     .sort((a, b) => (a.finishPosition ?? 99) - (b.finishPosition ?? 99));
