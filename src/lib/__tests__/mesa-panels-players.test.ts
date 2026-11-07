@@ -280,4 +280,18 @@ describe("Jogadores com Prêmios pagos", () => {
       "de 4 com buy-in",
     ]);
   });
+
+  it("total pago no resumo sem ninguém na lista não desliga a linha de dinheiro", () => {
+    const participants = [makeParticipant(), makeParticipant(), makeParticipant(), makeParticipant()];
+    const snapshot = makeSnapshot({
+      participants,
+      prizeStructure: PAYS_THREE,
+      financialSummary: { buy_in: 40000, rebuy: 0, addon: 0, prize: 5000, bounty_earned: 0 },
+    });
+
+    const { panel, card } = buildMesaPanels(makeInput({ snapshot })).players;
+
+    expect(panel.moneyLine).toMatchObject({ state: "bubble" });
+    expect(card.supportLines).toEqual(["de 4 com buy-in", "Bolha"]);
+  });
 });

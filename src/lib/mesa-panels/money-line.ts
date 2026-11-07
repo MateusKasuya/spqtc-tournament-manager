@@ -1,4 +1,4 @@
-import type { MesaFinancialSummary, MesaParticipant, MesaPrizePosition } from "@/db/queries/mesa";
+import type { MesaSnapshot, MesaParticipant, MesaPrizePosition } from "@/db/queries/mesa";
 import { countPlaying } from "./playing";
 import { hasPrizesPaid } from "./prizes-paid";
 
@@ -43,12 +43,12 @@ export interface MoneyLine {
 // `null` com Prêmios pagos (acordo na mesa final ou acerto depois da Coroação),
 // sem ninguém Em jogo (antes do primeiro buy-in ou depois da Coroação) ou sem
 // fronteira (sem Estrutura, sem Posições premiadas ou com o 1º em 0%).
-export function deriveMoneyLine({ participants, prizeStructure, financialSummary }: {
+export function deriveMoneyLine({ participants, prizeStructure, paidPrizesByParticipant }: {
   participants: MesaParticipant[];
   prizeStructure: MesaPrizePosition[];
-  financialSummary: MesaFinancialSummary;
+  paidPrizesByParticipant: MesaSnapshot["paidPrizesByParticipant"];
 }): MoneyLine | null {
-  if (hasPrizesPaid({ financialSummary })) return null;
+  if (hasPrizesPaid({ participants, paidPrizesByParticipant })) return null;
   const playing = countPlaying(participants);
   const paysThrough = moneyBoundary(prizeStructure);
   if (playing === 0 || paysThrough === 0) return null;

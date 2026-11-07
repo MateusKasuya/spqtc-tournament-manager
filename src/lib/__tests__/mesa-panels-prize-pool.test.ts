@@ -562,3 +562,47 @@ describe("card Prize pool: 1º pago", () => {
     expect(card.supportLines).toEqual([]);
   });
 });
+
+// O resumo financeiro soma todos os registros de Prêmio do torneio; a lista por
+// Participante só os de quem ainda é Participante (um Participante removido deixa o
+// registro órfão) e vem de outra leitura. A mesa segue só a lista, para a conta, a
+// tabela e a linha de dinheiro nunca discordarem.
+describe("painel Prize pool: Prêmios pagos vêm só da lista por Participante", () => {
+  it("total pago no resumo sem ninguém na lista: estado normal, com estimados e linha de dinheiro", () => {
+    const snapshot = withStructure({ playing: 4 });
+    const orphaned = { ...snapshot, financialSummary: { ...snapshot.financialSummary, prize: 5000 } };
+
+    const { panel, card } = prizePool(orphaned);
+
+    expect(panel.prizesPaid).toBeNull();
+    expect(panel.paidPrizesByPosition).toBeNull();
+    expect(panel.structure?.paysThroughPosition).toBe(3);
+    expect(panel.moneyLine).toMatchObject({ state: "bubble" });
+    expect(card.supportLines).toEqual([`1º ${formatCurrency(15500)}`]);
+  });
+
+  it("a linha Prêmios pagos e o Saldo somam só a lista", () => {
+    const snapshot = withStructure({ playing: 0 });
+    const champion = makeParticipant({ name: "Campeao", status: "finished", finishPosition: 1 });
+    snapshot.participants.push(champion);
+    const paid = payPrizes(snapshot, [[champion, 20000]]);
+    // Mais R$ 50 de um Participante já removido.
+    const withOrphan = { ...paid, financialSummary: { ...paid.financialSummary, prize: 25000 } };
+
+    const { panel } = prizePool(withOrphan);
+
+    expect(panel.prizesPaid).toEqual({ total: 20000, balance: 11000 });
+    expect(panel.paidPrizesByPosition?.map((p) => p.amount)).toEqual([20000]);
+  });
+
+  it("Prêmio de quem não está entre os participantes lidos não conta", () => {
+    const snapshot = withStructure({ playing: 4 });
+    const stale = { ...snapshot, paidPrizesByParticipant: [{ participantId: 999999, amount: 5000 }] };
+
+    const { panel } = prizePool(stale);
+
+    expect(panel.prizesPaid).toBeNull();
+    expect(panel.paidPrizesByPosition).toBeNull();
+    expect(panel.moneyLine).toMatchObject({ state: "bubble" });
+  });
+});

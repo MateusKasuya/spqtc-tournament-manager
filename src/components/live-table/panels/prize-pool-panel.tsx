@@ -16,7 +16,7 @@ export function PrizePoolPanel({ panel }: { panel: PrizePoolPanelModel }) {
     <div className="flex flex-col gap-6">
       <Account panel={panel} />
       <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-semibold">{panel.paidPrizesByPosition ? "Premios pagos" : "Estrutura de premios"}</h3>
+        <h3 className="text-sm font-semibold">{panel.paidPrizesByPosition ? "Premios por posicao" : "Estrutura de premios"}</h3>
         {panel.prizedPositionsAboveBuyIns && (
           <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-sm">
             A Estrutura tem {panel.prizedPositionsAboveBuyIns.prizedPositions} Posicoes premiadas e so ha{" "}

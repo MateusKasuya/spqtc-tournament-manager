@@ -28,4 +28,3 @@ export type MesaParticipant = MesaSnapshot["participants"][number];
 export type MesaLevel = MesaSnapshot["blindLevels"][number];
 export type MesaFinancialSummary = MesaSnapshot["financialSummary"];
 export type MesaPrizePosition = MesaSnapshot["prizeStructure"][number];
-export type MesaPaidPrize = MesaSnapshot["paidPrizesByParticipant"][number];
