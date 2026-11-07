@@ -21,6 +21,9 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
+      - name: Lint
+        run: pnpm lint --max-warnings 0
+
       - name: Typecheck
         run: pnpm typecheck
 

@@ -6,7 +6,7 @@
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "../src/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getPointsForPosition } from "../src/lib/points-table";
 
 const client = postgres(process.env.DATABASE_URL!, { prepare: false });
@@ -234,7 +234,7 @@ async function main() {
         const status = p.position === 1 ? "finished" : "eliminated";
 
         // Inserir participante
-        const [participant] = await tx
+        await tx
           .insert(schema.participants)
           .values({
             tournamentId: tournament.id,
@@ -247,8 +247,7 @@ async function main() {
             prizeAmount: p.prize,
             status,
             eliminatedAt: p.position === 1 ? null : etapa.date,
-          })
-          .returning({ id: schema.participants.id });
+          });
 
         // Transacao buy-in
         await tx.insert(schema.transactions).values({
