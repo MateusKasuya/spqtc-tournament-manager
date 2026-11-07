@@ -318,8 +318,8 @@ describe("Premio pago bloqueia Desfazer buy-in e Remover participante", () => {
 
   it("undoBuyIn de quem saiu da redistribuicao volta a ser aceito", async () => {
     const { t, players, parts } = await setupNormal();
-    await distributePayouts(t, [{ playerId: players[2], amount: 50, position: 1 }]);
-    await distributePayouts(t, [{ playerId: players[0], amount: 50, position: 1 }]);
+    expect(await distributePayouts(t, [{ playerId: players[2], amount: 50, position: 1 }])).toEqual({ success: true });
+    expect(await distributePayouts(t, [{ playerId: players[0], amount: 50, position: 1 }])).toEqual({ success: true });
 
     expect(await undoBuyIn(parts[2])).toEqual({ success: true });
   });

@@ -49,15 +49,15 @@ export function PayoutDialog({
   tournamentId,
   prizePool,
   prizePositions,
-  participants: allParticipants,
+  participants,
   totalBountiesCollected,
 }: PayoutDialogProps) {
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   // Só recebe Prêmio quem tem buy-in confirmado (Em jogo ou eliminado).
-  const participants = allParticipants.filter((p) => p.buyInPaid);
-  const ranked = [...participants]
+  const recipients = participants.filter((p) => p.buyInPaid);
+  const ranked = [...recipients]
     .filter((p) => p.finishPosition !== null)
     .sort((a, b) => (a.finishPosition ?? 99) - (b.finishPosition ?? 99));
 
@@ -166,7 +166,7 @@ export function PayoutDialog({
                         onChange={(e) => updateEntry(index, "playerId", e.target.value)}
                       >
                         <option value="">Selecione...</option>
-                        {participants.map((p) => (
+                        {recipients.map((p) => (
                           <option key={p.playerId} value={String(p.playerId)}>
                             {p.nickname ? `${p.name} (${p.nickname})` : p.name}
                           </option>
