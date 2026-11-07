@@ -14,8 +14,7 @@ import { hasPaidPrize } from "@/db/queries/transactions";
 import { SaldoNegativoError } from "@/lib/prize-pool";
 import { applyKnockout, undoKnockout, loadKnockoutSnapshot, lockAndReadTournament, renumberFinalPositions } from "@/db/ledger/knockout-ledger";
 import { pauseTimer } from "@/lib/tournament-clock";
-import { finalPositionsAfterPayout } from "@/lib/payout-positions";
-import { writeRankingPoints } from "@/db/ledger/ranking-points";
+import { applyPayoutPositions } from "@/db/ledger/payout-positions";
 import { revalidatePath, revalidateTag } from "next/cache";
 import {
   checkAddAddon,
@@ -562,9 +561,7 @@ export async function distributePayouts(
       await tx.insert(transactions).values(transactionValues);
     }
 
-    // A lista nova substitui o acordo inteiro: quem fica fora dela perde o Prêmio.
     await tx.update(participants).set({ prizeAmount: 0 }).where(eq(participants.tournamentId, tournamentId));
-
     for (const p of items) {
       await tx
         .update(participants)
@@ -572,32 +569,7 @@ export async function distributePayouts(
         .where(and(eq(participants.tournamentId, tournamentId), eq(participants.playerId, p.playerId)));
     }
 
-    // Quem está na lista fica com a posição do acordo; quem saiu volta à que a mesa dá.
-    const all = await tx
-      .select({
-        id: participants.id,
-        playerId: participants.playerId,
-        status: participants.status,
-        finishPosition: participants.finishPosition,
-        eliminatedAt: participants.eliminatedAt,
-      })
-      .from(participants)
-      .where(eq(participants.tournamentId, tournamentId));
-    const positions = finalPositionsAfterPayout(all, items);
-    const moved: { id: number; playerId: number; finishPosition: number | null }[] = [];
-    for (const p of all) {
-      const position = positions.get(p.id) ?? null;
-      if (position === p.finishPosition) continue;
-      await tx.update(participants).set({ finishPosition: position }).where(eq(participants.id, p.id));
-      moved.push({ id: p.id, playerId: p.playerId, finishPosition: position });
-    }
-
-    // Encerrado já deu os pontos de ranking: quem mudou de posição é recalculado
-    // pela regra do Encerrar. Prêmio e posição de torneio Encerrado aparecem no Ranking.
-    if (tournament.status === "finished") {
-      await writeRankingPoints(tx, tournament, moved);
-      rankingChanged = true;
-    }
+    ({ rankingChanged } = await applyPayoutPositions(tx, tournament, items));
   });
   if (failed) return failed;
 

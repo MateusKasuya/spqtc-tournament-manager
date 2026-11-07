@@ -1,25 +1,24 @@
-// Pontos de ranking de um torneio, gravados na transação do chamador: a regra do
-// Encerrar, reusada pela redistribuição de prêmios em torneio Encerrado para as
-// duas nunca divergirem.
+// Pontos de ranking gravados na transação do chamador: a regra do Encerrar,
+// reusada pela redistribuição em torneio Encerrado para as duas não divergirem.
 import { eq } from "drizzle-orm";
 import { participants, type tournaments } from "@/db/schema";
-import { computeParticipantPoints } from "@/lib/points-table";
+import { rankingPoints } from "@/lib/points-table";
 import { countKnockoutsByEliminator, type LedgerExecutor } from "@/db/ledger/knockout-ledger";
 
-// Grava os pontos de cada Participante passado pela Posição final dele e pelos
-// Knockouts do Ledger (só em Bounty Builder); sem posição, zero.
+export type ScoredParticipant = Pick<typeof participants.$inferSelect, "id" | "playerId" | "finishPosition">;
+
 export async function writeRankingPoints(
   tx: LedgerExecutor,
   tournament: Pick<typeof tournaments.$inferSelect, "id" | "tournamentType">,
-  parts: { id: number; playerId: number; finishPosition: number | null }[]
+  participantsToScore: ScoredParticipant[]
 ) {
-  if (parts.length === 0) return;
-  const koByPlayer =
+  if (participantsToScore.length === 0) return;
+  const knockoutsByPlayer =
     tournament.tournamentType === "bounty_builder"
       ? await countKnockoutsByEliminator(tx, tournament.id)
       : new Map<number, number>();
-  for (const p of parts) {
-    const points = p.finishPosition ? computeParticipantPoints(p.finishPosition, koByPlayer.get(p.playerId) ?? 0) : 0;
+  for (const p of participantsToScore) {
+    const points = rankingPoints(p.finishPosition, knockoutsByPlayer.get(p.playerId) ?? 0);
     await tx.update(participants).set({ pointsEarned: points.toFixed(2) }).where(eq(participants.id, p.id));
   }
 }

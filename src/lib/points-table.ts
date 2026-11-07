@@ -20,3 +20,8 @@ export const ELIMINATION_BONUS_POINTS = 0.25;
 export function computeParticipantPoints(position: number, knockouts: number): number {
   return getPointsForPosition(position) + knockouts * ELIMINATION_BONUS_POINTS;
 }
+
+// Sem Posição final (ainda em jogo ao sair de um acordo) não há pontos de ranking.
+export function rankingPoints(position: number | null, knockouts: number): number {
+  return position === null ? 0 : computeParticipantPoints(position, knockouts);
+}
