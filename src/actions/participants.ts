@@ -14,6 +14,8 @@ import { hasPaidPrize } from "@/db/queries/transactions";
 import { SaldoNegativoError } from "@/lib/prize-pool";
 import { applyKnockout, undoKnockout, loadKnockoutSnapshot, lockAndReadTournament, renumberFinalPositions } from "@/db/ledger/knockout-ledger";
 import { pauseTimer } from "@/lib/tournament-clock";
+import { applyPayoutPositions } from "@/db/ledger/payout-positions";
+import { revalidatePath, revalidateTag } from "next/cache";
 import {
   checkAddAddon,
   checkAddBonusChip,
@@ -529,8 +531,9 @@ export async function distributePayouts(
 
   // Status, inscrição, buy-in e Prize pool decidem pela releitura dentro do lock,
   // para um Desfazer, Remover ou Cancelar concorrente não furar a trava.
+  let rankingChanged = false;
   const failed = await runLedger(async (tx) => {
-    await lockTournamentRequiring(tx, tournamentId, STATUS_RULES.payouts);
+    const tournament = await lockTournamentRequiring(tx, tournamentId, STATUS_RULES.payouts);
     const enrolled = ids.length
       ? await tx
           .select({ playerId: participants.playerId, buyInPaid: participants.buyInPaid })
@@ -558,17 +561,22 @@ export async function distributePayouts(
       await tx.insert(transactions).values(transactionValues);
     }
 
-    await Promise.all(
-      items.map((p) =>
-        tx
-          .update(participants)
-          .set({ prizeAmount: p.amount, finishPosition: p.position })
-          .where(and(eq(participants.tournamentId, tournamentId), eq(participants.playerId, p.playerId)))
-      )
-    );
+    await tx.update(participants).set({ prizeAmount: 0 }).where(eq(participants.tournamentId, tournamentId));
+    for (const p of items) {
+      await tx
+        .update(participants)
+        .set({ prizeAmount: p.amount })
+        .where(and(eq(participants.tournamentId, tournamentId), eq(participants.playerId, p.playerId)));
+    }
+
+    ({ rankingChanged } = await applyPayoutPositions(tx, tournament, items));
   });
   if (failed) return failed;
 
   revalidateTournament(tournamentId);
+  if (rankingChanged) {
+    revalidateTag("ranking");
+    revalidatePath("/ranking");
+  }
   return { success: true };
 }

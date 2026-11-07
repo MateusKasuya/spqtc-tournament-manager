@@ -11,8 +11,8 @@ import {
 import { db } from "@/db";
 import { tournaments, blindStructures, prizeStructures, participants } from "@/db/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
-import { computeParticipantPoints } from "@/lib/points-table";
-import { countKnockoutsByEliminator, lockAndReadTournament, lockTournament } from "@/db/ledger/knockout-ledger";
+import { lockAndReadTournament, lockTournament } from "@/db/ledger/knockout-ledger";
+import { writeRankingPoints } from "@/db/ledger/ranking-points";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
@@ -233,11 +233,6 @@ export async function updateTournamentStatus(
       .where(eq(tournaments.id, id));
 
     if (status === "finished") {
-      const isBounty = current.tournamentType === "bounty_builder";
-
-      // Knockouts por Eliminador a partir do Ledger de Knockout (sem a autocoleta da Coroação).
-      const koByPlayer = isBounty ? await countKnockoutsByEliminator(tx, id) : new Map<number, number>();
-
       const finishedParticipants = await tx
         .select({
           id: participants.id,
@@ -246,17 +241,7 @@ export async function updateTournamentStatus(
         })
         .from(participants)
         .where(and(eq(participants.tournamentId, id), isNotNull(participants.finishPosition)));
-
-      for (const p of finishedParticipants) {
-        if (p.finishPosition) {
-          const knockouts = koByPlayer.get(p.playerId) ?? 0;
-          const points = computeParticipantPoints(p.finishPosition, knockouts);
-          await tx
-            .update(participants)
-            .set({ pointsEarned: points.toFixed(2) })
-            .where(eq(participants.id, p.id));
-        }
-      }
+      await writeRankingPoints(tx, current, finishedParticipants);
     }
     return { applied: true };
   });
