@@ -1,10 +1,10 @@
-import type { MesaParticipant, MesaPrizePosition } from "@/db/queries/mesa";
+import type { MesaSnapshot, MesaParticipant, MesaPrizePosition } from "@/db/queries/mesa";
 import { countPlaying } from "./playing";
+import { hasPrizesPaid } from "./prizes-paid";
 
 // A Fronteira do dinheiro (CONTEXT.md: Posições premiadas, Bolha, No dinheiro), a
-// única conta dela: o painel do Prize pool e o Jogadores (#84) a leem daqui.
-// O #85 desliga a linha com Prêmios pagos aqui dentro, com `hasPrizesPaid` de
-// `./prizes-paid` (que não importa este arquivo).
+// única conta dela: o painel do Prize pool e o Jogadores a leem daqui, e por isso
+// desligam juntos quando há Prêmios pagos.
 
 export function isPrizedPosition(position: MesaPrizePosition): boolean {
   return position.percentage > 0;
@@ -40,12 +40,15 @@ export interface MoneyLine {
   state: MoneyLineState;
 }
 
-// `null` sem ninguém Em jogo (antes do primeiro buy-in ou depois da Coroação) ou
-// sem fronteira (sem Estrutura, sem Posições premiadas ou com o 1º em 0%).
-export function deriveMoneyLine({ participants, prizeStructure }: {
+// `null` com Prêmios pagos (acordo na mesa final ou acerto depois da Coroação),
+// sem ninguém Em jogo (antes do primeiro buy-in ou depois da Coroação) ou sem
+// fronteira (sem Estrutura, sem Posições premiadas ou com o 1º em 0%).
+export function deriveMoneyLine({ participants, prizeStructure, paidPrizesByParticipant }: {
   participants: MesaParticipant[];
   prizeStructure: MesaPrizePosition[];
+  paidPrizesByParticipant: MesaSnapshot["paidPrizesByParticipant"];
 }): MoneyLine | null {
+  if (hasPrizesPaid({ participants, paidPrizesByParticipant })) return null;
   const playing = countPlaying(participants);
   const paysThrough = moneyBoundary(prizeStructure);
   if (playing === 0 || paysThrough === 0) return null;

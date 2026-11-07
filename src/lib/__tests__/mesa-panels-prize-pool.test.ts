@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { buildMesaPanels } from "@/lib/mesa-panels";
 import { formatCurrency } from "@/lib/format";
 import type { MesaSnapshot } from "@/db/queries/mesa";
-import { makeInput, makeParticipant, makeSnapshot, makeTournament } from "./mesa-panels-fixture";
+import { makeInput, makeParticipant, makeSnapshot, makeTournament, payPrizes } from "./mesa-panels-fixture";
 
 function prizePool(snapshot: MesaSnapshot) {
   return buildMesaPanels(makeInput({ snapshot })).prizePool;
@@ -54,6 +54,7 @@ describe("painel Prize pool", () => {
       prizePool: 31000,
       prizesPaid: null,
       structure: null,
+      paidPrizesByPosition: null,
       moneyLine: null,
       nextOut: null,
       prizedPositionsAboveBuyIns: null,
@@ -100,24 +101,26 @@ describe("painel Prize pool", () => {
   });
 
   it("com Prêmios pagos mostra o total pago e o Saldo", () => {
+    const champion = makeParticipant({ status: "finished", finishPosition: 1 });
     const snapshot = makeSnapshot({
       tournament: makeTournament({ rankingFeeAmount: 2000 }),
-      participants: [makeParticipant(), makeParticipant({ status: "finished", finishPosition: 1 })],
-      financialSummary: { buy_in: 20000, rebuy: 10000, addon: 0, prize: 20000, bounty_earned: 0 },
+      participants: [makeParticipant(), champion],
+      financialSummary: { buy_in: 20000, rebuy: 10000, addon: 0, prize: 0, bounty_earned: 0 },
     });
-    const { panel } = prizePool(snapshot);
+    const { panel } = prizePool(payPrizes(snapshot, [[champion, 20000]]));
 
     expect(panel.prizePool).toBe(26000);
     expect(panel.prizesPaid).toEqual({ total: 20000, balance: 6000 });
   });
 
   it("mostra o Saldo como está, mesmo negativo", () => {
+    const player = makeParticipant();
     const snapshot = makeSnapshot({
       tournament: makeTournament({ rankingFeeAmount: 0 }),
-      participants: [makeParticipant()],
-      financialSummary: { buy_in: 10000, rebuy: 0, addon: 0, prize: 15000, bounty_earned: 0 },
+      participants: [player],
+      financialSummary: { buy_in: 10000, rebuy: 0, addon: 0, prize: 0, bounty_earned: 0 },
     });
-    const { panel } = prizePool(snapshot);
+    const { panel } = prizePool(payPrizes(snapshot, [[player, 15000]]));
 
     expect(panel.prizesPaid).toEqual({ total: 15000, balance: -5000 });
   });
@@ -406,5 +409,200 @@ describe("painel Prize pool: Estrutura com posição de 0% no meio", () => {
     expect(panel.structure?.paysThroughPosition).toBe(0);
     expect(panel.moneyLine).toBeNull();
     expect(panel.nextOut).toBeNull();
+  });
+});
+
+// Distribuir prêmios grava a Posição final junto com o Prêmio. Prize pool de R$ 310
+// com 50/30/20 (o `withStructure`), acordo na mesa final com 3 Em jogo.
+describe("painel Prize pool: Prêmios pagos", () => {
+  it("lista o Prêmio pago de cada pessoa, pelo nome de exibição, ordenado pela Posição final", () => {
+    const snapshot = withStructure({ playing: 0 });
+    const ana = makeParticipant({ name: "Ana Souza", nickname: null, finishPosition: 2 });
+    const bigode = makeParticipant({ name: "Carlos Lima", nickname: "Bigode", finishPosition: 1 });
+    const caio = makeParticipant({ name: "Caio", finishPosition: 3 });
+    snapshot.participants.push(ana, bigode, caio);
+
+    const { panel } = prizePool(
+      payPrizes(snapshot, [
+        [ana, 9000],
+        [caio, 6000],
+        [bigode, 16000],
+      ])
+    );
+
+    expect(panel.paidPrizesByPosition).toEqual([
+      { participantId: bigode.id, name: "Bigode", finishPosition: 1, amount: 16000 },
+      { participantId: ana.id, name: "Ana Souza", finishPosition: 2, amount: 9000 },
+      { participantId: caio.id, name: "Caio", finishPosition: 3, amount: 6000 },
+    ]);
+  });
+
+  it("quem tem Prêmio pago e está sem Posição final aparece no fim, sem posição", () => {
+    const snapshot = withStructure({ playing: 0 });
+    const undone = makeParticipant({ name: "Desfeito", status: "playing", finishPosition: null });
+    const first = makeParticipant({ name: "Primeiro", finishPosition: 1 });
+    const second = makeParticipant({ name: "Segundo", finishPosition: 2 });
+    snapshot.participants.push(undone, first, second);
+
+    const { panel } = prizePool(
+      payPrizes(snapshot, [
+        [undone, 5000],
+        [first, 15000],
+        [second, 10000],
+      ])
+    );
+
+    expect(panel.paidPrizesByPosition?.map((p) => [p.name, p.finishPosition])).toEqual([
+      ["Primeiro", 1],
+      ["Segundo", 2],
+      ["Desfeito", null],
+    ]);
+  });
+
+  it("Posição final repetida aparece como está, na ordem de inscrição", () => {
+    const snapshot = withStructure({ playing: 0 });
+    const a = makeParticipant({ name: "Zeca", finishPosition: 2 });
+    const b = makeParticipant({ name: "Abel", finishPosition: 2 });
+    const c = makeParticipant({ name: "Rui", finishPosition: 1 });
+    snapshot.participants.push(a, b, c);
+
+    const { panel } = prizePool(
+      payPrizes(snapshot, [
+        [b, 8000],
+        [a, 8000],
+        [c, 15000],
+      ])
+    );
+
+    expect(panel.paidPrizesByPosition?.map((p) => [p.name, p.finishPosition])).toEqual([
+      ["Rui", 1],
+      ["Zeca", 2],
+      ["Abel", 2],
+    ]);
+  });
+
+  it("substitui os Prêmios estimados e a linha até onde paga, e desliga a linha de dinheiro e o próximo a cair", () => {
+    // 3 Em jogo com 50/30/20 estaria No dinheiro, com o próximo a cair em 3º.
+    const snapshot = withStructure({ playing: 3, eliminated: 1 });
+    const [first, second, third] = snapshot.participants;
+
+    const { panel } = prizePool(
+      payPrizes(snapshot, [
+        [first, 14000],
+        [second, 10000],
+        [third, 7000],
+      ])
+    );
+
+    expect(panel.paidPrizesByPosition).toHaveLength(3);
+    expect(panel.structure).toBeNull();
+    expect(panel.moneyLine).toBeNull();
+    expect(panel.nextOut).toBeNull();
+  });
+
+  it("funciona sem Estrutura de prêmios", () => {
+    const snapshot = withStructure({ playing: 0, prizeStructure: [] });
+    const champion = makeParticipant({ name: "Campeao", status: "finished", finishPosition: 1 });
+    snapshot.participants.push(champion);
+
+    const { panel, card } = prizePool(payPrizes(snapshot, [[champion, 31000]]));
+
+    expect(panel.paidPrizesByPosition).toEqual([
+      { participantId: champion.id, name: "Campeao", finishPosition: 1, amount: 31000 },
+    ]);
+    expect(panel.prizesPaid).toEqual({ total: 31000, balance: 0 });
+    expect(card.supportLines).toEqual([`1º ${formatCurrency(31000)}`]);
+  });
+
+  it("o aviso do admin continua seguindo a Estrutura de prêmios", () => {
+    // 3 Posições premiadas e só 2 Participantes com buy-in.
+    const snapshot = withStructure({ playing: 2 });
+    const [first, second] = snapshot.participants;
+    const paid = payPrizes(snapshot, [
+      [first, 20000],
+      [second, 11000],
+    ]);
+
+    const { panel } = buildMesaPanels(makeInput({ snapshot: paid, isAdmin: true })).prizePool;
+
+    expect(panel.prizedPositionsAboveBuyIns).toEqual({ prizedPositions: 3, buyIns: 2 });
+  });
+
+  it("sem Prêmios pagos não há lista de pagos", () => {
+    expect(prizePool(withStructure({ playing: 4 })).panel.paidPrizesByPosition).toBeNull();
+  });
+});
+
+describe("card Prize pool: 1º pago", () => {
+  // Acordo na mesa final com 2 Em jogo: a distribuição grava a posição em quem
+  // ainda está Em jogo.
+  it("mostra o Prêmio pago de quem tem Posição final 1, no lugar do estimado", () => {
+    const snapshot = withStructure({ playing: 0, eliminated: 1 });
+    const first = makeParticipant({ finishPosition: 1 });
+    const second = makeParticipant({ finishPosition: 2 });
+    snapshot.participants.push(first, second);
+
+    const { card } = prizePool(
+      payPrizes(snapshot, [
+        [first, 18000],
+        [second, 13000],
+      ])
+    );
+
+    expect(card.supportLines).toEqual([`1º ${formatCurrency(18000)}`]);
+  });
+
+  it("sem ninguém com Prêmio pago na posição 1 não mostra a linha", () => {
+    const snapshot = withStructure({ playing: 1, eliminated: 1 });
+    const first = makeParticipant({ finishPosition: 2 });
+    snapshot.participants.push(first);
+
+    const { card } = prizePool(payPrizes(snapshot, [[first, 9000]]));
+
+    expect(card.supportLines).toEqual([]);
+  });
+});
+
+// O resumo financeiro soma todos os registros de Prêmio do torneio; a lista por
+// Participante só os de quem ainda é Participante (um Participante removido deixa o
+// registro órfão) e vem de outra leitura. A mesa segue só a lista, para a conta, a
+// tabela e a linha de dinheiro nunca discordarem.
+describe("painel Prize pool: Prêmios pagos vêm só da lista por Participante", () => {
+  it("total pago no resumo sem ninguém na lista: estado normal, com estimados e linha de dinheiro", () => {
+    const snapshot = withStructure({ playing: 4 });
+    const orphaned = { ...snapshot, financialSummary: { ...snapshot.financialSummary, prize: 5000 } };
+
+    const { panel, card } = prizePool(orphaned);
+
+    expect(panel.prizesPaid).toBeNull();
+    expect(panel.paidPrizesByPosition).toBeNull();
+    expect(panel.structure?.paysThroughPosition).toBe(3);
+    expect(panel.moneyLine).toMatchObject({ state: "bubble" });
+    expect(card.supportLines).toEqual([`1º ${formatCurrency(15500)}`]);
+  });
+
+  it("a linha Prêmios pagos e o Saldo somam só a lista", () => {
+    const snapshot = withStructure({ playing: 0 });
+    const champion = makeParticipant({ name: "Campeao", status: "finished", finishPosition: 1 });
+    snapshot.participants.push(champion);
+    const paid = payPrizes(snapshot, [[champion, 20000]]);
+    // Mais R$ 50 de um Participante já removido.
+    const withOrphan = { ...paid, financialSummary: { ...paid.financialSummary, prize: 25000 } };
+
+    const { panel } = prizePool(withOrphan);
+
+    expect(panel.prizesPaid).toEqual({ total: 20000, balance: 11000 });
+    expect(panel.paidPrizesByPosition?.map((p) => p.amount)).toEqual([20000]);
+  });
+
+  it("Prêmio de quem não está entre os participantes lidos não conta", () => {
+    const snapshot = withStructure({ playing: 4 });
+    const stale = { ...snapshot, paidPrizesByParticipant: [{ participantId: 999999, amount: 5000 }] };
+
+    const { panel } = prizePool(stale);
+
+    expect(panel.prizesPaid).toBeNull();
+    expect(panel.paidPrizesByPosition).toBeNull();
+    expect(panel.moneyLine).toMatchObject({ state: "bubble" });
   });
 });

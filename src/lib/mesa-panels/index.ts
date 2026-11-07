@@ -7,7 +7,8 @@
 // novo só edita o próprio arquivo. `panel: null` quer dizer que o painel ainda não
 // existe e o card não abre gaveta. Conta que mais de um painel usa mora num arquivo
 // próprio, sem slice: `money-line.ts` (a fronteira do dinheiro), `prizes-paid.ts`
-// (há Prêmios pagos) e `playing.ts` (Em jogo e com buy-in).
+// (há Prêmios pagos), `playing.ts` (Em jogo e com buy-in) e `finish-position.ts`
+// (ordem pela Posição final).
 
 import { deriveAverageStack, type AverageStackSlice } from "./average-stack";
 import { deriveBounty, type BountySlice } from "./bounty";
@@ -32,6 +33,8 @@ export * from "./money-line";
 export * from "./prizes-paid";
 
 export * from "./playing";
+
+export * from "./finish-position";
 
 export * from "./bounty";
 
