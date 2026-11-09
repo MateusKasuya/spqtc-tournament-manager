@@ -20,6 +20,25 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Testes e2e (Playwright + Supabase local)
+
+Os e2e abrem o app num navegador real contra um Supabase local em Docker (ver `docs/adr/0003-e2e-contra-supabase-local.md`). Nada aponta para produção: as variáveis vêm do `supabase status`, nunca do `.env.local`, e o setup recusa rodar se a URL do banco ou da API não for local.
+
+Pré-requisitos: Docker rodando e o [CLI do Supabase](https://supabase.com/docs/guides/local-development/cli/getting-started) instalado (`brew install supabase/tap/supabase`). Na primeira vez, instale o navegador: `pnpm exec playwright install chromium`.
+
+```bash
+pnpm supabase:start   # sobe banco, Auth, PostgREST e Realtime (config em supabase/config.toml)
+pnpm e2e:migrate      # pnpm db:migrate contra o Supabase local, da baseline à última migration
+pnpm e2e              # roda os testes; sobe o `next dev` na porta 3100 se não houver um rodando
+```
+
+- Para não esperar o servidor a cada run, deixe `pnpm e2e:dev` rodando num terminal (`next dev` na 3100 apontado para o Supabase local); o `pnpm e2e` reaproveita. Um `pnpm dev` comum (porta 3000, `.env.local`) nunca é reaproveitado.
+- Cada run zera as tabelas `public` e os usuários do Auth e cria um admin e um jogador de teste (`e2e/support/users.ts`).
+- Falhas guardam trace, screenshot e vídeo em `test-results/`; abra com `pnpm exec playwright show-trace <arquivo>.zip`.
+- `pnpm supabase:stop` derruba os containers. `pnpm test` (Vitest) ignora a pasta `e2e/` e não precisa de Docker.
+
+No CI, o job `e2e` faz o mesmo com `next build` + `next start` e sobe o relatório como artefato quando algo falha.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:
