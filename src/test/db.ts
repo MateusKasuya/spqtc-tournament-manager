@@ -9,10 +9,10 @@ export const pg = new PGlite();
 export const testDb = drizzle(pg, { schema });
 
 // Schema de teste gerado do schema TS (fonte única de verdade) com
-// `pnpm test:schema` (drizzle-kit export). As migrations incrementais do
-// projeto NÃO replicam limpo no pglite (a 0008 cria FK uuid->integer), por
-// isso aplicamos o DDL consolidado direto. Regenere com `pnpm test:schema`
-// sempre que o schema TS mudar.
+// `pnpm test:schema` (drizzle-kit export). As migrations replicam do zero
+// (a partir de drizzle/migrations/0000_baseline.sql), mas aqui aplicamos o DDL
+// consolidado direto por velocidade e isolamento. Regenere com
+// `pnpm test:schema` sempre que o schema TS mudar.
 const schemaSql = readFileSync(
   fileURLToPath(new URL("./schema.sql", import.meta.url)),
   "utf8"
