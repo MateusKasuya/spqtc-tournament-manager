@@ -19,7 +19,8 @@
     "e2e": "playwright test",
     "e2e:migrate": "tsx e2e/with-local-supabase.ts pnpm db:migrate",
     "e2e:build": "tsx e2e/with-local-supabase.ts pnpm build",
-    "e2e:dev": "tsx e2e/with-local-supabase.ts pnpm dev --port 3100"
+    "e2e:dev": "tsx e2e/with-local-supabase.ts pnpm dev --port 3100",
+    "db:check": "tsx scripts/db-check.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

@@ -56,6 +56,7 @@ Persistência de eventos (hoje: o Ledger de Knockout, `knockout-ledger.ts`). Cat
 - Tabelas têm `createdAt`/`updatedAt` como `timestamp(…, { withTimezone: true })`.
 - Nunca editar migration já aplicada; mudança de schema = novo `pnpm db:generate`. A história replica do zero a partir de `drizzle/migrations/0000_baseline.sql` (as antigas ficam em `drizzle/_legacy_migrations/`, só referência). Os testes usam o DDL gerado do schema TS, por velocidade e isolamento: rode `pnpm test:schema` sempre que o schema TS mudar.
 - RLS: escrita é só pelo Drizzle, nenhuma policy de escrita; policy de SELECT só para o que o cliente do Supabase lê (Realtime, `supabase.from`). Que toda tabela de `public` tenha RLS ligado é garantido por `src/db/__tests__/rls-migration.test.ts` — se ficar vermelho, a tabela nova precisa de uma migration custom (`pnpm db:generate --custom`) que ligue o RLS.
+- Migrations não rodam no deploy (#131). Depois de aplicar uma migration, e sempre que houver dúvida sobre o banco, rode `pnpm db:check`. Ele lê o banco de `DATABASE_URL` (`.env.local`) numa transação `read only` e lista migrations do journal × aplicadas, RLS e policies de `public`, a publicação `supabase_realtime` e os triggers de `auth.users`. Sai com 1 se houver drift: migration pendente ou contagem diferente, tabela sem RLS, tabela da Mesa ao vivo (`MESA_REALTIME_TABLES`, em `src/lib/mesa-realtime.ts`) fora da publicação, ou falta do `on_auth_user_created`. Sai com 2 se não conseguir checar. Fora do Supabase, a publicação e o schema `auth` são só reportados.
 
 ## Dinheiro e inteiros
 

@@ -4,15 +4,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { applyTournamentEvent, TOURNAMENT_RAW_COLUMNS } from "@/lib/mesa-snapshot";
 import { getMesaLiveData } from "@/actions/mesa";
+import { MESA_LIVE_TABLES } from "@/lib/mesa-realtime";
 import type { MesaSnapshot } from "@/db/queries/mesa";
 
 const TOURNAMENT_SELECT = TOURNAMENT_RAW_COLUMNS.join(", ");
-
-// Tabelas cuja mudança dispara nova busca da parte ao vivo.
-// Editar a Estrutura de prêmios apaga e reinsere as posições: as inserções disparam
-// a busca. Limpar a Estrutura só apaga, e o realtime pode não entregar apagamentos a
-// um canal filtrado por torneio; aí a mesa só vê a limpeza no próximo evento.
-const LIVE_TABLES = ["participants", "blind_structures", "prize_structures"] as const;
 
 function liveOf(snapshot: MesaSnapshot) {
   const { tournament, ...live } = snapshot;
@@ -109,7 +104,7 @@ export function useMesaSnapshot(initial: MesaSnapshot) {
           setTournament((prev) => applyTournamentEvent(prev, payload.new));
         }
       );
-    for (const table of LIVE_TABLES) {
+    for (const table of MESA_LIVE_TABLES) {
       channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table, filter: `tournament_id=eq.${tournamentId}` },
