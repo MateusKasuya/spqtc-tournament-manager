@@ -3,7 +3,9 @@
 --    public.users no cadastro (name do metadata "name" ou a parte antes do @);
 -- 2. tournaments e participants na publicação supabase_realtime (Mesa ao vivo).
 -- Idempotente e só no Supabase (fora dele, no-op). Onde a função ou o trigger já
--- existem (produção), nada é recriado.
+-- existem (produção), nada é recriado. O corpo da função é o de
+-- docs/phase_1_detailed.md (o SQL rodado no painel); a definição atual de produção
+-- não foi lida ao escrever esta migration.
 DO $$
 DECLARE
   t text;

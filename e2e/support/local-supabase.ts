@@ -1,11 +1,17 @@
 import { execFileSync } from "node:child_process";
 import { parse } from "dotenv";
 
-export type LocalSupabaseEnv = {
+// O que o app (next dev/build/start e drizzle-kit) precisa para falar com o Supabase local.
+export type LocalAppEnv = {
   NEXT_PUBLIC_SUPABASE_URL: string;
   NEXT_PUBLIC_SUPABASE_ANON_KEY: string;
   DATABASE_URL: string;
-  SUPABASE_SERVICE_ROLE_KEY: string;
+};
+
+export type LocalSupabase = {
+  appEnv: LocalAppEnv;
+  // Só o setup do e2e usa (Admin API); não vai para o processo do app.
+  serviceRoleKey: string;
 };
 
 const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
@@ -15,19 +21,19 @@ const LOCAL_HOSTS = new Set(["127.0.0.1", "localhost", "[::1]"]);
 function assertLocal(name: string, url: string) {
   const host = new URL(url).hostname;
   if (!LOCAL_HOSTS.has(host)) {
-    throw new Error(`${name} aponta para ${host}; o e2e só roda contra o Supabase local.`);
+    throw new Error(`${name} aponta para ${host}; o e2e so roda contra o Supabase local.`);
   }
 }
 
-function required(vars: Record<string, string>, name: string) {
+function requireStatusVar(vars: Record<string, string>, name: string) {
   const value = vars[name];
   if (!value) {
-    throw new Error(`\`supabase status\` não trouxe ${name}. O Supabase local está rodando? (pnpm supabase:start)`);
+    throw new Error(`\`supabase status\` nao trouxe ${name}. O Supabase local esta rodando? (pnpm supabase:start)`);
   }
   return value;
 }
 
-export function localSupabaseEnv(): LocalSupabaseEnv {
+export function localSupabase(): LocalSupabase {
   let output: string;
   try {
     output = execFileSync("supabase", ["status", "-o", "env"], {
@@ -39,13 +45,12 @@ export function localSupabaseEnv(): LocalSupabaseEnv {
   }
   const vars = parse(output);
 
-  const env: LocalSupabaseEnv = {
-    NEXT_PUBLIC_SUPABASE_URL: required(vars, "API_URL"),
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: required(vars, "ANON_KEY"),
-    DATABASE_URL: required(vars, "DB_URL"),
-    SUPABASE_SERVICE_ROLE_KEY: required(vars, "SERVICE_ROLE_KEY"),
+  const appEnv: LocalAppEnv = {
+    NEXT_PUBLIC_SUPABASE_URL: requireStatusVar(vars, "API_URL"),
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: requireStatusVar(vars, "ANON_KEY"),
+    DATABASE_URL: requireStatusVar(vars, "DB_URL"),
   };
-  assertLocal("API_URL", env.NEXT_PUBLIC_SUPABASE_URL);
-  assertLocal("DB_URL", env.DATABASE_URL);
-  return env;
+  assertLocal("API_URL", appEnv.NEXT_PUBLIC_SUPABASE_URL);
+  assertLocal("DB_URL", appEnv.DATABASE_URL);
+  return { appEnv, serviceRoleKey: requireStatusVar(vars, "SERVICE_ROLE_KEY") };
 }

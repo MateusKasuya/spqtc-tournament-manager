@@ -1,5 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
-import { localSupabaseEnv } from "./e2e/support/local-supabase";
+import { localSupabase } from "./e2e/support/local-supabase";
 
 const isCI = !!process.env.CI;
 // Porta própria: um `pnpm dev` comum na 3000 aponta para produção e nunca pode
@@ -34,6 +34,6 @@ export default defineConfig({
     url: baseURL,
     reuseExistingServer: !isCI,
     timeout: 120_000,
-    env: { ...localSupabaseEnv(), NEXT_TELEMETRY_DISABLED: "1" },
+    env: { ...localSupabase().appEnv, NEXT_TELEMETRY_DISABLED: "1" },
   },
 });

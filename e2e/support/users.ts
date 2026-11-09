@@ -6,10 +6,10 @@ export const E2E_USERS = {
     password: "senha-e2e-admin",
     storageState: "e2e/.auth/admin.json",
   },
-  jogador: {
+  player: {
     name: "Jogador E2E",
     email: "jogador@e2e.test",
     password: "senha-e2e-jogador",
-    storageState: "e2e/.auth/jogador.json",
+    storageState: "e2e/.auth/player.json",
   },
 } as const;

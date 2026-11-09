@@ -1,7 +1,7 @@
 import { expect, test as setup, type Browser } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 import postgres from "postgres";
-import { localSupabaseEnv } from "./support/local-supabase";
+import { localSupabase } from "./support/local-supabase";
 import { E2E_USERS } from "./support/users";
 
 type E2EUser = (typeof E2E_USERS)[keyof typeof E2E_USERS];
@@ -9,8 +9,8 @@ type E2EUser = (typeof E2E_USERS)[keyof typeof E2E_USERS];
 // Infraestrutura, não asserção: zera o Supabase local e prepara os usuários de
 // teste. Roda uma vez por run, antes de qualquer teste (projeto "setup").
 setup("zera o banco, cria admin e jogador e salva as sessoes", async ({ browser }) => {
-  const env = localSupabaseEnv();
-  const sql = postgres(env.DATABASE_URL, { max: 1, onnotice: () => {} });
+  const { appEnv, serviceRoleKey } = localSupabase();
+  const sql = postgres(appEnv.DATABASE_URL, { max: 1, onnotice: () => {} });
   try {
     await sql`
       DO $$ DECLARE r RECORD;
@@ -21,7 +21,7 @@ setup("zera o banco, cria admin e jogador e salva as sessoes", async ({ browser 
       END $$`;
     await sql`DELETE FROM auth.users`;
 
-    const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, {
+    const supabase = createClient(appEnv.NEXT_PUBLIC_SUPABASE_URL, serviceRoleKey, {
       auth: { autoRefreshToken: false, persistSession: false },
     });
     for (const user of Object.values(E2E_USERS)) {
@@ -38,7 +38,7 @@ setup("zera o banco, cria admin e jogador e salva as sessoes", async ({ browser 
     const promoted = await sql`
       UPDATE public.users SET role = 'admin' WHERE email = ${E2E_USERS.admin.email} RETURNING id`;
     if (promoted.length !== 1) {
-      throw new Error("Perfil do admin não foi criado pelo trigger on_auth_user_created.");
+      throw new Error("Perfil do admin nao foi criado pelo trigger on_auth_user_created.");
     }
   } finally {
     await sql.end();
