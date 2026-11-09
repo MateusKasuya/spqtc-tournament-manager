@@ -14,6 +14,12 @@
     "test:schema": "drizzle-kit export --sql > src/test/schema.sql",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
+    "supabase:start": "supabase start -x studio,postgres-meta,storage-api,imgproxy,edge-runtime,logflare,vector,mailpit,supavisor",
+    "supabase:stop": "supabase stop",
+    "e2e": "playwright test",
+    "e2e:migrate": "tsx e2e/with-local-supabase.ts pnpm db:migrate",
+    "e2e:build": "tsx e2e/with-local-supabase.ts pnpm build",
+    "e2e:dev": "tsx e2e/with-local-supabase.ts pnpm dev --port 3100",
     "db:check": "tsx scripts/db-check.ts"
   },
   "dependencies": {
@@ -42,6 +48,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.3",
     "@eslint/eslintrc": "^3.3.5",
+    "@playwright/test": "^1.65.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

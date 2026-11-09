@@ -43,3 +43,8 @@ next-env.d.ts
 # local tooling
 .claude/
 .playwright-mcp/
+
+# e2e (Playwright)
+/test-results/
+/playwright-report/
+/e2e/.auth/

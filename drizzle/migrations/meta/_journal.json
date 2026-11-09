@@ -50,6 +50,13 @@
       "when": 1794246660173,
       "tag": "0006_rls_tabelas_public",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1794253246348,
+      "tag": "0007_supabase_auth_trigger_e_realtime",
+      "breakpoints": true
     }
   ]
 }
