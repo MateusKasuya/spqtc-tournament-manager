@@ -43,6 +43,13 @@
       "when": 1793988601630,
       "tag": "0005_realtime_prize_structures",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794246660173,
+      "tag": "0006_rls_tabelas_public",
+      "breakpoints": true
     }
   ]
 }

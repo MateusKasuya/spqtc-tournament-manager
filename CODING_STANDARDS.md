@@ -55,6 +55,7 @@ Persistência de eventos (hoje: o Ledger de Knockout, `knockout-ledger.ts`). Cat
 - Enums de domínio como `text("…", { enum: […] })` com `.notNull().default(…)`.
 - Tabelas têm `createdAt`/`updatedAt` como `timestamp(…, { withTimezone: true })`.
 - Nunca editar migration já aplicada; mudança de schema = novo `pnpm db:generate`. As migrations NÃO replicam do zero (a 0008 cria FK incompatível) — o schema de teste é o DDL consolidado: rode `pnpm test:schema` sempre que o schema TS mudar.
+- Toda tabela de `public` tem RLS ligado (ver `0006_rls_tabelas_public.sql`). Tabela nova vem com RLS desligado: a mesma PR traz uma migration custom (`pnpm db:generate --custom`) que liga o RLS e, só se o cliente do Supabase lê a tabela (Realtime, `supabase.from`), a policy de SELECT. Escrita é só pelo Drizzle; nenhuma policy de escrita.
 
 ## Dinheiro e inteiros
 
