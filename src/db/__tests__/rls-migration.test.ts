@@ -5,21 +5,37 @@ import { fileURLToPath } from "node:url";
 
 // A migration de RLS só age no Supabase (papéis anon/authenticated e auth.uid()).
 // Aqui o pglite imita esse ambiente para provar o que ela libera e o que ela barra.
+// O banco é montado aplicando as migrations na ordem do journal, como no Supabase:
+// a 0006 liga RLS só nas tabelas que já existem quando ela roda, então tabela criada
+// por migration posterior sem a sua própria migration de RLS fica aberta — e o teste
+// "toda tabela do schema tem RLS" fica vermelho.
 const read = (rel: string) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
 const schemaSql = read("../../test/schema.sql");
-const migrationSql = read("../../../drizzle/migrations/0006_rls_tabelas_public.sql");
+const rlsMigrationSql = read("../../../drizzle/migrations/0006_rls_tabelas_public.sql");
+const journal: { entries: { tag: string }[] } = JSON.parse(
+  read("../../../drizzle/migrations/meta/_journal.json")
+);
+const migrations = journal.entries.map((e) => read(`../../../drizzle/migrations/${e.tag}.sql`));
+
+async function applyMigrations(pg: PGlite) {
+  for (const m of migrations) await pg.exec(m);
+}
 
 const ME = "00000000-0000-0000-0000-00000000000a";
 const OTHER = "00000000-0000-0000-0000-00000000000b";
 
-const TABLES = [
-  "blind_structures", "blind_templates", "participants", "players", "prize_structures",
-  "prize_templates", "seasons", "tournaments", "transactions", "users",
-];
+// As tabelas reais: o DDL gerado do schema TS (`pnpm test:schema`).
+async function schemaTables() {
+  const pg = new PGlite();
+  await pg.exec(schemaSql);
+  const { rows } = await pg.query<{ tablename: string }>(
+    `SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY 1`
+  );
+  return rows.map((r) => r.tablename);
+}
 
 async function supabaseLike() {
   const pg = new PGlite();
-  await pg.exec(schemaSql);
   await pg.exec(`
     CREATE ROLE anon NOLOGIN;
     CREATE ROLE authenticated NOLOGIN;
@@ -28,8 +44,12 @@ async function supabaseLike() {
       AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
     GRANT USAGE ON SCHEMA public, auth TO anon, authenticated;
     GRANT EXECUTE ON FUNCTION auth.uid() TO anon, authenticated;
-    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO anon, authenticated;
-    GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anon, authenticated;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO anon, authenticated;
+  `);
+  await applyMigrations(pg);
+  await pg.exec(`
     INSERT INTO users (id, email, name, role) VALUES
       ('${ME}', 'me@t.com', 'Eu', 'player'),
       ('${OTHER}', 'other@t.com', 'Outro', 'admin');
@@ -52,7 +72,7 @@ describe("migration de RLS nas tabelas public", () => {
   it("fora do Supabase não faz nada", async () => {
     const pg = new PGlite();
     await pg.exec(schemaSql);
-    await pg.exec(migrationSql);
+    await pg.exec(rlsMigrationSql);
     const { rows } = await pg.query<{ n: number }>(
       `SELECT count(*)::int n FROM pg_class c JOIN pg_namespace s ON s.oid = c.relnamespace
        WHERE s.nspname = 'public' AND c.relrowsecurity`
@@ -62,18 +82,29 @@ describe("migration de RLS nas tabelas public", () => {
 
   describe("no Supabase", () => {
     let pg: PGlite;
+    let tables: string[];
+    let rlsTables: string[];
     beforeAll(async () => {
+      tables = await schemaTables();
       pg = await supabaseLike();
-      await pg.exec(migrationSql);
-      await pg.exec(migrationSql); // idempotente
-    });
-
-    it("liga RLS em todas as tabelas e cria só policies de leitura", async () => {
-      const rls = await pg.query<{ relname: string }>(
+      // Lido antes de rodar a 0006 de novo: a re-execução ligaria RLS em tudo e
+      // esconderia a tabela que ficou de fora.
+      const { rows } = await pg.query<{ relname: string }>(
         `SELECT c.relname FROM pg_class c JOIN pg_namespace s ON s.oid = c.relnamespace
          WHERE s.nspname = 'public' AND c.relkind = 'r' AND c.relrowsecurity ORDER BY 1`
       );
-      expect(rls.rows.map((r) => r.relname)).toEqual(TABLES);
+      rlsTables = rows.map((r) => r.relname);
+      await pg.exec(rlsMigrationSql); // idempotente
+    });
+
+    it("toda tabela do schema tem RLS ligado depois das migrations", () => {
+      // Vermelho aqui = tabela nova sem migration custom que liga o RLS
+      // (`pnpm db:generate --custom`), ou tabela do schema TS sem migration nenhuma.
+      expect(tables).toContain("users");
+      expect(rlsTables).toEqual(tables);
+    });
+
+    it("cria só policies de leitura", async () => {
 
       const policies = await pg.query<{ tablename: string; cmd: string; roles: string }>(
         `SELECT tablename, cmd, roles::text FROM pg_policies WHERE schemaname = 'public' ORDER BY 1`
@@ -86,7 +117,7 @@ describe("migration de RLS nas tabelas public", () => {
     });
 
     it("anon não lê nem escreve nada", async () => {
-      for (const t of TABLES) {
+      for (const t of tables) {
         expect((await as(pg, "anon", null, `SELECT * FROM ${t}`)).rows).toEqual([]);
       }
       expect((await as(pg, "anon", null, `UPDATE users SET role = 'admin'`)).affectedRows).toBe(0);
