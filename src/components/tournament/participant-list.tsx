@@ -257,7 +257,7 @@ export function ParticipantList({
   }
 
   return (
-    <div className="space-y-2">
+    <div role="list" aria-label="Participantes" className="space-y-2">
       {participants.map((p) => {
         const badge = STATUS_BADGE[p.status] ?? STATUS_BADGE.registered;
         const displayName = p.nickname ?? p.name;
@@ -269,6 +269,8 @@ export function ParticipantList({
         return (
           <div
             key={p.id}
+            role="listitem"
+            aria-label={displayName}
             className="flex flex-col gap-2 rounded-lg border px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
           >
             <div className="flex items-center gap-3 min-w-0">

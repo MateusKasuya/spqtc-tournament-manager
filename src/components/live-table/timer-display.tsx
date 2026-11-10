@@ -51,7 +51,7 @@ export function TimerDisplay({ remainingSeconds, tone, totalSeconds }: TimerDisp
             suppressHydrationWarning
           />
         </svg>
-        <span suppressHydrationWarning className={`font-mono text-5xl font-bold tabular-nums ${colorClass}`}>
+        <span role="timer" aria-label="Tempo restante" suppressHydrationWarning className={`font-mono text-5xl font-bold tabular-nums ${colorClass}`}>
           {formatTime(remainingSeconds)}
         </span>
       </div>
