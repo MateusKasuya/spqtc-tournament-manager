@@ -575,7 +575,7 @@ export async function distributePayouts(
 
   revalidateTournament(tournamentId);
   if (rankingChanged) {
-    revalidateTag("ranking");
+    revalidateTag("ranking", { expire: 0 });
     revalidatePath("/ranking");
   }
   return { success: true };
