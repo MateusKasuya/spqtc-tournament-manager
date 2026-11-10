@@ -13,7 +13,7 @@ export function BountyPanel({ panel }: { panel: BountyPanelModel }) {
         {panel.inPlay.length === 0 ? (
           <p className="text-sm text-muted-foreground">Ninguem em jogo.</p>
         ) : (
-          <ul className="flex flex-col">
+          <ul aria-label="Bounty de cada Participante em jogo" className="flex flex-col">
             {panel.inPlay.map((e) => (
               <li key={e.participantId} className="flex flex-col gap-0.5 border-b py-2">
                 <div className="flex items-baseline justify-between gap-3 text-sm">
@@ -35,7 +35,7 @@ export function BountyPanel({ panel }: { panel: BountyPanelModel }) {
         {panel.collected.length === 0 ? (
           <p className="text-sm text-muted-foreground">Ninguem coletou Bounty ainda.</p>
         ) : (
-          <ul className="flex flex-col">
+          <ul aria-label="Bounty coletado" className="flex flex-col">
             {panel.collected.map((e) => (
               <li key={e.participantId} className="flex flex-col gap-0.5 border-b py-2">
                 <div className="flex items-baseline justify-between gap-3 text-sm">

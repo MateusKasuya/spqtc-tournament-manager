@@ -29,14 +29,24 @@ export type NewTournament = {
   // Cria uma temporada nova (que vira a ativa) e liga o torneio a ela; sem
   // temporada, o torneio não conta para Ranking nenhum.
   newSeason?: string;
+  // Modalidade Bounty Builder com o % Bounty do valor líquido; sem valor, Normal.
+  bountyBuilder?: { percentage: number };
 };
 
-// Torneio Normal; blinds e prêmios nascem com o padrão do app.
+// Blinds e prêmios nascem com o padrão do app.
 export async function createTournament(page: Page, tournament: NewTournament) {
   await page.goto("/torneios/novo");
   // A temporada vem antes dos outros campos: criá-la recarrega os dados da página.
   if (tournament.newSeason) await createSeasonInForm(page, tournament.newSeason);
   await page.getByLabel("Nome do torneio", { exact: true }).fill(tournament.name);
+  if (tournament.bountyBuilder) {
+    // O seletor de Modalidade não tem rótulo ligado; é o único que começa em "Normal".
+    await page.getByRole("combobox").filter({ hasText: /^Normal/ }).click();
+    await page.getByRole("option", { name: "Bounty Builder (PKO)" }).click();
+    await page
+      .getByLabel("% Bounty do valor liquido", { exact: true })
+      .fill(String(tournament.bountyBuilder.percentage));
+  }
   await page.getByLabel("Fichas iniciais", { exact: true }).fill(String(tournament.initialChips));
   await page.getByLabel("Buy-in (R$)", { exact: true }).fill(tournament.buyIn.toFixed(2));
   if (tournament.rebuy) {
