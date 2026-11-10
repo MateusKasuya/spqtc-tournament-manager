@@ -7,13 +7,14 @@ import {
   openTournamentTab,
   participantRow,
   registerPlayers,
+  startTournament,
   uniqueName,
 } from "./support/tournament";
+import { brl } from "./support/text";
 
 test.use({ storageState: E2E_USERS.admin.storageState });
 
-// Intl pt-BR separa "R$" do valor com espaço não separável.
-const brl = (reais: number) => new RegExp(`R\\$\\s${reais},00`);
+const money = (reais: number) => new RegExp(brl(reais));
 
 test("admin cria o torneio, confirma os buy-ins e roda o Relogio", async ({ page }) => {
   const players = [uniqueName("Ana"), uniqueName("Bruno")];
@@ -61,17 +62,16 @@ test("admin cria o torneio, confirma os buy-ins e roda o Relogio", async ({ page
       const row = participantRow(page, name);
       // Na tela, Em jogo aparece como "Jogando".
       await expect(row.getByText("Jogando", { exact: true })).toBeVisible();
-      await expect(row.getByText(brl(buyIn))).toBeVisible();
+      await expect(row.getByText(money(buyIn))).toBeVisible();
     }
 
     await openTournamentTab(page, tournamentId, "Visao Geral");
     const financial = page.getByText("Prize pool", { exact: true }).locator("..");
-    await expect(financial).toContainText(brl(buyIn * players.length));
+    await expect(financial).toContainText(money(buyIn * players.length));
   });
 
   await test.step("inicia o torneio, que fica Rodando", async () => {
-    await page.getByRole("button", { name: "Iniciar torneio" }).click();
-    await expect(page.getByText("Rodando", { exact: true })).toBeVisible();
+    await startTournament(page, tournamentId);
   });
 
   await test.step("inicia, pausa e retoma o Relogio na Mesa ao vivo", async () => {

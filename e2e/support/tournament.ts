@@ -24,20 +24,44 @@ export type NewTournament = {
   buyIn: number;
   initialChips: number;
   rankingFee: number;
+  // Sem valor, fica o padrão do formulário (R$ 30,00 e 10.000 fichas).
+  rebuy?: { amount: number; chips: number };
+  // Cria uma temporada nova (que vira a ativa) e liga o torneio a ela; sem
+  // temporada, o torneio não conta para Ranking nenhum.
+  newSeason?: string;
 };
 
-// Torneio Normal, sem temporada; blinds e prêmios nascem com o padrão do app.
+// Torneio Normal; blinds e prêmios nascem com o padrão do app.
 export async function createTournament(page: Page, tournament: NewTournament) {
   await page.goto("/torneios/novo");
+  // A temporada vem antes dos outros campos: criá-la recarrega os dados da página.
+  if (tournament.newSeason) await createSeasonInForm(page, tournament.newSeason);
   await page.getByLabel("Nome do torneio", { exact: true }).fill(tournament.name);
   await page.getByLabel("Fichas iniciais", { exact: true }).fill(String(tournament.initialChips));
   await page.getByLabel("Buy-in (R$)", { exact: true }).fill(tournament.buyIn.toFixed(2));
+  if (tournament.rebuy) {
+    await page.getByLabel("Rebuy (R$)", { exact: true }).fill(tournament.rebuy.amount.toFixed(2));
+    await page.getByLabel("Fichas de rebuy", { exact: true }).fill(String(tournament.rebuy.chips));
+  }
   await page.getByLabel("Taxa de ranking por buy-in (R$)", { exact: true }).fill(tournament.rankingFee.toFixed(2));
   await page.getByRole("button", { name: "Criar torneio" }).click();
 
   await page.waitForURL(/\/torneios\/\d+$/);
   await expect(page.getByRole("heading", { name: tournament.name })).toBeVisible();
   return Number(new URL(page.url()).pathname.split("/").pop());
+}
+
+async function createSeasonInForm(page: Page, name: string) {
+  await page.getByRole("button", { name: "Nova temporada" }).click();
+  const dialog = page.getByRole("dialog", { name: "Nova temporada" });
+  await dialog.getByLabel("Nome", { exact: true }).fill(name);
+  await dialog.getByRole("button", { name: "Criar" }).click();
+  await expect(dialog).toBeHidden();
+  // O seletor de Temporada não tem rótulo ligado; é o único que começa em
+  // "Sem temporada" (a Modalidade começa em "Normal").
+  await page.getByRole("combobox").filter({ hasText: "Sem temporada" }).click();
+  await page.getByRole("option", { name, exact: true }).click();
+  await expect(page.getByRole("combobox").filter({ hasText: name })).toBeVisible();
 }
 
 export async function openTournamentTab(
@@ -81,4 +105,10 @@ export async function confirmBuyIn(page: Page, tournamentId: number, name: strin
   const confirm = row.getByRole("button", { name: "Confirmar buy-in" });
   await confirm.click();
   await expect(confirm).toBeHidden();
+}
+
+export async function startTournament(page: Page, tournamentId: number) {
+  await openTournamentTab(page, tournamentId, "Visao Geral");
+  await page.getByRole("button", { name: "Iniciar torneio" }).click();
+  await expect(page.getByText("Rodando", { exact: true })).toBeVisible();
 }
