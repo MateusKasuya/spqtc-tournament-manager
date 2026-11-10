@@ -117,10 +117,19 @@ export function useMesaSnapshot(initial: MesaSnapshot) {
         }
       );
     }
-    channel.subscribe((status) => {
-      // Fecha a janela entre o SSR e o SUBSCRIBED e cobre reconexão automática
-      // do supabase-js (CHANNEL_ERROR/TIMED_OUT → SUBSCRIBED de novo).
-      if (status === "SUBSCRIBED") resyncAll();
+    // O join do canal precisa levar o token do usuário: sem ele o Realtime avalia
+    // as policies de RLS como `anon` e não entrega evento nenhum (só
+    // `authenticated` lê). O supabase-js só repassa o token ao Realtime em
+    // SIGNED_IN/TOKEN_REFRESHED, nunca para a sessão que já vem do cookie.
+    // `active` é deste efeito: o cancelledRef volta a false quando ele remonta.
+    let active = true;
+    void supabase.realtime.setAuth().then(() => {
+      if (!active) return;
+      channel.subscribe((status) => {
+        // Fecha a janela entre o SSR e o SUBSCRIBED e cobre reconexão automática
+        // do supabase-js (CHANNEL_ERROR/TIMED_OUT → SUBSCRIBED de novo).
+        if (status === "SUBSCRIBED") resyncAll();
+      });
     });
 
     // Catch-all ao voltar do background (aba inativa, tela bloqueada no mobile):
@@ -131,6 +140,7 @@ export function useMesaSnapshot(initial: MesaSnapshot) {
     document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
+      active = false;
       cancelledRef.current = true;
       document.removeEventListener("visibilitychange", onVisibilityChange);
       supabase.removeChannel(channel);
