@@ -1,8 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { E2E_USERS } from "./support/users";
 
-// Sem storageState: cada teste começa deslogado.
-
 test("pagina interna sem sessao leva ao login", async ({ page }) => {
   await page.goto("/torneios");
 
@@ -17,6 +15,10 @@ test("senha errada mostra a mensagem de erro e continua no login", async ({ page
   await page.getByRole("button", { name: "Entrar" }).click();
 
   await expect(page.getByText("Email ou senha incorretos")).toBeVisible();
+  await expect(page).toHaveURL(/\/login$/);
+
+  // Nenhuma sessão foi aberta: a página interna continua exigindo login.
+  await page.goto("/dashboard");
   await expect(page).toHaveURL(/\/login$/);
 });
 

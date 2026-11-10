@@ -7,12 +7,12 @@ import { E2E_USERS } from "./support/users";
 // passeio com o admin prova que os seletores acham os controles quando existem:
 // sem ele, um nome errado de botão passaria calado no lado do jogador.
 
-type Fixture = { id: number; name: string; registeredName: string; playingName: string };
+type RunningTournament = { id: number; name: string; awaitingBuyInName: string; inPlayName: string };
 
-let fixture: Fixture;
+let tournament: RunningTournament;
 
 test.beforeAll(async () => {
-  fixture = await createRunningTournament();
+  tournament = await createRunningTournament();
 });
 
 test.describe("jogador", () => {
@@ -50,10 +50,10 @@ async function walkTournament(page: Page, adminControls: Expectation) {
   await page.goto("/torneios");
   await expect(page.getByRole("heading", { name: "Torneios" })).toBeVisible();
   await expectControls(adminControls, [page.getByRole("link", { name: "Novo Torneio" })]);
-  await page.getByRole("link", { name: fixture.name }).click();
+  await page.getByRole("link", { name: tournament.name }).click();
 
-  await expect(page).toHaveURL(new RegExp(`/torneios/${fixture.id}$`));
-  await expect(page.getByRole("heading", { name: fixture.name })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/torneios/${tournament.id}$`));
+  await expect(page.getByRole("heading", { name: tournament.name })).toBeVisible();
   await expectControls(adminControls, [
     page.getByRole("link", { name: "Editar" }),
     page.getByRole("button", { name: "Encerrar torneio" }),
@@ -62,8 +62,8 @@ async function walkTournament(page: Page, adminControls: Expectation) {
 
   // O conteúdo de uma aba só existe com ela aberta.
   await page.getByRole("tab", { name: /^Jogadores/ }).click();
-  await expect(page.getByText(fixture.registeredName)).toBeVisible();
-  await expect(page.getByText(fixture.playingName)).toBeVisible();
+  await expect(page.getByText(tournament.awaitingBuyInName)).toBeVisible();
+  await expect(page.getByText(tournament.inPlayName)).toBeVisible();
   await expectControls(adminControls, [
     page.getByRole("button", { name: "Confirmar buy-in" }),
     page.getByRole("button", { name: "Eliminar", exact: true }),
@@ -74,49 +74,52 @@ async function walkTournament(page: Page, adminControls: Expectation) {
   await expectControls(adminControls, [page.getByRole("button", { name: "Distribuir premios" })]);
 
   await page.getByRole("link", { name: "Mesa ao Vivo" }).click();
-  await expect(page).toHaveURL(new RegExp(`/torneios/${fixture.id}/mesa$`));
-  await expect(page.getByRole("heading", { name: fixture.name })).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/torneios/${tournament.id}/mesa$`));
+  await expect(page.getByRole("heading", { name: tournament.name })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Abrir painel Nivel/ })).toBeVisible();
+  // Ações rápidas da Mesa: no desktop, botões na linha de cada Participante.
   await expectControls(adminControls, [
     page.getByRole("button", { name: "Iniciar", exact: true }),
     page.getByRole("button", { name: "Encerrar", exact: true }),
+    page.getByRole("button", { name: "Buy-in", exact: true }),
+    page.getByRole("button", { name: "Eliminar", exact: true }),
   ]);
 }
 
-// Torneio rodando com um nível de blind e dois participantes: um inscrito sem
-// buy-in (o admin veria "Confirmar buy-in") e um jogando (o admin veria
+// Torneio rodando com um nível de blind e dois Participantes: um Aguardando
+// buy-in (o admin veria "Confirmar buy-in") e um Em jogo (o admin veria
 // "Eliminar"). Direto no banco, sem depender de outro teste.
-async function createRunningTournament(): Promise<Fixture> {
+async function createRunningTournament(): Promise<RunningTournament> {
   const suffix = Date.now();
   const names = {
     name: `Barreira E2E ${suffix}`,
-    registeredName: `Inscrito E2E ${suffix}`,
-    playingName: `Jogando E2E ${suffix}`,
+    awaitingBuyInName: `Aguardando E2E ${suffix}`,
+    inPlayName: `Em jogo E2E ${suffix}`,
   };
   const sql = postgres(localSupabase().appEnv.DATABASE_URL, { max: 1, onnotice: () => {} });
   try {
     const [admin] = await sql`SELECT id FROM public.users WHERE email = ${E2E_USERS.admin.email}`;
     if (!admin) throw new Error("Admin do setup nao encontrado em public.users.");
 
-    const [tournament] = await sql`
+    const [created] = await sql`
       INSERT INTO public.tournaments (name, date, status, buy_in_amount, initial_chips, created_by)
-      VALUES (${names.name}, now(), 'running', 50, 10000, ${admin.id})
+      VALUES (${names.name}, now(), 'running', 5000, 10000, ${admin.id})
       RETURNING id`;
     await sql`
       INSERT INTO public.blind_structures (tournament_id, level, small_blind, big_blind, duration_minutes)
-      VALUES (${tournament.id}, 1, 25, 50, 20)`;
+      VALUES (${created.id}, 1, 25, 50, 20)`;
 
-    const [registered] = await sql`
-      INSERT INTO public.players (name) VALUES (${names.registeredName}) RETURNING id`;
-    const [playing] = await sql`
-      INSERT INTO public.players (name) VALUES (${names.playingName}) RETURNING id`;
+    const [awaitingBuyIn] = await sql`
+      INSERT INTO public.players (name) VALUES (${names.awaitingBuyInName}) RETURNING id`;
+    const [inPlay] = await sql`
+      INSERT INTO public.players (name) VALUES (${names.inPlayName}) RETURNING id`;
     await sql`
       INSERT INTO public.participants (tournament_id, player_id, buy_in_paid, status)
       VALUES
-        (${tournament.id}, ${registered.id}, false, 'registered'),
-        (${tournament.id}, ${playing.id}, true, 'playing')`;
+        (${created.id}, ${awaitingBuyIn.id}, false, 'registered'),
+        (${created.id}, ${inPlay.id}, true, 'playing')`;
 
-    return { id: tournament.id as number, ...names };
+    return { id: created.id as number, ...names };
   } finally {
     await sql.end();
   }
