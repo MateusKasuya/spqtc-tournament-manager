@@ -1,6 +1,4 @@
 // Passos de montar um torneio pela UI, reaproveitados pelas jornadas do e2e.
-// Cada helper espera a tela confirmar o passo antes de devolver; quem confere
-// o resultado de domínio é a spec.
 import { expect, type Page } from "@playwright/test";
 
 // O setup zera o banco só uma vez por run: nomes únicos evitam que um teste
@@ -28,8 +26,7 @@ export type NewTournament = {
   rankingFee: number;
 };
 
-// Cria o torneio (Normal, sem temporada). As estruturas de blinds e de prêmios
-// nascem com o padrão do app. Devolve o id lido da URL do torneio criado.
+// Torneio Normal, sem temporada; blinds e prêmios nascem com o padrão do app.
 export async function createTournament(page: Page, tournament: NewTournament) {
   await page.goto("/torneios/novo");
   await page.getByLabel("Nome do torneio", { exact: true }).fill(tournament.name);

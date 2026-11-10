@@ -29,11 +29,15 @@ test("admin cria o torneio, confirma os buy-ins e roda o Relogio", async ({ page
     tournamentId = await createTournament(page, {
       name: tournamentName,
       buyIn,
-      initialChips: 10000,
+      // Diferente das fichas de Rebuy e add-on (10.000) para a tela distinguir.
+      initialChips: 5000,
       // Sem taxa de ranking: o Prize pool é a soma dos buy-ins.
       rankingFee: 0,
     });
     await expect(page.getByText("Pendente", { exact: true })).toBeVisible();
+    await expect(page.getByText("Iniciais", { exact: true }).locator("..")).toContainText(
+      /Iniciais\s*5\.000/
+    );
 
     await openTournamentTab(page, tournamentId, "Blinds");
     await expect(page.getByRole("row", { name: /^1 10 \/ 20 .* 15min$/ })).toBeVisible();
@@ -75,35 +79,52 @@ test("admin cria o torneio, confirma os buy-ins e roda o Relogio", async ({ page
     await page.waitForURL(`/torneios/${tournamentId}/mesa`);
 
     const remaining = page.getByRole("timer", { name: "Tempo restante" });
+    const play = page.getByRole("button", { name: "Iniciar", exact: true });
+    const pause = page.getByRole("button", { name: "Pausar", exact: true });
+    // A troca do botão espera a action e o refresh; o build de produção do CI
+    // pode passar do timeout padrão.
+    const actionTimeout = { timeout: 15_000 };
 
-    await page.getByRole("button", { name: "Iniciar", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Pausar", exact: true })).toBeVisible();
+    await play.click();
+    await expect(pause).toBeVisible(actionTimeout);
     // O Iniciar carrega os 15 minutos do Nível 1 do padrão; nenhum Fim do nível
     // cabe no teste (ADR 0002).
-    await expect(remaining).toHaveText(/^1[45]:\d\d$/);
-    await expectTicking(remaining);
+    const started = await secondsLeft(remaining);
+    expect(started).toBeGreaterThan(14 * 60);
+    await expectCountingDownFrom(remaining, started);
 
-    await page.getByRole("button", { name: "Pausar", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Iniciar", exact: true })).toBeVisible();
-    await expectStopped(remaining);
+    const beforePause = await secondsLeft(remaining);
+    await pause.click();
+    await expect(play).toBeVisible(actionTimeout);
+    const paused = await expectStopped(remaining);
+    expect(paused).toBeLessThan(started);
+    expect(paused).toBeLessThanOrEqual(beforePause);
 
-    await page.getByRole("button", { name: "Iniciar", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Pausar", exact: true })).toBeVisible();
-    await expectTicking(remaining);
+    await play.click();
+    await expect(pause).toBeVisible(actionTimeout);
+    // Retoma de onde parou, sem voltar aos 15 minutos.
+    expect(await secondsLeft(remaining)).toBeLessThanOrEqual(paused);
+    await expectCountingDownFrom(remaining, paused);
   });
 });
 
-async function expectTicking(remaining: Locator) {
-  const before = await remaining.textContent();
-  await expect.poll(() => remaining.textContent(), { timeout: 5_000 }).not.toBe(before);
+async function secondsLeft(remaining: Locator) {
+  const [minutes, seconds] = ((await remaining.textContent()) ?? "").split(":").map(Number);
+  return minutes * 60 + seconds;
 }
 
+// Correndo: o Tempo restante desce dois tiques abaixo do ponto de partida.
+async function expectCountingDownFrom(remaining: Locator, from: number) {
+  await expect.poll(() => secondsLeft(remaining), { timeout: 5_000 }).toBeLessThanOrEqual(from - 2);
+}
+
+// Parado só se prova esperando. A primeira espera deixa o refresh da pausa
+// trocar o último tique do cliente pelo valor gravado no servidor; a segunda
+// cobre mais de um tique do Relógio. Devolve o Tempo restante congelado.
 async function expectStopped(remaining: Locator) {
-  // Parado só se prova esperando. A primeira espera deixa o refresh da pausa
-  // trocar o último tique do cliente pelo valor gravado no servidor; a segunda
-  // cobre mais de um tique do Relógio.
   await remaining.page().waitForTimeout(1_000);
-  const paused = (await remaining.textContent()) ?? "";
+  const paused = await secondsLeft(remaining);
   await remaining.page().waitForTimeout(2_500);
-  await expect(remaining).toHaveText(paused);
+  expect(await secondsLeft(remaining)).toBe(paused);
+  return paused;
 }
