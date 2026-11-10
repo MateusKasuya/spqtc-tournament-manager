@@ -19,7 +19,7 @@ export async function expectCountingDownFrom(remaining: Locator, from: number) {
 // Parado só se prova esperando. A primeira espera deixa o refresh da pausa
 // trocar o último tique do cliente pelo valor gravado no servidor; a segunda
 // cobre mais de um tique do Relógio. Devolve o Tempo restante congelado.
-export async function expectStopped(remaining: Locator) {
+export async function expectPaused(remaining: Locator) {
   await remaining.page().waitForTimeout(1_000);
   const paused = await secondsLeft(remaining);
   await remaining.page().waitForTimeout(2_500);

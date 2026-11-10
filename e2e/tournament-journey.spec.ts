@@ -11,7 +11,7 @@ import {
   uniqueName,
 } from "./support/tournament";
 import { brl } from "./support/text";
-import { expectCountingDownFrom, expectStopped, remainingTimer, secondsLeft } from "./support/clock";
+import { expectCountingDownFrom, expectPaused, remainingTimer, secondsLeft } from "./support/clock";
 
 test.use({ storageState: E2E_USERS.admin.storageState });
 
@@ -97,7 +97,7 @@ test("admin cria o torneio, confirma os buy-ins e roda o Relogio", async ({ page
     const beforePause = await secondsLeft(remaining);
     await pause.click();
     await expect(play).toBeVisible(actionTimeout);
-    const paused = await expectStopped(remaining);
+    const paused = await expectPaused(remaining);
     expect(paused).toBeLessThan(started);
     expect(paused).toBeLessThanOrEqual(beforePause);
 
