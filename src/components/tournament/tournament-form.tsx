@@ -247,9 +247,9 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
         )}
 
         <div className="space-y-2">
-          <Label>Modalidade</Label>
+          <Label htmlFor="tournamentType">Modalidade</Label>
           <Select value={tournamentType} onValueChange={(v) => setTournamentType(v as "normal" | "bounty_builder")} disabled={locks.entryRules}>
-            <SelectTrigger>
+            <SelectTrigger id="tournamentType">
               <SelectValue>
                 {tournamentType === "bounty_builder" ? "Bounty Builder (PKO)" : "Normal"}
               </SelectValue>

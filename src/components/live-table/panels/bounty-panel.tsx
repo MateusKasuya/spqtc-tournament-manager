@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/format";
 import type { BountyPanel as BountyPanelModel } from "@/lib/mesa-panels";
@@ -6,14 +7,16 @@ import type { BountyPanel as BountyPanelModel } from "@/lib/mesa-panels";
 // sozinho, o Bounty coletado de cada Participante e a conferência com o Bounty
 // armado do Prize pool. Recebe o modelo da derivação e só desenha.
 export function BountyPanel({ panel }: { panel: BountyPanelModel }) {
+  const inPlayTitle = useId();
+  const collectedTitle = useId();
   return (
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-semibold">Bounty de cada Participante em jogo</h3>
+        <h3 id={inPlayTitle} className="text-sm font-semibold">Bounty de cada Participante em jogo</h3>
         {panel.inPlay.length === 0 ? (
           <p className="text-sm text-muted-foreground">Ninguem em jogo.</p>
         ) : (
-          <ul className="flex flex-col">
+          <ul aria-labelledby={inPlayTitle} className="flex flex-col">
             {panel.inPlay.map((e) => (
               <li key={e.participantId} className="flex flex-col gap-0.5 border-b py-2">
                 <div className="flex items-baseline justify-between gap-3 text-sm">
@@ -31,11 +34,11 @@ export function BountyPanel({ panel }: { panel: BountyPanelModel }) {
       </section>
 
       <section className="flex flex-col gap-3">
-        <h3 className="text-sm font-semibold">Bounty coletado</h3>
+        <h3 id={collectedTitle} className="text-sm font-semibold">Bounty coletado</h3>
         {panel.collected.length === 0 ? (
           <p className="text-sm text-muted-foreground">Ninguem coletou Bounty ainda.</p>
         ) : (
-          <ul className="flex flex-col">
+          <ul aria-labelledby={collectedTitle} className="flex flex-col">
             {panel.collected.map((e) => (
               <li key={e.participantId} className="flex flex-col gap-0.5 border-b py-2">
                 <div className="flex items-baseline justify-between gap-3 text-sm">
