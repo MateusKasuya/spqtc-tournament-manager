@@ -27,6 +27,13 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
       dependencies: ["setup"],
     },
+    // Só a Mesa ao vivo, que o jogador acompanha no celular: Safari (WebKit) num iPhone.
+    {
+      name: "iphone",
+      testMatch: /mesa-ao-vivo\.spec\.ts/,
+      use: { ...devices["iPhone 15"] },
+      dependencies: ["setup"],
+    },
   ],
   webServer: {
     // No CI o app já foi buildado (`pnpm e2e:build`); localmente, `next dev`.

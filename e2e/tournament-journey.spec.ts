@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { E2E_USERS } from "./support/users";
 import {
   confirmBuyIn,
@@ -11,6 +11,7 @@ import {
   uniqueName,
 } from "./support/tournament";
 import { brl } from "./support/text";
+import { expectCountingDownFrom, expectStopped, remainingTimer, secondsLeft } from "./support/clock";
 
 test.use({ storageState: E2E_USERS.admin.storageState });
 
@@ -78,7 +79,7 @@ test("admin cria o torneio, confirma os buy-ins e roda o Relogio", async ({ page
     await page.getByRole("link", { name: "Mesa ao Vivo" }).click();
     await page.waitForURL(`/torneios/${tournamentId}/mesa`);
 
-    const remaining = page.getByRole("timer", { name: "Tempo restante" });
+    const remaining = remainingTimer(page);
     const play = page.getByRole("button", { name: "Iniciar", exact: true });
     const pause = page.getByRole("button", { name: "Pausar", exact: true });
     // A troca do botão espera a action e o refresh; o build de produção do CI
@@ -107,24 +108,3 @@ test("admin cria o torneio, confirma os buy-ins e roda o Relogio", async ({ page
     await expectCountingDownFrom(remaining, paused);
   });
 });
-
-async function secondsLeft(remaining: Locator) {
-  const [minutes, seconds] = ((await remaining.textContent()) ?? "").split(":").map(Number);
-  return minutes * 60 + seconds;
-}
-
-// Correndo: o Tempo restante desce dois tiques abaixo do ponto de partida.
-async function expectCountingDownFrom(remaining: Locator, from: number) {
-  await expect.poll(() => secondsLeft(remaining), { timeout: 5_000 }).toBeLessThanOrEqual(from - 2);
-}
-
-// Parado só se prova esperando. A primeira espera deixa o refresh da pausa
-// trocar o último tique do cliente pelo valor gravado no servidor; a segunda
-// cobre mais de um tique do Relógio. Devolve o Tempo restante congelado.
-async function expectStopped(remaining: Locator) {
-  await remaining.page().waitForTimeout(1_000);
-  const paused = await secondsLeft(remaining);
-  await remaining.page().waitForTimeout(2_500);
-  expect(await secondsLeft(remaining)).toBe(paused);
-  return paused;
-}
