@@ -249,7 +249,7 @@ export async function updateTournamentStatus(
   if (!outcome.applied) return { success: true };
 
   if (status === "finished") {
-    revalidateTag("ranking");
+    revalidateTag("ranking", { expire: 0 });
   }
 
   revalidateTournament(id);

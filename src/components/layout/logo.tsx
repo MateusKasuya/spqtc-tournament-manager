@@ -15,7 +15,7 @@ export function Logo({ variant = "default", className }: LogoProps) {
           alt="Só Puxa Quem Tem Coragem"
           width={220}
           height={220}
-          priority
+          preload
           className="object-contain mix-blend-screen"
         />
       </div>

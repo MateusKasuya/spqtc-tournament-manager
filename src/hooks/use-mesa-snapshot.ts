@@ -27,10 +27,14 @@ export function useMesaSnapshot(initial: MesaSnapshot) {
 
   // Re-semeia com o snapshot fresco do servidor sempre que ele mudar (F5,
   // router.refresh() após actions do Relógio). O servidor é a fonte da verdade.
-  useEffect(() => {
+  // Ajuste de estado durante o render (padrão do React para "resetar estado
+  // quando a prop muda"), em vez de um efeito que re-renderiza em cascata.
+  const [seeded, setSeeded] = useState(initial);
+  if (seeded !== initial) {
+    setSeeded(initial);
     setTournament(initial.tournament);
     setLive(liveOf(initial));
-  }, [initial]);
+  }
 
   // Coalescing: no máximo uma busca em voo. Pedidos que chegam durante o voo marcam
   // pendingRef e disparam uma única re-execução ao final — bursts de N ações colapsam
