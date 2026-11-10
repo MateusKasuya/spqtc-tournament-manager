@@ -40,8 +40,7 @@ export async function createTournament(page: Page, tournament: NewTournament) {
   if (tournament.newSeason) await createSeasonInForm(page, tournament.newSeason);
   await page.getByLabel("Nome do torneio", { exact: true }).fill(tournament.name);
   if (tournament.bountyBuilder) {
-    // O seletor de Modalidade não tem rótulo ligado; é o único que começa em "Normal".
-    await page.getByRole("combobox").filter({ hasText: /^Normal/ }).click();
+    await page.getByLabel("Modalidade", { exact: true }).click();
     await page.getByRole("option", { name: "Bounty Builder (PKO)" }).click();
     await page
       .getByLabel("% Bounty do valor liquido", { exact: true })
@@ -68,7 +67,7 @@ async function createSeasonInForm(page: Page, name: string) {
   await dialog.getByRole("button", { name: "Criar" }).click();
   await expect(dialog).toBeHidden();
   // O seletor de Temporada não tem rótulo ligado; é o único que começa em
-  // "Sem temporada" (a Modalidade começa em "Normal").
+  // "Sem temporada".
   await page.getByRole("combobox").filter({ hasText: "Sem temporada" }).click();
   await page.getByRole("option", { name, exact: true }).click();
   await expect(page.getByRole("combobox").filter({ hasText: name })).toBeVisible();
