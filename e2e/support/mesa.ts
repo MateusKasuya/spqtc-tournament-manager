@@ -22,10 +22,16 @@ export function mesaRow(page: Page, name: string) {
 
 // Card da Mesa ao vivo (Jogadores, Fichas em jogo, Prize pool...). Com detalhe
 // para abrir, o card é um botão cujo nome é "<rótulo>: <número>. Ver detalhes".
-export async function expectStatCard(page: Page, label: string, value: string | RegExp) {
+// Quem só assiste espera o realtime: passe `ACTION_TIMEOUT` em `options`.
+export async function expectStatCard(
+  page: Page,
+  label: string,
+  value: string | RegExp,
+  options: { timeout?: number } = {}
+) {
   const card = page.getByRole("button", { name: new RegExp(`^${escapeRegExp(label)}: `) });
   const shown = typeof value === "string" ? escapeRegExp(value) : value.source;
-  await expect(card).toHaveAccessibleName(new RegExp(`^${escapeRegExp(label)}: ${shown}\\. Ver detalhes$`));
+  await expect(card).toHaveAccessibleName(new RegExp(`^${escapeRegExp(label)}: ${shown}\\. Ver detalhes$`), options);
 }
 
 export type KnockoutOptions = {

@@ -70,7 +70,7 @@ jobs:
           NEXT_TELEMETRY_DISABLED: 1
 
       - name: Navegadores do Playwright
-        run: pnpm exec playwright install --with-deps chromium
+        run: pnpm exec playwright install --with-deps chromium webkit
 
       - name: E2E
         run: pnpm e2e
