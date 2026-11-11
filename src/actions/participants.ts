@@ -5,14 +5,14 @@ import { participants, transactions, tournaments } from "@/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { requireAdmin } from "@/lib/require-admin";
 import { revalidateTournament } from "@/lib/revalidate-tournament";
-import { STATUS_RULES, statusAllows, type StatusRule } from "@/lib/tournament-status";
+import { STATUS_RULES, type StatusRule } from "@/lib/tournament-status";
 import { clockStateColumns, getTournamentRequiringStatus } from "@/db/queries/tournaments";
 import { getParticipantById, getParticipantByPlayerAndTournament } from "@/db/queries/participants";
 import { checkKnockout, checkUndo, initialBounty, KnockoutLedgerError, type KnockoutEvent, type UndoRequest } from "@/lib/knockout-ledger";
 import { assertPremiosCabemNoPrizePool, assertSaldoNaoNegativo } from "@/db/ledger/saldo";
 import { hasPaidPrize } from "@/db/queries/transactions";
 import { SaldoNegativoError } from "@/lib/prize-pool";
-import { applyKnockout, undoKnockout, loadKnockoutSnapshot, lockAndReadTournament, renumberFinalPositions } from "@/db/ledger/knockout-ledger";
+import { applyKnockout, undoKnockout, loadKnockoutSnapshot, lockTournamentRequiringStatus, renumberFinalPositions } from "@/db/ledger/knockout-ledger";
 import { pauseTimer } from "@/lib/tournament-clock";
 import { applyPayoutPositions } from "@/db/ledger/payout-positions";
 import { revalidatePath, revalidateTag } from "next/cache";
@@ -208,10 +208,9 @@ class ParticipantRefusal extends Error {}
 
 // Trava o torneio, relê a linha e recusa se o Status relido não permitir a ação.
 async function lockTournamentRequiring(tx: Tx, tournamentId: number, rule: StatusRule) {
-  const tournament = await lockAndReadTournament(tx, tournamentId);
-  if (!tournament) throw new ParticipantRefusal("Torneio nao encontrado");
-  if (!statusAllows(rule, tournament.status)) throw new ParticipantRefusal(rule.error);
-  return tournament;
+  const locked = await lockTournamentRequiringStatus(tx, tournamentId, rule);
+  if ("error" in locked) throw new ParticipantRefusal(locked.error);
+  return locked.tournament;
 }
 
 // Trava o torneio, relê torneio e participante e roda nessa releitura a mesma

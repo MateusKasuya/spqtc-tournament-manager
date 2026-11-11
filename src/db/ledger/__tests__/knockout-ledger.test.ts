@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { eq, and } from "drizzle-orm";
 import { participants, transactions } from "@/db/schema";
-import { applyKnockout, loadKnockoutSnapshot } from "@/db/ledger/knockout-ledger";
+import { applyKnockout, loadKnockoutSnapshot, lockTournamentRequiringStatus } from "@/db/ledger/knockout-ledger";
+import { STATUS_RULES } from "@/lib/tournament-status";
 import { checkKnockout, type KnockoutEvent } from "@/lib/knockout-ledger";
 import { seedTournament, seedPlayer, seedParticipant } from "@/test/setup";
 import { testDb } from "@/test/db";
@@ -47,5 +48,24 @@ describe("adapter do Ledger de Knockout", () => {
     expect(e1).toMatchObject({ currentBounty: 40, bountiesCollected: 0, status: "playing" });
     const [v] = await testDb.select().from(participants).where(eq(participants.id, parts[0]));
     expect(v.finishPosition).toBe(3);
+  });
+});
+
+describe("lockTournamentRequiringStatus", () => {
+  it("Status permitido pela regra → devolve o torneio relido", async () => {
+    const t = await seedTournament({ status: "pending", name: "Relido" });
+    const locked = await testDb.transaction((tx) => lockTournamentRequiringStatus(tx, t, STATUS_RULES.deletion));
+    expect(locked).toMatchObject({ tournament: { id: t, name: "Relido", status: "pending" } });
+  });
+
+  it("Status relido fora da regra → recusa com o erro da regra", async () => {
+    const t = await seedTournament({ status: "finished" });
+    const locked = await testDb.transaction((tx) => lockTournamentRequiringStatus(tx, t, STATUS_RULES.deletion));
+    expect(locked).toEqual({ error: "Torneio so pode ser excluido com o torneio pendente ou cancelado" });
+  });
+
+  it("torneio que não existe (ou sumiu antes do lock) → 'Torneio nao encontrado'", async () => {
+    const locked = await testDb.transaction((tx) => lockTournamentRequiringStatus(tx, 999999, STATUS_RULES.deletion));
+    expect(locked).toEqual({ error: "Torneio nao encontrado" });
   });
 });

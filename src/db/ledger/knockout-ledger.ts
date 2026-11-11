@@ -14,6 +14,7 @@ import {
   type LedgerSnapshot,
   type UndoRequest,
 } from "@/lib/knockout-ledger";
+import { statusAllows, type StatusRule } from "@/lib/tournament-status";
 
 export type LedgerExecutor = PgDatabase<PgQueryResultHKT, typeof schema>;
 
@@ -80,6 +81,19 @@ export async function lockTournament(tx: LedgerExecutor, tournamentId: number) {
 export async function lockAndReadTournament(tx: LedgerExecutor, tournamentId: number) {
   const [tournament] = await tx.select().from(tournaments).where(eq(tournaments.id, tournamentId)).for("update");
   return tournament ?? null;
+}
+
+// Trava o torneio, relê a linha e confere o Status relido pela regra: devolve o
+// torneio ou a recusa em pt-BR, no mesmo formato de `getTournamentRequiringStatus`.
+export async function lockTournamentRequiringStatus(
+  tx: LedgerExecutor,
+  tournamentId: number,
+  rule: StatusRule
+): Promise<{ tournament: typeof tournaments.$inferSelect } | { error: string }> {
+  const tournament = await lockAndReadTournament(tx, tournamentId);
+  if (!tournament) return { error: "Torneio nao encontrado" };
+  if (!statusAllows(rule, tournament.status)) return { error: rule.error };
+  return { tournament };
 }
 
 // Carimbo único do evento, estritamente maior que qualquer linha já gravada no
