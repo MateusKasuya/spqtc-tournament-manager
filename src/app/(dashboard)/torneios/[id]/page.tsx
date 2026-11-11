@@ -27,6 +27,7 @@ import { formatCurrency, formatChips } from "@/lib/format";
 import { calculateRoundedPrizeAmounts } from "@/lib/prize";
 import { computePrizePool, computeSaldo } from "@/lib/prize-pool";
 import { STATUS_RULES, statusAllows } from "@/lib/tournament-status";
+import { allowsAddon, rebuyLimit } from "@/lib/tournament-entries";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ArrowLeft, Pencil, Monitor } from "lucide-react";
@@ -184,9 +185,9 @@ export default async function TorneioPage({ params }: PageProps) {
               <span className="text-muted-foreground">Rebuy</span>
               <span>{formatCurrency(tournament.rebuyAmount)}</span>
               <span className="text-muted-foreground">Add-on</span>
-              <span>{tournament.allowAddon ? formatCurrency(tournament.addonAmount) : "Nao permitido"}</span>
+              <span>{allowsAddon(tournament) ? formatCurrency(tournament.addonAmount) : "Nao permitido"}</span>
               <span className="text-muted-foreground">Max rebuys</span>
-              <span>{tournament.maxRebuys === 0 ? "Ilimitado" : tournament.maxRebuys}</span>
+              <span>{rebuyLimit(tournament) ?? "Ilimitado"}</span>
             </CardContent>
           </Card>
 
@@ -199,7 +200,7 @@ export default async function TorneioPage({ params }: PageProps) {
               <span>{formatChips(tournament.initialChips)}</span>
               <span className="text-muted-foreground">Rebuy</span>
               <span>{formatChips(tournament.rebuyChips)}</span>
-              {tournament.allowAddon && (
+              {allowsAddon(tournament) && (
                 <>
                   <span className="text-muted-foreground">Add-on</span>
                   <span>{formatChips(tournament.addonChips)}</span>
@@ -233,11 +234,13 @@ export default async function TorneioPage({ params }: PageProps) {
               finishPosition: p.finishPosition ?? null,
             }))}
             isAdmin={canManageParticipants}
-            allowAddon={tournament.allowAddon}
-            bonusChipAmount={tournament.bonusChipAmount}
-            buyInAmount={tournament.buyInAmount}
-            rebuyAmount={tournament.rebuyAmount}
-            addonAmount={tournament.addonAmount}
+            tournament={{
+              allowAddon: tournament.allowAddon,
+              bonusChipAmount: tournament.bonusChipAmount,
+              buyInAmount: tournament.buyInAmount,
+              rebuyAmount: tournament.rebuyAmount,
+              addonAmount: tournament.addonAmount,
+            }}
             isBounty={isBountyTournament}
           />
         </TabsContent>
