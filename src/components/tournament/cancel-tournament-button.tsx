@@ -51,8 +51,7 @@ export function CancelTournamentButton({ tournamentId, currentStatus }: CancelTo
           <DialogHeader>
             <DialogTitle>Cancelar torneio</DialogTitle>
             <DialogDescription>
-              Tem certeza? Um torneio cancelado nao volta a rodar e nao da pontos no ranking da temporada.
-              Essa acao nao pode ser desfeita.
+              Tem certeza? Um torneio cancelado nao pode ser reaberto e nao da pontos no ranking da temporada.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
