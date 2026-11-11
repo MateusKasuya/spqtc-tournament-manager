@@ -207,7 +207,7 @@ async function loadKnockoutContext(participantId: number) {
 class ParticipantRefusal extends Error {}
 
 // Trava o torneio, relê a linha e recusa se o Status relido não permitir a ação.
-async function lockTournamentRequiring(tx: Tx, tournamentId: number, rule: StatusRule) {
+async function lockTournamentOrRefuse(tx: Tx, tournamentId: number, rule: StatusRule) {
   const locked = await lockTournamentRequiringStatus(tx, tournamentId, rule);
   if ("error" in locked) throw new ParticipantRefusal(locked.error);
   return locked.tournament;
@@ -223,7 +223,7 @@ async function lockAndReload(
   rule: StatusRule,
   check: (participant: Participant, tournament: Tournament) => Refusal
 ) {
-  const tournament = await lockTournamentRequiring(tx, tournamentId, rule);
+  const tournament = await lockTournamentOrRefuse(tx, tournamentId, rule);
   const [participant] = await tx.select().from(participants).where(eq(participants.id, participantId));
   if (!participant) throw new ParticipantRefusal("Participante nao encontrado");
   const refused = check(participant, tournament);
@@ -532,7 +532,7 @@ export async function distributePayouts(
   // para um Desfazer, Remover ou Cancelar concorrente não furar a trava.
   let rankingChanged = false;
   const failed = await runLedger(async (tx) => {
-    const tournament = await lockTournamentRequiring(tx, tournamentId, STATUS_RULES.payouts);
+    const tournament = await lockTournamentOrRefuse(tx, tournamentId, STATUS_RULES.payouts);
     const enrolled = ids.length
       ? await tx
           .select({ playerId: participants.playerId, buyInPaid: participants.buyInPaid })
