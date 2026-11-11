@@ -7,7 +7,7 @@ import { Skull, RefreshCw, Plus, RotateCcw, CheckCircle, Zap, ChevronRight } fro
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/format";
 import { displayName } from "@/lib/display-name";
-import { allowsAddon, allowsBonusChip, allowsRebuy } from "@/lib/tournament-entries";
+import { allowsAddon, allowsBonusChip, allowsRebuy, totalPaid } from "@/lib/tournament-entries";
 import {
   Dialog,
   DialogContent,
@@ -224,12 +224,9 @@ function ParticipantMobileCard({
   const isEliminated = participant.status === "eliminated";
   const isFinished = participant.status === "finished";
 
-  const totalPaid =
-    (participant.buyInPaid ? tournament.buyInAmount : 0) +
-    participant.rebuyCount * tournament.rebuyAmount +
-    participant.addonCount * tournament.addonAmount;
+  const paid = totalPaid(participant, tournament);
 
-  const summary = buildSummary(participant, totalPaid, isBounty);
+  const summary = buildSummary(participant, paid, isBounty);
 
   const canUndoBuyIn =
     isPlaying &&
@@ -448,10 +445,7 @@ function ParticipantRowFiltered({
   const isEliminated = participant.status === "eliminated";
   const isFinished = participant.status === "finished";
 
-  const totalPaid =
-    (participant.buyInPaid ? tournament.buyInAmount : 0) +
-    participant.rebuyCount * tournament.rebuyAmount +
-    participant.addonCount * tournament.addonAmount;
+  const paid = totalPaid(participant, tournament);
 
   const canUndoBuyIn =
     isPlaying &&
@@ -562,7 +556,7 @@ function ParticipantRowFiltered({
         )}
 
         <td className="py-2.5 pr-3 text-base text-right text-muted-foreground whitespace-nowrap">
-          {formatCurrency(totalPaid)}
+          {formatCurrency(paid)}
         </td>
 
         <td className="py-2.5 pr-4">

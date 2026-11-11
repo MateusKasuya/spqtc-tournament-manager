@@ -17,6 +17,7 @@ import {
   removeParticipant,
 } from "@/actions/participants";
 import { formatCurrency } from "@/lib/format";
+import { allowsAddon, allowsBonusChip, totalPaid } from "@/lib/tournament-entries";
 import { Trophy, Skull, RotateCcw, Trash2, DollarSign, RefreshCw, Plus, Zap } from "lucide-react";
 import { toast } from "sonner";
 
@@ -36,14 +37,18 @@ interface Participant {
   bountiesCollected?: number;
 }
 
-interface ParticipantListProps {
-  participants: Participant[];
-  isAdmin: boolean;
+interface Tournament {
   allowAddon: boolean;
   bonusChipAmount: number;
   buyInAmount: number;
   rebuyAmount: number;
   addonAmount: number;
+}
+
+interface ParticipantListProps {
+  participants: Participant[];
+  isAdmin: boolean;
+  tournament: Tournament;
   isBounty?: boolean;
 }
 
@@ -86,12 +91,10 @@ function ActionButton({
 
 function ParticipantActions({
   participant,
-  allowAddon,
-  bonusChipAmount,
+  tournament,
 }: {
   participant: Participant;
-  allowAddon: boolean;
-  bonusChipAmount: number;
+  tournament: Tournament;
 }) {
   const [isPending, startTransition] = useTransition();
 
@@ -101,6 +104,9 @@ function ParticipantActions({
       if (result && "error" in result) toast.error(result.error);
     });
   }
+
+  const showAddon = allowsAddon(tournament);
+  const showBonus = allowsBonusChip(tournament);
 
   const canUndoBuyIn =
     participant.status === "playing" &&
@@ -161,7 +167,7 @@ function ParticipantActions({
             </ActionButton>
           )}
 
-          {allowAddon && (
+          {showAddon && (
             <ActionButton
               onClick={() => run(() => addAddon(participant.id))}
               disabled={isPending}
@@ -171,7 +177,7 @@ function ParticipantActions({
             </ActionButton>
           )}
 
-          {allowAddon && participant.addonCount > 0 && (
+          {showAddon && participant.addonCount > 0 && (
             <ActionButton
               onClick={() => run(() => undoAddon(participant.id))}
               disabled={isPending}
@@ -182,7 +188,7 @@ function ParticipantActions({
             </ActionButton>
           )}
 
-          {bonusChipAmount > 0 && !participant.bonusChipUsed && (
+          {showBonus && !participant.bonusChipUsed && (
             <ActionButton
               onClick={() => run(() => addBonusChip(participant.id))}
               disabled={isPending}
@@ -192,7 +198,7 @@ function ParticipantActions({
             </ActionButton>
           )}
 
-          {bonusChipAmount > 0 && participant.bonusChipUsed && (
+          {showBonus && participant.bonusChipUsed && (
             <ActionButton
               onClick={() => run(() => undoBonusChip(participant.id))}
               disabled={isPending}
@@ -241,11 +247,7 @@ function ParticipantActions({
 export function ParticipantList({
   participants,
   isAdmin,
-  allowAddon,
-  bonusChipAmount,
-  buyInAmount,
-  rebuyAmount,
-  addonAmount,
+  tournament,
   isBounty,
 }: ParticipantListProps) {
   if (participants.length === 0) {
@@ -261,10 +263,7 @@ export function ParticipantList({
       {participants.map((p) => {
         const badge = STATUS_BADGE[p.status] ?? STATUS_BADGE.registered;
         const displayName = p.nickname ?? p.name;
-        const total =
-          (p.buyInPaid ? buyInAmount : 0) +
-          p.rebuyCount * rebuyAmount +
-          p.addonCount * addonAmount;
+        const total = totalPaid(p, tournament);
 
         return (
           <div
@@ -299,7 +298,7 @@ export function ParticipantList({
               </div>
             </div>
             <div className="flex items-center gap-2 flex-wrap justify-end sm:shrink-0 sm:flex-nowrap">
-              {isAdmin && <ParticipantActions participant={p} allowAddon={allowAddon} bonusChipAmount={bonusChipAmount} />}
+              {isAdmin && <ParticipantActions participant={p} tournament={tournament} />}
               <Badge variant={badge.variant} className="text-xs">
                 {badge.label}
               </Badge>
