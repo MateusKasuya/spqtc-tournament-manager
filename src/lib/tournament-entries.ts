@@ -1,7 +1,5 @@
 // Entradas que o torneio permite (Rebuy, add-on e bônus) e quanto cada Participante
-// pagou por elas. O servidor (Ledger de Knockout e checks de participant-entries),
-// as Ações rápidas, a lista de participantes e o painel Fichas em jogo leem estas
-// mesmas condições.
+// pagou por elas. Servidor e telas leem daqui, em vez de repetir a condição.
 
 import type { participants, tournaments } from "@/db/schema";
 

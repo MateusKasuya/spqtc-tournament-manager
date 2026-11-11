@@ -20,6 +20,7 @@ import { formatCurrency } from "@/lib/format";
 import { allowsAddon, allowsBonusChip, totalPaid } from "@/lib/tournament-entries";
 import { Trophy, Skull, RotateCcw, Trash2, DollarSign, RefreshCw, Plus, Zap } from "lucide-react";
 import { toast } from "sonner";
+import type { tournaments } from "@/db/schema";
 
 interface Participant {
   id: number;
@@ -37,13 +38,10 @@ interface Participant {
   bountiesCollected?: number;
 }
 
-interface Tournament {
-  allowAddon: boolean;
-  bonusChipAmount: number;
-  buyInAmount: number;
-  rebuyAmount: number;
-  addonAmount: number;
-}
+type Tournament = Pick<
+  typeof tournaments.$inferSelect,
+  "allowAddon" | "bonusChipAmount" | "buyInAmount" | "rebuyAmount" | "addonAmount"
+>;
 
 interface ParticipantListProps {
   participants: Participant[];
@@ -263,7 +261,7 @@ export function ParticipantList({
       {participants.map((p) => {
         const badge = STATUS_BADGE[p.status] ?? STATUS_BADGE.registered;
         const displayName = p.nickname ?? p.name;
-        const total = totalPaid(p, tournament);
+        const paid = totalPaid(p, tournament);
 
         return (
           <div
@@ -287,7 +285,7 @@ export function ParticipantList({
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium truncate">{displayName}</p>
                 <p className="text-xs text-muted-foreground">
-                  {total > 0 ? formatCurrency(total) : "Nao pago"}
+                  {paid > 0 ? formatCurrency(paid) : "Nao pago"}
                   {p.rebuyCount > 0 && ` · ${p.rebuyCount}R`}
                   {p.addonCount > 0 && ` · ${p.addonCount === 1 ? "A" : `${p.addonCount}A`}`}
                   {p.bonusChipUsed && " · B"}
