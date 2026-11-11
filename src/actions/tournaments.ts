@@ -5,13 +5,12 @@ import { revalidateTournament } from "@/lib/revalidate-tournament";
 import {
   STATUS_RULES,
   TOURNAMENT_STATUS_TRANSITIONS,
-  statusAllows,
   type TournamentStatus,
 } from "@/lib/tournament-status";
 import { db } from "@/db";
 import { tournaments, blindStructures, prizeStructures, participants } from "@/db/schema";
 import { eq, and, isNotNull } from "drizzle-orm";
-import { lockAndReadTournament, lockTournament } from "@/db/ledger/knockout-ledger";
+import { lockAndReadTournament, lockTournamentRequiringStatus } from "@/db/ledger/knockout-ledger";
 import { writeRankingPoints } from "@/db/ledger/ranking-points";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { redirect } from "next/navigation";
@@ -180,11 +179,9 @@ export async function updateTournament(id: number, formData: FormData) {
   // Trava a linha e relê: um buy-in confirmado ou uma troca de Status no meio
   // não pode furar a checagem dos campos travados.
   const refusal = await db.transaction(async (tx) => {
-    await lockTournament(tx, id);
-    const [current] = await tx.select().from(tournaments).where(eq(tournaments.id, id));
-    if (!current || !statusAllows(STATUS_RULES.tournamentData, current.status)) {
-      return STATUS_RULES.tournamentData.error;
-    }
+    const reread = await lockTournamentRequiringStatus(tx, id, STATUS_RULES.tournamentData);
+    if ("error" in reread) return reread.error;
+    const current = reread.tournament;
 
     const facts = { hasConfirmedBuyIn: await hasConfirmedBuyIn(id, tx), hasAddon: await hasAddon(id, tx) };
     const locked = lockedFieldError(current, facts, parsed.data);
@@ -268,13 +265,8 @@ export async function deleteTournament(id: number) {
   // Trava a linha e relê: um Iniciar ou Encerrar no meio não pode deixar
   // apagar um torneio Rodando ou Encerrado.
   const refusal = await db.transaction(async (tx) => {
-    await lockTournament(tx, id);
-    const [current] = await tx
-      .select({ status: tournaments.status })
-      .from(tournaments)
-      .where(eq(tournaments.id, id));
-    if (!current) return "Torneio nao encontrado";
-    if (!statusAllows(STATUS_RULES.deletion, current.status)) return STATUS_RULES.deletion.error;
+    const reread = await lockTournamentRequiringStatus(tx, id, STATUS_RULES.deletion);
+    if ("error" in reread) return reread.error;
 
     await tx.delete(tournaments).where(eq(tournaments.id, id));
     return null;

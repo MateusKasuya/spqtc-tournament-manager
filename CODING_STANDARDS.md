@@ -35,7 +35,7 @@ Persistência de eventos (hoje: o Ledger de Knockout, `knockout-ledger.ts`). Cat
 
 ## Precondições comuns das actions
 
-- Status do torneio: a regra do `CONTEXT.md` mora em `STATUS_RULES` (`src/lib/tournament-status.ts`), um grupo por linha da regra, com uma mensagem de recusa por grupo. A action carrega o torneio com `getTournamentRequiringStatus(id, STATUS_RULES.<grupo>)`; ação que parte de um participante carrega o participante e depois o torneio dele pela mesma função.
+- Status do torneio: a regra do `CONTEXT.md` mora em `STATUS_RULES` (`src/lib/tournament-status.ts`), um grupo por linha da regra, com uma mensagem de recusa por grupo. A action carrega o torneio com `getTournamentRequiringStatus(id, STATUS_RULES.<grupo>)`; ação que parte de um participante carrega o participante e depois o torneio dele pela mesma função. Dentro da transação, a contraparte é `lockTournamentRequiringStatus(tx, id, STATUS_RULES.<grupo>)` (`src/db/ledger/knockout-ledger.ts`, ao lado de `lockAndReadTournament`): trava o torneio, relê a linha e confere o Status relido, com o mesmo `{ tournament } | { error }`. A action de torneio devolve a recusa; a de participante a lança como `ParticipantRefusal` (`lockTournamentOrRefuse`). `lockTournament` sem releitura só serve a quem não decide pelo torneio.
 - Precondição de entrada de participante fora do Ledger de Knockout (buy-in, add-on, bônus e os Desfazer): função pura em `src/lib/participant-entries.ts` que devolve `{ error } | null`. A action roda a mesma função na leitura de fora (resposta rápida) e de novo em `lockAndReload`, depois de travar o torneio e reler torneio e participante; só a releitura decide e fornece os valores gravados, e a recusa dela repete a mensagem da checagem de fora.
 - Prêmio pago e quem pode receber Prêmio: "tem Prêmio pago" depende das transações `prize` (nunca de `participants.prizeAmount`), então não é função pura; `removeParticipant` e `undoBuyIn` consultam `hasPaidPrize` só dentro do lock, depois de `lockAndReload`. `distributePayouts` relê `(playerId, buyInPaid)` dentro do lock e decide com `checkPayoutRecipients`, sem leitura de participantes fora dele.
 - Campos de `participants` que copiam o resultado da distribuição (`prizeAmount`, e a Posição final que o acordo fixa) espelham as transações `prize`: quem reescreve essas transações reescreve a cópia do torneio inteiro, inclusive de quem saiu da lista, na mesma transação. Ler "tem Prêmio" continua sendo pelas transações.
@@ -47,7 +47,7 @@ Persistência de eventos (hoje: o Ledger de Knockout, `knockout-ledger.ts`). Cat
 
 - Só leitura: sem auth, sem `revalidatePath`, sem efeitos colaterais.
 - Busca por id retorna o registro ou `null` (`const [x] = await …; return x ?? null;`) — não lança quando não encontra.
-- Exceção: `getTournamentRequiringStatus` devolve `{ tournament } | { error }` com a recusa em pt-BR, porque é a precondição de Status do torneio compartilhada pelas actions (ver "Precondições comuns das actions").
+- Exceção: `getTournamentRequiringStatus` (e `lockTournamentRequiringStatus`, a versão dentro do lock) devolve `{ tournament } | { error }` com a recusa em pt-BR, porque é a precondição de Status do torneio compartilhada pelas actions (ver "Precondições comuns das actions").
 
 ## Schema e migrations
 
