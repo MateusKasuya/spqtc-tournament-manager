@@ -54,7 +54,7 @@ function centsToReais(cents: number): string {
   return (cents / 100).toFixed(2);
 }
 
-const NO_LOCKS: EditLocks = { chips: false, entryRules: false, addonAmount: false };
+const NO_LOCKS: EditLocks = { chips: false, entryRules: false, addonAmount: false, addonChips: false };
 
 // Valores em R$ no formulário; vão em centavos para o servidor.
 const MONEY_FIELDS = ["buyInAmount", "rebuyAmount", "addonAmount", "rankingFeeAmount"] as const;
@@ -138,9 +138,10 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
 
     // Campo travado vai desabilitado na tela e some do FormData (ou o toggle de
     // add-on o esconde): reenvia o valor atual para o servidor ver "sem mudança".
-    if (initialData && locks.chips) {
+    if (initialData) {
       for (const field of CHIP_FIELDS) {
-        raw.set(field, String(initialData[field]));
+        const locked = field === "addonChips" ? locks.addonChips : locks.chips;
+        if (locked) raw.set(field, String(initialData[field]));
       }
     }
     if (initialData) {
@@ -288,7 +289,9 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
         </h2>
         {locks.chips && (
           <p className="text-xs text-muted-foreground">
-            As fichas so podem ser alteradas com o torneio pendente.
+            {locks.addonChips
+              ? "As fichas so podem ser alteradas com o torneio pendente."
+              : "As fichas iniciais, de rebuy e de bonus so podem ser alteradas com o torneio pendente. As fichas de add-on podem ser definidas ao ligar o add-on."}
           </p>
         )}
 
@@ -328,7 +331,7 @@ export function TournamentForm({ seasons, initialData, locks = NO_LOCKS }: Tourn
                 min="0"
                 value={addonChips}
                 onChange={(e) => setAddonChips(e.target.value)}
-                disabled={locks.chips}
+                disabled={locks.addonChips}
               />
             </div>
           )}

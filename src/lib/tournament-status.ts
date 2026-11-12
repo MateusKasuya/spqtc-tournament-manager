@@ -37,6 +37,8 @@ export const STATUS_RULES = {
     error: "Torneio so pode ser editado com o torneio pendente ou rodando",
   },
   // Fichas (iniciais, de Rebuy, de add-on, de bonus): nao sao guardadas por entrada.
+  // As fichas de add-on ficam livres enquanto o add-on nao e permitido e ninguem
+  // fez add-on.
   chips: {
     allowed: ["pending"],
     error: "Fichas so podem ser alteradas com o torneio pendente",

@@ -129,8 +129,9 @@ describe("torneio Rodando", () => {
     expect(row.date.toISOString()).toBe("2026-12-24T22:00:00.000Z");
   });
 
-  it.each(CHIP_FIELDS)("recusa alterar %s e nao grava nada", async (field) => {
-    const t = await seed({ status: "running" });
+  // Com add-on permitido as fichas de add-on travam como as outras (ver "fichas de add-on").
+  it.each(CHIP_FIELDS)("recusa alterar %s com add-on permitido e nao grava nada", async (field) => {
+    const t = await seed({ status: "running", allowAddon: true });
     const form = await formFor(t, { [field]: 12345, name: "Outro nome" });
     const before = await dumpDb();
 
@@ -222,6 +223,38 @@ describe("valor do add-on", () => {
     const before = await dumpDb();
 
     expect(await updateTournament(t, form)).toEqual({ error: STATUS_RULES.entryRules.error });
+    expect(await dumpDb()).toEqual(before);
+  });
+});
+
+describe("fichas de add-on", () => {
+  it("torneio Rodando sem add-on, com buy-in confirmado, aceita ligar o add-on com valor e fichas", async () => {
+    const t = await seed({ status: "running", allowAddon: false, addonAmount: 0, addonChips: 0 });
+    await confirmedBuyIn(t);
+
+    expect(
+      await updateTournament(t, await formFor(t, { allowAddon: true, addonAmount: 3000, addonChips: 15000 }))
+    ).toBeUndefined();
+    expect(await tournamentRow(t)).toMatchObject({ allowAddon: true, addonAmount: 3000, addonChips: 15000 });
+  });
+
+  it("torneio Rodando com add-on permitido recusa mudar as fichas de add-on e nao grava nada", async () => {
+    const t = await seed({ status: "running", allowAddon: true, addonChips: 15000 });
+    await confirmedBuyIn(t);
+    const form = await formFor(t, { addonChips: 20000 });
+    const before = await dumpDb();
+
+    expect(await updateTournament(t, form)).toEqual({ error: STATUS_RULES.chips.error });
+    expect(await dumpDb()).toEqual(before);
+  });
+
+  it("torneio Rodando com add-on desligado mas com add-on registrado recusa mudar as fichas de add-on", async () => {
+    const t = await seed({ status: "running", allowAddon: false, addonChips: 15000 });
+    await seedParticipant(t, await seedPlayer(), { status: "playing", buyInPaid: true, addonCount: 1 });
+    const form = await formFor(t, { addonChips: 20000 });
+    const before = await dumpDb();
+
+    expect(await updateTournament(t, form)).toEqual({ error: STATUS_RULES.chips.error });
     expect(await dumpDb()).toEqual(before);
   });
 });

@@ -25,6 +25,9 @@ export interface EditLocks {
   // Valor do add-on: trava com as regras de entrada, salvo enquanto o add-on
   // não é permitido e ninguém fez add-on (não há total pago a reescrever).
   addonAmount: boolean;
+  // Fichas de add-on: travam com as outras fichas, salvo enquanto o add-on não é
+  // permitido e ninguém fez add-on (não há Fichas em jogo a recalcular).
+  addonChips: boolean;
 }
 
 // Fatos do torneio que a trava lê além do Status e da permissão de add-on.
@@ -40,10 +43,13 @@ interface LockedTournament {
 
 export function editLocks(tournament: LockedTournament, facts: EditLockFacts): EditLocks {
   const entryRules = !statusAllows(STATUS_RULES.entryRules, tournament.status) || facts.hasConfirmedBuyIn;
+  const chips = !statusAllows(STATUS_RULES.chips, tournament.status);
+  const addonInUse = tournament.allowAddon || facts.hasAddon;
   return {
-    chips: !statusAllows(STATUS_RULES.chips, tournament.status),
+    chips,
     entryRules,
-    addonAmount: entryRules && (tournament.allowAddon || facts.hasAddon),
+    addonAmount: entryRules && addonInUse,
+    addonChips: chips && addonInUse,
   };
 }
 
@@ -60,7 +66,12 @@ export function lockedFieldError(
   const changed = (fields: readonly EditableField[]) => fields.some((f) => current[f] !== next[f]);
 
   const locks = editLocks(current, facts);
-  if (locks.chips && changed(CHIP_FIELDS)) return STATUS_RULES.chips.error;
+  if (
+    (locks.chips && changed(CHIP_FIELDS.filter((f) => f !== "addonChips"))) ||
+    (locks.addonChips && changed(["addonChips"]))
+  ) {
+    return STATUS_RULES.chips.error;
+  }
   if ((locks.entryRules && changed(ENTRY_RULE_FIELDS)) || (locks.addonAmount && changed(["addonAmount"]))) {
     return statusAllows(STATUS_RULES.entryRules, current.status)
       ? ENTRY_RULES_AFTER_BUY_IN_ERROR
