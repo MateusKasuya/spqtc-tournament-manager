@@ -14,6 +14,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { sql, type SQL } from "drizzle-orm";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+// relativo, e não @/, porque o `pnpm db:check` roda este módulo pelo tsx
 import { MESA_REALTIME_TABLES } from "../lib/mesa-realtime";
 
 export const MIGRATIONS_FOLDER = "drizzle/migrations";
@@ -61,7 +62,7 @@ export async function checkDatabase(
 }
 
 // O db.execute do drizzle devolve a lista de linhas no postgres-js e { rows } no pglite.
-async function query<T>(db: CheckConnection, statement: SQL): Promise<T[]> {
+async function rowsOf<T>(db: CheckConnection, statement: SQL): Promise<T[]> {
   const result: unknown = await db.execute(statement);
   if (Array.isArray(result)) return result as T[];
   return (result as { rows: T[] }).rows;
@@ -70,7 +71,7 @@ async function query<T>(db: CheckConnection, statement: SQL): Promise<T[]> {
 async function collectFacts(db: CheckConnection): Promise<DbFacts> {
   return db.transaction(
     async (tx) => {
-      const run = <T>(statement: SQL) => query<T>(tx, statement);
+      const run = <T>(statement: SQL) => rowsOf<T>(tx, statement);
 
       const [{ transaction_read_only: readOnly }] = await run<{ transaction_read_only: string }>(
         sql`SHOW transaction_read_only`
@@ -158,9 +159,8 @@ function findDrift(mode: CheckMode, journal: JournalEntry[], facts: DbFacts): st
     drift.push(`migration nao aplicada: ${entry.tag}`);
   }
   const appliedCount = facts.appliedMigrations?.length ?? 0;
-  const countIsDrift =
-    appliedCount < journal.length || (mode === "manual" && appliedCount > journal.length);
-  if (countIsDrift) {
+  const ahead = isAheadOfJournal(journal, facts);
+  if (appliedCount < journal.length || (ahead && mode === "manual")) {
     drift.push(`journal tem ${journal.length} migrations e o banco tem ${appliedCount}`);
   }
 

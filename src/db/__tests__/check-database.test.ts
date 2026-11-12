@@ -16,7 +16,7 @@ const journal = readJournal(migrationsFolder);
 const last = journal[journal.length - 1];
 const MODES: CheckMode[] = ["manual", "deploy"];
 
-async function migrated(pg: PGlite) {
+async function migratedDb(pg: PGlite) {
   const db = drizzle(pg);
   await migrate(db, { migrationsFolder });
   return db;
@@ -24,7 +24,7 @@ async function migrated(pg: PGlite) {
 
 async function supabaseDb() {
   const pg = await supabaseLikePg();
-  return { pg, db: await migrated(pg) };
+  return { pg, db: await migratedDb(pg) };
 }
 
 describe("conferência do banco", () => {
@@ -114,7 +114,7 @@ describe("conferência do banco", () => {
     });
 
     it("fora do Supabase, publicação e auth.users só aparecem no relatório", async () => {
-      const db = await migrated(new PGlite());
+      const db = await migratedDb(new PGlite());
 
       const { facts, drift, report } = await checkDatabase(db, { mode, journal });
 
