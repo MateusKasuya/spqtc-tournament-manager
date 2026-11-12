@@ -31,6 +31,8 @@ export type DeployOutcome =
   | { status: "failed"; reason: string; report?: string };
 
 // Chave fixa do pg_advisory_lock: dois deploys seguidos esperam um pelo outro.
+// O valor é arbitrário (#131 + #162); só não pode mudar, senão um deploy com a chave
+// antiga e outro com a nova migrariam ao mesmo tempo.
 const LOCK_KEY = 131_162;
 
 export async function deployMigrations(
@@ -69,7 +71,7 @@ export async function deployMigrations(
     return { status: "failed", reason: `nao foi possivel pegar a trava: ${checkFailureReason(error)}` };
   }
   try {
-    return await migrateAndCheck(db, readJournal(migrationsFolder), migrationsFolder);
+    return await migrateAndCheck(db, migrationsFolder);
   } finally {
     // Um erro aqui (conexão caída) não pode esconder o resultado; a trava de
     // sessão some sozinha quando a conexão fecha.
@@ -77,39 +79,38 @@ export async function deployMigrations(
   }
 }
 
-async function migrateAndCheck(
-  db: CheckConnection,
-  journal: JournalEntry[],
-  migrationsFolder: string
-): Promise<DeployOutcome> {
-  let before: number[];
+async function migrateAndCheck(db: CheckConnection, migrationsFolder: string): Promise<DeployOutcome> {
+  // Cada etapa diz o que falhou: o log do build mostra onde parou.
+  let stage = "nao foi possivel ler o journal";
   try {
-    before = (await checkDatabase(db, { mode: "deploy", journal })).facts.appliedMigrations ?? [];
-    // O mesmo que o migrate() do drizzle-orm/postgres-js e do drizzle-orm/pglite:
-    // a pasta do repo, a tabela drizzle.__drizzle_migrations e todo o lote
-    // pendente numa transação só.
+    const journal = readJournal(migrationsFolder);
+
+    stage = "nao foi possivel conferir o banco antes de migrar";
+    const before = await appliedMigrations(db, journal);
+
+    stage = "migration falhou";
+    // O mesmo que o migrate() do drizzle-orm/postgres-js e do drizzle-orm/pglite
+    // (que só existem por driver): a pasta do repo, a tabela
+    // drizzle.__drizzle_migrations e todo o lote pendente numa transação só.
     const config = { migrationsFolder };
     await new PgDialect().migrate(readMigrationFiles(config), db._.session as PgSession, config);
-  } catch (error) {
-    return { status: "failed", reason: `migration falhou: ${checkFailureReason(error)}` };
-  }
 
-  let result;
-  try {
-    result = await checkDatabase(db, { mode: "deploy", journal });
-  } catch (error) {
-    return {
-      status: "failed",
-      reason: `nao foi possivel conferir o banco: ${checkFailureReason(error)}`,
-    };
-  }
-  const { facts, drift, report } = result;
-  if (drift.length > 0) {
-    return { status: "failed", reason: `conferencia achou drift (${drift.length})`, report };
-  }
+    stage = "nao foi possivel conferir o banco";
+    const { facts, drift, report } = await checkDatabase(db, { mode: "deploy", journal });
+    if (drift.length > 0) {
+      return { status: "failed", reason: `conferencia achou drift (${drift.length})`, report };
+    }
 
-  const was = new Set(before);
-  const now = new Set(facts.appliedMigrations ?? []);
-  const applied = journal.filter((e) => !was.has(e.when) && now.has(e.when)).map((e) => e.tag);
-  return { status: "migrated", applied, report };
+    const now = new Set(facts.appliedMigrations ?? []);
+    const applied = journal.filter((e) => !before.has(e.when) && now.has(e.when)).map((e) => e.tag);
+    return { status: "migrated", applied, report };
+  } catch (error) {
+    return { status: "failed", reason: `${stage}: ${checkFailureReason(error)}` };
+  }
+}
+
+// `when` das migrations já gravadas antes deste deploy, para o log dizer o que ele aplicou.
+async function appliedMigrations(db: CheckConnection, journal: JournalEntry[]) {
+  const { facts } = await checkDatabase(db, { mode: "deploy", journal });
+  return new Set(facts.appliedMigrations ?? []);
 }

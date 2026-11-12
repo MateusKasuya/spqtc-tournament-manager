@@ -15,13 +15,18 @@ import { deployMigrations } from "../src/db/deploy-migrations";
 async function main() {
   const { VERCEL_ENV, VERCEL_GIT_COMMIT_REF, MIGRATION_DATABASE_URL } = process.env;
   const env = { VERCEL_ENV, VERCEL_GIT_COMMIT_REF, MIGRATION_DATABASE_URL };
+  // O cliente só existe se a regra decidir migrar: fora de Production nada conecta.
   let client: postgres.Sql | undefined;
-  const outcome = await deployMigrations(env, (url) => {
-    // max: 1 — a trava é de sessão: o migrate() precisa rodar na mesma conexão
-    client = postgres(url, { prepare: false, max: 1, onnotice: () => {} });
-    return drizzle(client);
-  });
-  await client?.end();
+  let outcome;
+  try {
+    outcome = await deployMigrations(env, (url) => {
+      // max: 1 — a trava é de sessão: o migrate() precisa rodar na mesma conexão
+      client = postgres(url, { prepare: false, max: 1, onnotice: () => {} });
+      return drizzle(client);
+    });
+  } finally {
+    await client?.end();
+  }
 
   switch (outcome.status) {
     case "skipped":

@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { afterAll, describe, it, expect } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
-import { copyFileSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,6 +12,10 @@ import { supabaseLikePg } from "@/test/supabase-like";
 
 // A migration do build de Production (ADR 0004) roda sobre pglite "parecido com
 // Supabase". Os testes olham só o resultado e o estado final do banco.
+// Limitação: o pglite é uma conexão só, então aqui só se vê que a trava
+// (pg_advisory_lock) é solta no fim. Que dois deploys ao mesmo tempo esperam um
+// pelo outro fica coberto pela revisão e por um teste manual contra o Postgres
+// do Supabase local (dois `pnpm db:migrate:deploy` juntos: um aplica, o outro não).
 const migrationsFolder = fileURLToPath(new URL("../../../drizzle/migrations", import.meta.url));
 const journal = readJournal(migrationsFolder);
 const last = journal[journal.length - 1];
@@ -33,8 +37,14 @@ type ExtraMigration = { tag: string; when: number; sql: string };
 
 // Pasta de migrations temporária: as `count` primeiras do repo e mais as extras,
 // no formato que o drizzle lê (meta/_journal.json + <tag>.sql).
+const tempFolders: string[] = [];
+afterAll(() => {
+  for (const folder of tempFolders) rmSync(folder, { recursive: true, force: true });
+});
+
 function folderWith(count: number, extra: ExtraMigration[] = []) {
   const folder = mkdtempSync(path.join(tmpdir(), "migrations-"));
+  tempFolders.push(folder);
   mkdirSync(path.join(folder, "meta"));
   const real = journal.slice(0, count);
   for (const entry of real) {
