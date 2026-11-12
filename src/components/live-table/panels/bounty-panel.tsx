@@ -45,9 +45,9 @@ export function BountyPanel({ panel }: { panel: BountyPanelModel }) {
                   <span className="font-medium">{e.name}</span>
                   <span className="tabular-nums whitespace-nowrap">{formatCurrency(e.bountyCollected)}</span>
                 </div>
-                {e.champion && (
+                {e.crowned && (
                   <p className="text-xs text-muted-foreground">
-                    Campeao: inclui o proprio Bounty coletado na Coroacao
+                    Coroado: inclui o proprio Bounty coletado na Coroacao
                   </p>
                 )}
               </li>

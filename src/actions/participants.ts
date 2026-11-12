@@ -437,7 +437,7 @@ export async function undoBonusChip(participantId: number) {
   return { success: true };
 }
 
-// Pausa o timer quando a eliminação final coroa o campeão; fica na action
+// Pausa o timer quando a eliminação final coroa o último Em jogo; fica na action
 // porque o relógio do torneio não pertence ao Ledger de Knockout. Mesma
 // transição Pausar do núcleo do Relógio, aplicada dentro da tx do ledger —
 // já protegida pelo lock do torneio, sem update condicional aqui.

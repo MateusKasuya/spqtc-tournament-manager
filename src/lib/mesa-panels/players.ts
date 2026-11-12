@@ -1,14 +1,15 @@
 import { displayName } from "@/lib/display-name";
-import { isBountyBuilder } from "@/lib/knockout-ledger";
+import { isBountyBuilder, isCrowned } from "@/lib/knockout-ledger";
 import { countWithBuyIn, isPlaying } from "./playing";
 import { compareFinishPosition } from "./finish-position";
 import { deriveMoneyLine, type MoneyLine } from "./money-line";
 import type { MesaParticipant } from "@/db/queries/mesa";
 import type { CardFace, MesaPanelsInput } from "./types";
 
-// Painel Jogadores. Quem é quem sai só do status do Participante (CONTEXT.md),
-// nunca da Posição final: Em jogo `playing`, Aguardando buy-in `registered`,
-// Eliminação `eliminated`, campeão `finished`; com buy-in é o buy-in confirmado.
+// Painel Jogadores. Quem é quem sai do status do Participante (CONTEXT.md), não
+// da Posição final: Em jogo `playing`, Aguardando buy-in `registered`,
+// Eliminação `eliminated`, Coroado `finished`; com buy-in é o buy-in confirmado.
+// A exceção é o Campeão, que sai da Posição final depois da Coroação.
 
 export interface PlayersCounts {
   playing: number;
@@ -71,14 +72,21 @@ function moneyLineSupportLine(moneyLine: MoneyLine | null): string | null {
   return null;
 }
 
+// Um acordo pode dar a posição 1 a outro que não o Coroado, mesmo a quem já caiu.
+function findChampion(participants: MesaParticipant[]): MesaParticipant | undefined {
+  const crowned = participants.find(isCrowned);
+  if (!crowned) return undefined;
+  // Sem ninguém na posição 1 o dado está inconsistente; o Coroado é o palpite.
+  return participants.find((p) => p.finishPosition === 1) ?? crowned;
+}
+
 export function derivePlayers({ snapshot }: MesaPanelsInput): PlayersSlice {
   const { participants, tournament } = snapshot;
   const withBounty = isBountyBuilder(tournament);
   const playing = participants.filter(isPlaying);
   const eliminated = participants.filter((p) => p.status === "eliminated");
   const awaiting = participants.filter((p) => p.status === "registered");
-  // `finished` do Participante, que não é o Status do torneio Encerrado.
-  const champion = participants.find((p) => p.status === "finished");
+  const champion = findChampion(participants);
   const counts: PlayersCounts = {
     playing: playing.length,
     withBuyIn: countWithBuyIn(participants),

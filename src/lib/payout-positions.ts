@@ -1,4 +1,4 @@
-import { renumberedFinalPositions, type LedgerParticipant } from "@/lib/knockout-ledger";
+import { isCrowned, renumberedFinalPositions, type LedgerParticipant } from "@/lib/knockout-ledger";
 
 export type PositionedParticipant = Pick<
   LedgerParticipant,
@@ -7,7 +7,7 @@ export type PositionedParticipant = Pick<
 
 // Posição final por participantId depois de uma distribuição. Quem caiu e está
 // fora da lista pula as posições do acordo, para ninguém repetir posição; o
-// campeão fora da lista também, se o acordo deu o 1º a outro.
+// Coroado fora da lista também, se o acordo deu o 1º a outro.
 export function finalPositionsAfterPayout(
   participants: PositionedParticipant[],
   payouts: { playerId: number; position: number }[]
@@ -16,13 +16,13 @@ export function finalPositionsAfterPayout(
   const dealPositions = new Set(dealPositionByPlayer.values());
   const positionById = new Map<number, number | null>();
   const fallenOutsideDeal = new Set<number>();
-  let displacedChampion: number | null = null;
+  let displacedCrowned: number | null = null;
 
   for (const p of participants) {
     const dealPosition = dealPositionByPlayer.get(p.playerId);
     if (dealPosition !== undefined) positionById.set(p.id, dealPosition);
-    else if (p.status === "finished" && dealPositions.has(1)) displacedChampion = p.id;
-    else if (p.status === "finished") positionById.set(p.id, 1);
+    else if (isCrowned(p) && dealPositions.has(1)) displacedCrowned = p.id;
+    else if (isCrowned(p)) positionById.set(p.id, 1);
     else if (p.status === "eliminated") fallenOutsideDeal.add(p.id);
     else positionById.set(p.id, null);
   }
@@ -41,7 +41,7 @@ export function finalPositionsAfterPayout(
     positionById.set(id, position);
     lastAssigned = position;
   };
-  if (displacedChampion !== null) assign(displacedChampion, 1);
+  if (displacedCrowned !== null) assign(displacedCrowned, 1);
   for (const [id, eliminationPosition] of eliminationPositions) {
     if (fallenOutsideDeal.has(id)) assign(id, eliminationPosition);
   }

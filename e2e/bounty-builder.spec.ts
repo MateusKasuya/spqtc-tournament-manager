@@ -23,12 +23,12 @@ const BOUNTY_PERCENTAGE = 50;
 
 // O que a Mesa ao vivo deve mostrar de Bounty numa etapa, em reais.
 type BountyState = {
-  // Bounty de cada Participante Em jogo; quem não está aqui saiu (ou é o campeão).
+  // Bounty de cada Participante Em jogo; quem não está aqui saiu (ou é o Coroado).
   inPlay: Record<string, number>;
   // Bounty coletado; quem não está aqui não coletou nada.
   collected: Record<string, number>;
   bountyAllocated: number;
-  champion?: string;
+  crowned?: string;
 };
 
 test("admin roda um Bounty Builder: Eliminacao, Rebuy, Desfazer e Coroacao movem o Bounty", async ({ page }) => {
@@ -105,7 +105,7 @@ test("admin roda um Bounty Builder: Eliminacao, Rebuy, Desfazer e Coroacao movem
     await expectBounty(page, participants, afterRebuy);
   });
 
-  await test.step("a Coroacao da ao campeao o proprio Bounty e zera o Bounty em jogo", async () => {
+  await test.step("a Coroacao da ao Coroado o proprio Bounty e zera o Bounty em jogo", async () => {
     // Bruno derruba Carla (R$ 50) e vai a R$ 100; Ana derruba Bruno (R$ 100),
     // vai a R$ 125 e, sozinha em jogo, coleta o próprio Bounty na Coroação.
     await eliminate(page, carla, { eliminators: [bruno] });
@@ -118,13 +118,13 @@ test("admin roda um Bounty Builder: Eliminacao, Rebuy, Desfazer e Coroacao movem
       // Ana: 25 (Diego) + 50 (Bruno) + 125 (o próprio Bounty).
       collected: { [ana]: 200, [bruno]: 50 },
       bountyAllocated: 250,
-      champion: ana,
+      crowned: ana,
     });
   });
 });
 
 // Coluna Status das Ações rápidas: "Jogando" (Em jogo), a Posição final de quem
-// caiu ou o troféu do campeão.
+// caiu ou o troféu do Coroado.
 async function expectStatus(page: Page, name: string, status: string) {
   await expect(mesaRow(page, name).getByText(status, { exact: true })).toBeVisible(ACTION_TIMEOUT);
 }
@@ -160,14 +160,14 @@ async function expectBounty(page: Page, participants: string[], state: BountySta
   await expectDrawerList(drawer, "Bounty de cada Participante em jogo", state.inPlay, "Ninguem em jogo.");
   await expectDrawerList(drawer, "Bounty coletado", state.collected, "Ninguem coletou Bounty ainda.");
   // Relativo: o `has` do filtro procura a partir de cada item, não da gaveta.
-  const championNote = page.getByText("Campeao: inclui o proprio Bounty coletado na Coroacao", { exact: true });
-  if (state.champion) {
-    await expect(drawer.locator(championNote)).toHaveCount(1);
+  const crownedNote = page.getByText("Coroado: inclui o proprio Bounty coletado na Coroacao", { exact: true });
+  if (state.crowned) {
+    await expect(drawer.locator(crownedNote)).toHaveCount(1);
     await expect(
-      drawer.getByRole("list", { name: "Bounty coletado" }).getByRole("listitem").filter({ has: championNote })
-    ).toHaveText(new RegExp(`^${escapeRegExp(state.champion)}`));
+      drawer.getByRole("list", { name: "Bounty coletado" }).getByRole("listitem").filter({ has: crownedNote })
+    ).toHaveText(new RegExp(`^${escapeRegExp(state.crowned)}`));
   } else {
-    await expect(drawer.locator(championNote)).toBeHidden();
+    await expect(drawer.locator(crownedNote)).toBeHidden();
   }
 
   for (const [label, amount] of [

@@ -11,6 +11,13 @@ export type TournamentType = "normal" | "bounty_builder";
 export type ParticipantStatus = "registered" | "playing" | "eliminated" | "finished";
 export type LedgerRowType = "bounty_earned" | "rebuy";
 
+// Coroado (CONTEXT.md) pelo status do Participante: `finished` é quem a
+// Coroação deixou em jogo, não o Status do torneio Encerrado. O Campeão sai da
+// Posição final, não daqui.
+export function isCrowned(participant: { status: ParticipantStatus }): boolean {
+  return participant.status === "finished";
+}
+
 export interface LedgerRules {
   tournamentType: TournamentType;
   buyInAmount: number;
@@ -148,7 +155,7 @@ function uniqueIds(ids: number[]) {
 // Posição final de quem caiu: única e sem buracos, da última Eliminação
 // (logo abaixo de quem ainda joga) para a primeira. Preserva a ordem gravada:
 // quem acabou de cair (sem posição) é o melhor dos que caíram, e posições
-// repetidas por dados antigos se desempatam por quem caiu depois. O campeão é 1
+// repetidas por dados antigos se desempatam por quem caiu depois. O Coroado é 1
 // e entra na base, então o primeiro colocado abaixo dele é 2.
 export function renumberedFinalPositions(
   participants: Pick<LedgerParticipant, "id" | "status" | "finishPosition" | "eliminatedAt">[]
@@ -326,16 +333,16 @@ class UndoBuilder {
     this.rules = snapshot.rules;
   }
 
-  // Desfazer no campeão só descoroa. Ao desfazer a eliminação de uma Vítima
-  // com campeão coroado, descoroa antes de reverter a Vítima.
+  // Desfazer no Coroado só descoroa. Ao desfazer a eliminação de uma Vítima
+  // com alguém coroado, descoroa antes de reverter a Vítima.
   undoElimination(victimId: number) {
     const victim = this.state.byId(victimId);
-    if (victim.status === "finished") {
+    if (isCrowned(victim)) {
       this.uncrown(victim);
       return;
     }
-    const champion = this.state.all().find((p) => p.status === "finished");
-    if (champion) this.uncrown(champion);
+    const crowned = this.state.all().find(isCrowned);
+    if (crowned) this.uncrown(crowned);
 
     const latest = this.groupsOf(victim).at(-1);
     if (latest?.kind === "elimination") this.revertBounty(victim, latest);
@@ -405,11 +412,11 @@ class UndoBuilder {
     this.deleteIds.push(...group.bountyRows.map((r) => r.id));
   }
 
-  private uncrown(champion: LedgerParticipant) {
-    const latest = this.groupsOf(champion).at(-1);
-    if (latest?.kind === "coronation") this.revertBounty(champion, latest);
-    champion.status = "playing";
-    champion.finishPosition = null;
+  private uncrown(crowned: LedgerParticipant) {
+    const latest = this.groupsOf(crowned).at(-1);
+    if (latest?.kind === "coronation") this.revertBounty(crowned, latest);
+    crowned.status = "playing";
+    crowned.finishPosition = null;
     this.uncrowned = true;
   }
 }
@@ -449,20 +456,20 @@ export function planKnockout(snapshot: LedgerSnapshot, event: KnockoutEvent): Kn
     victim.eliminatedAt = snapshot.now;
 
     if (playingBefore.length === 2) {
-      const champion = playingBefore.find((p) => p.id !== victim.id)!;
-      champion.status = "finished";
-      champion.finishPosition = 1;
+      const lastPlaying = playingBefore.find((p) => p.id !== victim.id)!;
+      lastPlaying.status = "finished";
+      lastPlaying.finishPosition = 1;
       crowned = true;
       if (isBountyBuilder(rules)) {
         inserts.push({
-          playerId: champion.playerId,
+          playerId: lastPlaying.playerId,
           type: "bounty_earned",
-          amount: champion.currentBounty,
+          amount: lastPlaying.currentBounty,
           bountyChange: 0,
-          relatedParticipantId: champion.id,
+          relatedParticipantId: lastPlaying.id,
         });
-        champion.bountiesCollected += champion.currentBounty;
-        champion.currentBounty = 0;
+        lastPlaying.bountiesCollected += lastPlaying.currentBounty;
+        lastPlaying.currentBounty = 0;
       }
     }
   } else {

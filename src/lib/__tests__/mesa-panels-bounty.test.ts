@@ -61,9 +61,9 @@ describe("painel Bounty em jogo", () => {
     expect(panel.inPlay.find((e) => e.participantId === impar.id)?.soloKnockout).toEqual({ cash: 1250, bounty: 1251 });
   });
 
-  it("lista o Bounty coletado do maior para o menor e sinaliza o do campeão", () => {
-    const campeao = makeParticipant({
-      name: "Campeao",
+  it("lista o Bounty coletado do maior para o menor e sinaliza o do Coroado", () => {
+    const crowned = makeParticipant({
+      name: "Coroado",
       status: "finished",
       finishPosition: 1,
       currentBounty: 0,
@@ -73,17 +73,29 @@ describe("painel Bounty em jogo", () => {
     const terceiro = makeParticipant({ name: "Terceiro", status: "eliminated", finishPosition: 3, bountiesCollected: 5000 });
     const semKnockout = makeParticipant({ name: "Zerado", status: "eliminated", finishPosition: 4, bountiesCollected: 0 });
 
-    const { panel } = bountyOf([vice, campeao, terceiro, semKnockout]);
+    const { panel } = bountyOf([vice, crowned, terceiro, semKnockout]);
 
     expect(panel.collected).toEqual([
-      { participantId: campeao.id, name: "Campeao", bountyCollected: 9000, champion: true },
-      { participantId: terceiro.id, name: "Terceiro", bountyCollected: 5000, champion: false },
-      { participantId: vice.id, name: "Vice", bountyCollected: 3000, champion: false },
+      { participantId: crowned.id, name: "Coroado", bountyCollected: 9000, crowned: true },
+      { participantId: terceiro.id, name: "Terceiro", bountyCollected: 5000, crowned: false },
+      { participantId: vice.id, name: "Vice", bountyCollected: 3000, crowned: false },
     ]);
     expect(panel.collectedTotal).toBe(17000);
     // Depois da Coroação não há Bounty em jogo.
     expect(panel.inPlay).toEqual([]);
     expect(panel.bountyInPlay).toBe(0);
+  });
+
+  it("acordo que deu o 1º a outro não tira a sinalização do Coroado", () => {
+    const dealWinner = makeParticipant({ name: "Ana", status: "eliminated", finishPosition: 1, bountiesCollected: 2000 });
+    const crownedOutsideFirst = makeParticipant({ name: "Bia", status: "finished", finishPosition: 2, currentBounty: 0, bountiesCollected: 7000 });
+
+    const { panel } = bountyOf([dealWinner, crownedOutsideFirst]);
+
+    expect(panel.collected.map((e) => [e.name, e.crowned])).toEqual([
+      ["Bia", true],
+      ["Ana", false],
+    ]);
   });
 
   it("confere o Bounty armado com o Bounty em jogo mais os coletados, o mesmo do Prize pool", () => {
