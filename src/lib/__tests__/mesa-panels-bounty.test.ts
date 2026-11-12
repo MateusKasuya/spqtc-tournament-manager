@@ -62,7 +62,7 @@ describe("painel Bounty em jogo", () => {
   });
 
   it("lista o Bounty coletado do maior para o menor e sinaliza o do Coroado", () => {
-    const campeao = makeParticipant({
+    const crowned = makeParticipant({
       name: "Campeao",
       status: "finished",
       finishPosition: 1,
@@ -73,10 +73,10 @@ describe("painel Bounty em jogo", () => {
     const terceiro = makeParticipant({ name: "Terceiro", status: "eliminated", finishPosition: 3, bountiesCollected: 5000 });
     const semKnockout = makeParticipant({ name: "Zerado", status: "eliminated", finishPosition: 4, bountiesCollected: 0 });
 
-    const { panel } = bountyOf([vice, campeao, terceiro, semKnockout]);
+    const { panel } = bountyOf([vice, crowned, terceiro, semKnockout]);
 
     expect(panel.collected).toEqual([
-      { participantId: campeao.id, name: "Campeao", bountyCollected: 9000, crowned: true },
+      { participantId: crowned.id, name: "Campeao", bountyCollected: 9000, crowned: true },
       { participantId: terceiro.id, name: "Terceiro", bountyCollected: 5000, crowned: false },
       { participantId: vice.id, name: "Vice", bountyCollected: 3000, crowned: false },
     ]);
@@ -87,10 +87,10 @@ describe("painel Bounty em jogo", () => {
   });
 
   it("acordo que deu o 1º a outro não tira a sinalização do Coroado", () => {
-    const primeiroNoAcordo = makeParticipant({ name: "Ana", status: "eliminated", finishPosition: 1, bountiesCollected: 2000 });
-    const coroado = makeParticipant({ name: "Bia", status: "finished", finishPosition: 2, currentBounty: 0, bountiesCollected: 7000 });
+    const dealWinner = makeParticipant({ name: "Ana", status: "eliminated", finishPosition: 1, bountiesCollected: 2000 });
+    const crownedOutsideFirst = makeParticipant({ name: "Bia", status: "finished", finishPosition: 2, currentBounty: 0, bountiesCollected: 7000 });
 
-    const { panel } = bountyOf([primeiroNoAcordo, coroado]);
+    const { panel } = bountyOf([dealWinner, crownedOutsideFirst]);
 
     expect(panel.collected.map((e) => [e.name, e.crowned])).toEqual([
       ["Bia", true],

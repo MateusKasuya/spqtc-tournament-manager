@@ -8,13 +8,13 @@ function part(id: number, status: PositionedParticipant["status"], finishPositio
 }
 
 describe("finalPositionsAfterPayout", () => {
-  it("campeao coroado fora da lista mantem o 1o", () => {
+  it("Coroado fora da lista mantem o 1o", () => {
     const parts = [part(1, "finished", 1), part(2, "eliminated", 2, at(5)), part(3, "eliminated", 3, at(1))];
     const positions = finalPositionsAfterPayout(parts, [{ playerId: 20, position: 2 }]);
     expect(positions).toEqual(new Map([[1, 1], [2, 2], [3, 3]] as [number, number | null][]));
   });
 
-  it("campeao coroado fora da lista, com o 1o do acordo para outro, recebe a posicao livre seguinte", () => {
+  it("Coroado fora da lista, com o 1o do acordo para outro, recebe a posicao livre seguinte", () => {
     const parts = [part(1, "finished", 1), part(2, "eliminated", 2, at(5)), part(3, "eliminated", 3, at(1))];
     const positions = finalPositionsAfterPayout(parts, [{ playerId: 20, position: 1 }]);
     expect(positions).toEqual(new Map([[1, 2], [2, 1], [3, 3]] as [number, number | null][]));
@@ -22,13 +22,14 @@ describe("finalPositionsAfterPayout", () => {
 
   it("com 6 jogadores: acordo da 1a, 3a e 5a; Coroado e eliminados fora do acordo ficam com as livres na ordem das Eliminacoes", () => {
     // Redistribuicao no Encerrado. Ordem das Eliminacoes: 6, 5, 4, 3 e, na Coroacao, 2.
+    // As posicoes gravadas, de um acordo anterior, nao seguem essa ordem: vale o carimbo.
     const parts = [
       part(1, "finished", 1),
-      part(2, "eliminated", 2, at(50)),
-      part(3, "eliminated", 3, at(40)),
-      part(4, "eliminated", 4, at(30)),
-      part(5, "eliminated", 5, at(20)),
-      part(6, "eliminated", 6, at(10)),
+      part(2, "eliminated", 5, at(50)),
+      part(3, "eliminated", 2, at(40)),
+      part(4, "eliminated", 6, at(30)),
+      part(5, "eliminated", 3, at(20)),
+      part(6, "eliminated", 4, at(10)),
     ];
     const positions = finalPositionsAfterPayout(parts, [
       { playerId: 20, position: 1 },

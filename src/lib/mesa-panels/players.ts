@@ -6,9 +6,10 @@ import { deriveMoneyLine, type MoneyLine } from "./money-line";
 import type { MesaParticipant } from "@/db/queries/mesa";
 import type { CardFace, MesaPanelsInput } from "./types";
 
-// Painel Jogadores. Quem é quem sai só do status do Participante (CONTEXT.md),
-// nunca da Posição final: Em jogo `playing`, Aguardando buy-in `registered`,
-// Eliminação `eliminated`, campeão `finished`; com buy-in é o buy-in confirmado.
+// Painel Jogadores. Quem é quem sai do status do Participante (CONTEXT.md), não
+// da Posição final: Em jogo `playing`, Aguardando buy-in `registered`,
+// Eliminação `eliminated`, Coroado `finished`; com buy-in é o buy-in confirmado.
+// A exceção é o Campeão, que sai da Posição final depois da Coroação.
 
 export interface PlayersCounts {
   playing: number;
@@ -77,6 +78,7 @@ function moneyLineSupportLine(moneyLine: MoneyLine | null): string | null {
 function findChampion(participants: MesaParticipant[]): MesaParticipant | undefined {
   const crowned = participants.find((p) => p.status === "finished");
   if (!crowned) return undefined;
+  // Sem ninguém na posição 1 o dado está inconsistente; o Coroado é o palpite.
   return participants.find((p) => p.finishPosition === 1) ?? crowned;
 }
 
