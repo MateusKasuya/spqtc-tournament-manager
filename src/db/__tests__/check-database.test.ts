@@ -3,7 +3,9 @@ import { PGlite } from "@electric-sql/pglite";
 import { drizzle } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import { fileURLToPath } from "node:url";
-import { checkDatabase, readJournal, type CheckMode } from "@/db/check-database";
+import {
+  checkDatabase, checkFailureReason, readJournal, type CheckMode,
+} from "@/db/check-database";
 import { supabaseLikePg } from "@/test/supabase-like";
 
 // A conferência do banco roda sobre pglite "parecido com Supabase", com as
@@ -137,6 +139,28 @@ describe("conferência do banco", () => {
         `Migrations: journal ${journal.length}, tabela drizzle.__drizzle_migrations ausente`
       );
     });
+  });
+
+  it("query que falha dentro da conferência expõe o motivo original", async () => {
+    // anon não tem USAGE no schema drizzle: a consulta à tabela de controle falha
+    // no meio da conferência, e o drizzle embrulha o erro num DrizzleQueryError.
+    const { pg, db } = await supabaseDb();
+    await pg.exec(`SET ROLE anon`);
+
+    const error: unknown = await checkDatabase(db, { mode: "manual", journal }).then(
+      () => { throw new Error("a conferência deveria ter falhado"); },
+      (e: unknown) => e
+    );
+
+    expect((error as Error).message).toMatch(/^Failed query: /);
+    expect(checkFailureReason(error)).toBe("permission denied for schema drizzle");
+  });
+
+  it("motivo de erro sem cause é a própria message", () => {
+    expect(checkFailureReason(new Error("connect ECONNREFUSED 127.0.0.1:1"))).toBe(
+      "connect ECONNREFUSED 127.0.0.1:1"
+    );
+    expect(checkFailureReason("texto")).toBe("texto");
   });
 
   describe("banco com uma migration a mais que o journal (Redeploy de commit antigo)", () => {

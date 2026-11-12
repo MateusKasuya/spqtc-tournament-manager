@@ -9,7 +9,7 @@
 import { config } from "dotenv";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
-import { checkDatabase, readJournal } from "../src/db/check-database";
+import { checkDatabase, checkFailureReason, readJournal } from "../src/db/check-database";
 
 config({ path: ".env.local", quiet: true });
 
@@ -28,7 +28,7 @@ async function main() {
     console.log(report);
     process.exitCode = drift.length === 0 ? 0 : 1;
   } catch (error) {
-    console.error("Nao foi possivel checar o banco:", error instanceof Error ? error.message : error);
+    console.error("Nao foi possivel checar o banco:", checkFailureReason(error));
     process.exitCode = 2;
   } finally {
     await client.end();

@@ -61,6 +61,15 @@ export async function checkDatabase(
   return { facts, drift, report: formatReport(mode, journal, facts, drift) };
 }
 
+// Motivo de uma conferência que não rodou (exit 2). O drizzle embrulha toda falha
+// de query num DrizzleQueryError cuja message é só "Failed query: <SQL>"; o motivo
+// real (permission denied, timeout, conexão caída) fica no `cause`.
+export function checkFailureReason(error: unknown): string {
+  let current = error;
+  while (current instanceof Error && current.cause instanceof Error) current = current.cause;
+  return current instanceof Error ? current.message : String(current);
+}
+
 // O db.execute do drizzle devolve a lista de linhas no postgres-js e { rows } no pglite.
 async function rowsOf<T>(db: CheckConnection, statement: SQL): Promise<T[]> {
   const result: unknown = await db.execute(statement);
