@@ -177,9 +177,10 @@ export function checkKnockout(snapshot: LedgerSnapshot, event: KnockoutEvent): {
   if (event.kind === "rebuy") {
     if (!hasConfirmedBuyIn(victim)) return { error: "Jogador ainda nao pagou buy-in" };
     if (victim.status !== "playing") return { error: "Jogador nao esta em jogo" };
-    if (!allowsRebuy(rules)) return { error: "Torneio nao permite rebuy" };
     if (!canRebuy(victim, rules, event.count)) {
-      return { error: `Limite de rebuys atingido (max: ${rebuyLimit(rules)})` };
+      return allowsRebuy(rules)
+        ? { error: `Limite de rebuys atingido (max: ${rebuyLimit(rules)})` }
+        : { error: "Torneio nao permite rebuy" };
     }
   } else if (victim.status !== "playing") {
     return { error: "Jogador nao esta em jogo" };

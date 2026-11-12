@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { allowsAddon, allowsBonusChip, canRebuy, hasConfirmedBuyIn, rebuyLimit, totalPaid } from "@/lib/tournament-entries";
+import { allowsAddon, allowsBonusChip, canRebuy, entryTotalPaid, hasConfirmedBuyIn, rebuyLimit, totalPaid } from "@/lib/tournament-entries";
 
 const tournament = { buyInAmount: 5000, rebuyAmount: 3000, addonAmount: 2000 };
 
@@ -63,5 +63,17 @@ describe("hasConfirmedBuyIn", () => {
   it("segue o buy-in confirmado do Participante", () => {
     expect(hasConfirmedBuyIn({ buyInPaid: true })).toBe(true);
     expect(hasConfirmedBuyIn({ buyInPaid: false })).toBe(false);
+  });
+});
+
+describe("entryTotalPaid", () => {
+  it("na linha do historico, buy-in nao confirmado nao soma, mas Rebuys e add-ons somam", () => {
+    const entry = { ...tournament, buyInPaid: false, rebuyCount: 2, addonCount: 1 };
+    expect(entryTotalPaid(entry)).toBe(8000);
+  });
+
+  it("na linha do historico, buy-in confirmado soma junto com Rebuys e add-ons", () => {
+    const entry = { ...tournament, buyInPaid: true, rebuyCount: 2, addonCount: 1 };
+    expect(entryTotalPaid(entry)).toBe(13000);
   });
 });

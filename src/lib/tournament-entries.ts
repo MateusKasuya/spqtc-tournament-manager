@@ -52,3 +52,12 @@ export function totalPaid(
     participant.addonCount * tournament.addonAmount
   );
 }
+
+// Total pago numa linha que traz, junta, a entrada do Participante e os valores do
+// torneio (ex.: histórico da temporada do jogador).
+export function entryTotalPaid(
+  entry: Pick<Participant, "buyInPaid" | "rebuyCount" | "addonCount"> &
+    Pick<Tournament, "buyInAmount" | "rebuyAmount" | "addonAmount">
+): number {
+  return totalPaid(entry, entry);
+}
