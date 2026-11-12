@@ -134,6 +134,26 @@ describe("painel Jogadores: campeão e Aguardando buy-in", () => {
     expect(panel.counts.playing).toBe(0);
   });
 
+  it("depois de um acordo que deu o 1º a outro, o campeão é o 1º do acordo, não o Coroado", () => {
+    const panel = playersPanel([
+      makeParticipant({ name: "Ana", status: "eliminated", finishPosition: 1 }),
+      makeParticipant({ name: "Bia", status: "finished", finishPosition: 2 }),
+      makeParticipant({ name: "Caio", status: "eliminated", finishPosition: 3 }),
+    ]);
+
+    expect(panel.champion).toEqual(expect.objectContaining({ name: "Ana" }));
+  });
+
+  it("acordo com o torneio rodando não mostra campeão antes da Coroação", () => {
+    const panel = playersPanel([
+      makeParticipant({ name: "Ana", finishPosition: 1 }),
+      makeParticipant({ name: "Bia", finishPosition: 2 }),
+      makeParticipant({ name: "Caio", status: "eliminated", finishPosition: 3 }),
+    ]);
+
+    expect(panel.champion).toBeNull();
+  });
+
   it("o destaque some quando a Coroação é desfeita e o Participante volta a ficar Em jogo", () => {
     const ana = makeParticipant({ name: "Ana", status: "finished", finishPosition: 1 });
     const bia = makeParticipant({ name: "Bia", status: "eliminated", finishPosition: 2 });

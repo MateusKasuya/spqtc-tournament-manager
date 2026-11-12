@@ -19,11 +19,11 @@ Participante inscrito cujo buy-in ainda não foi confirmado.
 _Avoid_: pendente, registrado
 
 **Em jogo**:
-Participante com buy-in confirmado que ainda disputa o torneio: nem teve Eliminação, nem foi coroado campeão.
+Participante com buy-in confirmado que ainda disputa o torneio: nem teve Eliminação, nem é o Coroado.
 _Avoid_: ativo, vivo, jogando
 
 **Posição final**:
-Colocação do Participante no torneio: 1 para o campeão; para quem caiu, a ordem inversa das Eliminações, sem repetir e sem buracos (o último a cair fica logo abaixo de quem ainda está em jogo). É renumerada quando um Desfazer ou um buy-in tardio muda o número de Participantes. Um acordo pode fixá-la para quem ainda está em jogo; quem sai do acordo ao refazer a distribuição volta à posição que a mesa dá (sem posição se ainda está em jogo, a da Eliminação se caiu), pulando as posições do acordo. O campeão fora do acordo mantém o 1º, a não ser que o acordo dê o 1º a outro: aí ele também pula as posições do acordo e fica com a primeira livre.
+Colocação do Participante no torneio: 1 para o Coroado, a não ser que um acordo a dê a outro; para quem caiu, a ordem inversa das Eliminações, sem repetir e sem buracos (o último a cair fica logo abaixo de quem ainda está em jogo). É renumerada quando um Desfazer ou um buy-in tardio muda o número de Participantes. Um acordo pode fixá-la para quem ainda está em jogo; quem sai do acordo ao refazer a distribuição volta à posição que a mesa dá (sem posição se ainda está em jogo, a da Eliminação se caiu), pulando as posições do acordo. O Coroado fora do acordo mantém o 1º, a não ser que o acordo dê o 1º a outro: aí ele também pula as posições do acordo e fica com a primeira livre.
 _Avoid_: colocação, finish position
 
 ### Torneio
@@ -141,7 +141,11 @@ _Avoid_: bounty pool
 Dinheiro que um participante já ganhou como Eliminador ao longo do torneio.
 
 **Coroação**:
-Knockout final que deixa um único participante em jogo; ele se torna campeão e coleta o próprio Bounty.
+Knockout final que deixa um único participante em jogo; ele é o **Coroado** e coleta o próprio Bounty.
+
+**Campeão**:
+Participante com a Posição final 1, e só depois da Coroação. Sem acordo, é o Coroado. Se um acordo dá o 1º a outro, o Campeão é quem recebeu o 1º, mesmo que já tenha caído; o Coroado continua dono do próprio Bounty coletado na Coroação.
+_Avoid_: vencedor
 
 **Ledger de Knockout**:
 Registro de todos os Knockouts de um torneio e de seus efeitos sobre Bounty e Bounty coletado. É a fonte da contagem de Knockouts por Eliminador e do Desfazer.

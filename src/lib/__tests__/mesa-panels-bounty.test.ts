@@ -61,7 +61,7 @@ describe("painel Bounty em jogo", () => {
     expect(panel.inPlay.find((e) => e.participantId === impar.id)?.soloKnockout).toEqual({ cash: 1250, bounty: 1251 });
   });
 
-  it("lista o Bounty coletado do maior para o menor e sinaliza o do campeão", () => {
+  it("lista o Bounty coletado do maior para o menor e sinaliza o do Coroado", () => {
     const campeao = makeParticipant({
       name: "Campeao",
       status: "finished",
@@ -76,14 +76,26 @@ describe("painel Bounty em jogo", () => {
     const { panel } = bountyOf([vice, campeao, terceiro, semKnockout]);
 
     expect(panel.collected).toEqual([
-      { participantId: campeao.id, name: "Campeao", bountyCollected: 9000, champion: true },
-      { participantId: terceiro.id, name: "Terceiro", bountyCollected: 5000, champion: false },
-      { participantId: vice.id, name: "Vice", bountyCollected: 3000, champion: false },
+      { participantId: campeao.id, name: "Campeao", bountyCollected: 9000, crowned: true },
+      { participantId: terceiro.id, name: "Terceiro", bountyCollected: 5000, crowned: false },
+      { participantId: vice.id, name: "Vice", bountyCollected: 3000, crowned: false },
     ]);
     expect(panel.collectedTotal).toBe(17000);
     // Depois da Coroação não há Bounty em jogo.
     expect(panel.inPlay).toEqual([]);
     expect(panel.bountyInPlay).toBe(0);
+  });
+
+  it("acordo que deu o 1º a outro não tira a sinalização do Coroado", () => {
+    const primeiroNoAcordo = makeParticipant({ name: "Ana", status: "eliminated", finishPosition: 1, bountiesCollected: 2000 });
+    const coroado = makeParticipant({ name: "Bia", status: "finished", finishPosition: 2, currentBounty: 0, bountiesCollected: 7000 });
+
+    const { panel } = bountyOf([primeiroNoAcordo, coroado]);
+
+    expect(panel.collected.map((e) => [e.name, e.crowned])).toEqual([
+      ["Bia", true],
+      ["Ana", false],
+    ]);
   });
 
   it("confere o Bounty armado com o Bounty em jogo mais os coletados, o mesmo do Prize pool", () => {

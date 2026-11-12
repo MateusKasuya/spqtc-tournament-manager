@@ -7,7 +7,7 @@ export type PositionedParticipant = Pick<
 
 // Posição final por participantId depois de uma distribuição. Quem caiu e está
 // fora da lista pula as posições do acordo, para ninguém repetir posição; o
-// campeão fora da lista também, se o acordo deu o 1º a outro.
+// Coroado fora da lista também, se o acordo deu o 1º a outro.
 export function finalPositionsAfterPayout(
   participants: PositionedParticipant[],
   payouts: { playerId: number; position: number }[]

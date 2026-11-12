@@ -71,14 +71,22 @@ function moneyLineSupportLine(moneyLine: MoneyLine | null): string | null {
   return null;
 }
 
+// Só há Campeão depois da Coroação (`finished` do Participante, que não é o
+// Status do torneio Encerrado). É quem tem a posição 1: um acordo pode dá-la a
+// outro que não o Coroado, mesmo a quem já caiu.
+function findChampion(participants: MesaParticipant[]): MesaParticipant | undefined {
+  const crowned = participants.find((p) => p.status === "finished");
+  if (!crowned) return undefined;
+  return participants.find((p) => p.finishPosition === 1) ?? crowned;
+}
+
 export function derivePlayers({ snapshot }: MesaPanelsInput): PlayersSlice {
   const { participants, tournament } = snapshot;
   const withBounty = isBountyBuilder(tournament);
   const playing = participants.filter(isPlaying);
   const eliminated = participants.filter((p) => p.status === "eliminated");
   const awaiting = participants.filter((p) => p.status === "registered");
-  // `finished` do Participante, que não é o Status do torneio Encerrado.
-  const champion = participants.find((p) => p.status === "finished");
+  const champion = findChampion(participants);
   const counts: PlayersCounts = {
     playing: playing.length,
     withBuyIn: countWithBuyIn(participants),

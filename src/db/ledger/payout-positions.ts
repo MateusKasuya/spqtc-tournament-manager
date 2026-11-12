@@ -6,8 +6,10 @@ import { finalPositionsAfterPayout } from "@/lib/payout-positions";
 import type { LedgerExecutor } from "@/db/ledger/knockout-ledger";
 import { writeRankingPoints, type ScoredParticipant } from "@/db/ledger/ranking-points";
 
-// Grava só as posições que mudaram; em torneio Encerrado, recalcula os pontos
-// de quem mudou. Devolve se alguma posição ou ponto do Ranking mudou.
+// Grava só as posições que mudaram. Só em torneio Encerrado recalcula pontos de
+// Ranking, e só de quem mudou de posição. `rankingChanged` diz se houve esse
+// recálculo, isto é, se o Ranking precisa ser revalidado; com o torneio
+// rodando é sempre false, mesmo que posições tenham mudado.
 export async function applyPayoutPositions(
   tx: LedgerExecutor,
   tournament: Pick<typeof tournaments.$inferSelect, "id" | "tournamentType" | "status">,
