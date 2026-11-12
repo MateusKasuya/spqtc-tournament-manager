@@ -3,6 +3,7 @@
 // Sem banco: a página chama no servidor, a mesa ao vivo chama no cliente.
 
 import { isBountyBuilder, type LedgerRules } from "@/lib/knockout-ledger";
+import { hasConfirmedBuyIn } from "@/lib/tournament-entries";
 
 export interface PrizePoolParticipant {
   buyInPaid: boolean;
@@ -26,7 +27,7 @@ export interface PrizePool {
 export function computePrizePool({ rules, collected, participants }: PrizePoolInput): PrizePool {
   const total = collected.buy_in + collected.rebuy + collected.addon;
   // Só buy-in confirmado paga taxa de ranking; Rebuy e add-on não contribuem.
-  const rankingFund = rules.rankingFeeAmount * participants.filter((p) => p.buyInPaid).length;
+  const rankingFund = rules.rankingFeeAmount * participants.filter(hasConfirmedBuyIn).length;
   // Pela Conservação, em jogo + coletado é o total de Bounty criado, invariante a Knockout e Desfazer.
   const bountyAllocated = isBountyBuilder(rules)
     ? participants.reduce((sum, p) => sum + p.currentBounty + p.bountiesCollected, 0)

@@ -17,7 +17,7 @@ import {
   removeParticipant,
 } from "@/actions/participants";
 import { formatCurrency } from "@/lib/format";
-import { allowsAddon, allowsBonusChip, totalPaid } from "@/lib/tournament-entries";
+import { allowsAddon, allowsBonusChip, allowsRebuy, canRebuy, hasConfirmedBuyIn, totalPaid } from "@/lib/tournament-entries";
 import { Trophy, Skull, RotateCcw, Trash2, DollarSign, RefreshCw, Plus, Zap } from "lucide-react";
 import { toast } from "sonner";
 import type { tournaments } from "@/db/schema";
@@ -40,7 +40,7 @@ interface Participant {
 
 type Tournament = Pick<
   typeof tournaments.$inferSelect,
-  "allowAddon" | "bonusChipAmount" | "buyInAmount" | "rebuyAmount" | "addonAmount"
+  "allowAddon" | "bonusChipAmount" | "buyInAmount" | "rebuyAmount" | "maxRebuys" | "addonAmount"
 >;
 
 interface ParticipantListProps {
@@ -103,6 +103,7 @@ function ParticipantActions({
     });
   }
 
+  const showRebuy = allowsRebuy(tournament);
   const showAddon = allowsAddon(tournament);
   const showBonus = allowsBonusChip(tournament);
 
@@ -115,7 +116,7 @@ function ParticipantActions({
 
   return (
     <div className="flex items-center gap-1">
-      {participant.status === "registered" && !participant.buyInPaid && (
+      {participant.status === "registered" && !hasConfirmedBuyIn(participant) && (
         <ActionButton
           onClick={() => run(() => confirmBuyIn(participant.id))}
           disabled={isPending}
@@ -138,21 +139,25 @@ function ParticipantActions({
             </ActionButton>
           )}
 
-          <ActionButton
-            onClick={() => run(() => addRebuy(participant.id))}
-            disabled={isPending}
-            label="Rebuy"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-          </ActionButton>
+          {showRebuy && (
+            <>
+              <ActionButton
+                onClick={() => run(() => addRebuy(participant.id))}
+                disabled={isPending || !canRebuy(participant, tournament, 1)}
+                label="Rebuy"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+              </ActionButton>
 
-          <ActionButton
-            onClick={() => run(() => addDoubleRebuy(participant.id))}
-            disabled={isPending}
-            label="2x Rebuy"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-          </ActionButton>
+              <ActionButton
+                onClick={() => run(() => addDoubleRebuy(participant.id))}
+                disabled={isPending || !canRebuy(participant, tournament, 2)}
+                label="2x Rebuy"
+              >
+                <RefreshCw className="h-3.5 w-3.5" />
+              </ActionButton>
+            </>
+          )}
 
           {participant.rebuyCount > 0 && (
             <ActionButton

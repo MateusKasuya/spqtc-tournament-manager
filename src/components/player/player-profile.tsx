@@ -8,6 +8,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatCurrency, formatPoints } from "@/lib/format";
+import { entryTotalPaid } from "@/lib/tournament-entries";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ArrowLeft } from "lucide-react";
@@ -34,6 +35,7 @@ interface PlayerProfileProps {
     finishPosition: number | null;
     pointsEarned: string;
     prizeAmount: number;
+    buyInPaid: boolean;
     rebuyCount: number;
     addonCount: number;
   }[];
@@ -53,14 +55,14 @@ function StatCard({ label, value }: { label: string; value: string }) {
 
 export function PlayerProfile({ player, stats, seasonHistory, seasonName }: PlayerProfileProps) {
   const totalGastos = seasonHistory.reduce((sum, e) => {
-    return sum + e.buyInAmount + e.rebuyCount * e.rebuyAmount + e.addonCount * e.addonAmount;
+    return sum + entryTotalPaid(e);
   }, 0);
 
   const totalPremio = seasonHistory.reduce((sum, e) => sum + e.prizeAmount, 0);
   const saldo = totalPremio - totalGastos;
 
   const chartData = seasonHistory.reduce<{ label: string; saldo: number }[]>((acc, e) => {
-    const gastos = e.buyInAmount + e.rebuyCount * e.rebuyAmount + e.addonCount * e.addonAmount;
+    const gastos = entryTotalPaid(e);
     const saldoEtapa = e.prizeAmount - gastos;
     const prev = acc.length > 0 ? acc[acc.length - 1].saldo : 0;
     acc.push({
@@ -138,7 +140,7 @@ export function PlayerProfile({ player, stats, seasonHistory, seasonName }: Play
                   </TableHeader>
                   <TableBody>
                     {seasonHistory.map((entry) => {
-                      const gastos = entry.buyInAmount + entry.rebuyCount * entry.rebuyAmount + entry.addonCount * entry.addonAmount;
+                      const gastos = entryTotalPaid(entry);
                       return (
                         <TableRow key={entry.tournamentId}>
                           <TableCell>

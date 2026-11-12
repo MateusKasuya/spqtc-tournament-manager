@@ -15,6 +15,7 @@ import {
 import { distributePayouts } from "@/actions/participants";
 import { formatCurrency } from "@/lib/format";
 import { calculateRoundedPrizeAmounts } from "@/lib/prize";
+import { hasConfirmedBuyIn } from "@/lib/tournament-entries";
 import { Trophy, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -56,7 +57,7 @@ export function PayoutDialog({
   const [isPending, startTransition] = useTransition();
 
   // Só recebe Prêmio quem tem buy-in confirmado (Em jogo ou eliminado).
-  const recipients = participants.filter((p) => p.buyInPaid);
+  const recipients = participants.filter(hasConfirmedBuyIn);
   const ranked = [...recipients]
     .filter((p) => p.finishPosition !== null)
     .sort((a, b) => (a.finishPosition ?? 99) - (b.finishPosition ?? 99));

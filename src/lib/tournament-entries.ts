@@ -15,12 +15,29 @@ export function rebuyLimit(tournament: Pick<Tournament, "maxRebuys">): number | 
   return tournament.maxRebuys > 0 ? tournament.maxRebuys : null;
 }
 
+// O Participante ainda pode fazer `count` Rebuys (1, ou 2 no Rebuy duplo): o torneio
+// permite Rebuy e o total não passa do limite.
+export function canRebuy(
+  participant: Pick<Participant, "rebuyCount">,
+  tournament: Pick<Tournament, "rebuyAmount" | "maxRebuys">,
+  count: 1 | 2
+): boolean {
+  if (!allowsRebuy(tournament)) return false;
+  const limit = rebuyLimit(tournament);
+  return limit === null || participant.rebuyCount + count <= limit;
+}
+
 export function allowsAddon(tournament: Pick<Tournament, "allowAddon">): boolean {
   return tournament.allowAddon;
 }
 
 export function allowsBonusChip(tournament: Pick<Tournament, "bonusChipAmount">): boolean {
   return tournament.bonusChipAmount > 0;
+}
+
+// Buy-in confirmado, Em jogo ou não.
+export function hasConfirmedBuyIn(participant: Pick<Participant, "buyInPaid">): boolean {
+  return participant.buyInPaid;
 }
 
 // Total pago pelo Participante: buy-in confirmado, Rebuys (o Rebuy duplo já conta 2
@@ -30,8 +47,17 @@ export function totalPaid(
   tournament: Pick<Tournament, "buyInAmount" | "rebuyAmount" | "addonAmount">
 ): number {
   return (
-    (participant.buyInPaid ? tournament.buyInAmount : 0) +
+    (hasConfirmedBuyIn(participant) ? tournament.buyInAmount : 0) +
     participant.rebuyCount * tournament.rebuyAmount +
     participant.addonCount * tournament.addonAmount
   );
+}
+
+// Total pago numa linha que traz, junta, a entrada do Participante e os valores do
+// torneio (ex.: histórico da temporada do jogador).
+export function entryTotalPaid(
+  entry: Pick<Participant, "buyInPaid" | "rebuyCount" | "addonCount"> &
+    Pick<Tournament, "buyInAmount" | "rebuyAmount" | "addonAmount">
+): number {
+  return totalPaid(entry, entry);
 }

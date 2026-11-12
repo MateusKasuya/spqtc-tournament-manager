@@ -7,7 +7,7 @@
 // consultado pela action dentro do lock.
 
 import type { participants, tournaments } from "@/db/schema";
-import { allowsAddon, allowsBonusChip } from "@/lib/tournament-entries";
+import { allowsAddon, allowsBonusChip, hasConfirmedBuyIn } from "@/lib/tournament-entries";
 
 type Participant = typeof participants.$inferSelect;
 type Tournament = typeof tournaments.$inferSelect;
@@ -22,7 +22,7 @@ export function checkRemoveParticipant(participant: Pick<Participant, "status">)
 }
 
 export function checkConfirmBuyIn(participant: Pick<Participant, "buyInPaid">): Refusal {
-  if (participant.buyInPaid) return { error: "Buy-in ja confirmado" };
+  if (hasConfirmedBuyIn(participant)) return { error: "Buy-in ja confirmado" };
   return null;
 }
 
@@ -32,7 +32,7 @@ export function checkUndoBuyIn(
     "buyInPaid" | "status" | "rebuyCount" | "addonCount" | "bonusChipUsed" | "bountiesCollected"
   >
 ): Refusal {
-  if (!participant.buyInPaid) return { error: "Buy-in nao confirmado" };
+  if (!hasConfirmedBuyIn(participant)) return { error: "Buy-in nao confirmado" };
   if (participant.status !== "playing") return { error: "Desfaca a eliminacao antes de remover o buy-in" };
   if (
     participant.rebuyCount > 0 ||
@@ -49,7 +49,7 @@ export function checkAddAddon(
   participant: Pick<Participant, "buyInPaid">,
   tournament: Pick<Tournament, "allowAddon">
 ): Refusal {
-  if (!participant.buyInPaid) return { error: "Jogador ainda nao pagou buy-in" };
+  if (!hasConfirmedBuyIn(participant)) return { error: "Jogador ainda nao pagou buy-in" };
   if (!allowsAddon(tournament)) return { error: "Torneio nao permite add-on" };
   return null;
 }
@@ -83,7 +83,7 @@ export function checkPayoutRecipients(
 ): Refusal {
   const byPlayer = new Map(enrolled.map((p) => [p.playerId, p]));
   if (payouts.some((p) => !byPlayer.has(p.playerId))) return { error: "Jogador nao inscrito neste torneio" };
-  if (payouts.some((p) => !byPlayer.get(p.playerId)?.buyInPaid)) {
+  if (payouts.some((p) => !hasConfirmedBuyIn(byPlayer.get(p.playerId)!))) {
     return { error: "So recebe Premio quem tem buy-in confirmado" };
   }
   return null;

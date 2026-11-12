@@ -95,6 +95,7 @@ export async function getPlayerSeasonHistory(playerId: number, seasonId: number)
       finishPosition: participants.finishPosition,
       pointsEarned: participants.pointsEarned,
       prizeAmount: participants.prizeAmount,
+      buyInPaid: participants.buyInPaid,
       rebuyCount: participants.rebuyCount,
       addonCount: participants.addonCount,
     })
