@@ -26,7 +26,7 @@ export interface EditLocks {
   // não é permitido e ninguém fez add-on (não há total pago a reescrever).
   addonAmount: boolean;
   // Fichas de add-on: travam com as outras fichas, salvo enquanto o add-on não é
-  // permitido e ninguém fez add-on (não há Fichas em jogo a recalcular).
+  // permitido e ninguém fez add-on (não há add-on a recalcular).
   addonChips: boolean;
 }
 

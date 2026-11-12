@@ -238,6 +238,16 @@ describe("fichas de add-on", () => {
     expect(await tournamentRow(t)).toMatchObject({ allowAddon: true, addonAmount: 3000, addonChips: 15000 });
   });
 
+  it("fichas de add-on livres nao destravam as fichas iniciais no mesmo salvamento", async () => {
+    const t = await seed({ status: "running", allowAddon: false, addonChips: 0 });
+    await confirmedBuyIn(t);
+    const form = await formFor(t, { allowAddon: true, addonChips: 15000, initialChips: 20000 });
+    const before = await dumpDb();
+
+    expect(await updateTournament(t, form)).toEqual({ error: STATUS_RULES.chips.error });
+    expect(await dumpDb()).toEqual(before);
+  });
+
   it("torneio Rodando com add-on permitido recusa mudar as fichas de add-on e nao grava nada", async () => {
     const t = await seed({ status: "running", allowAddon: true, addonChips: 15000 });
     await confirmedBuyIn(t);
