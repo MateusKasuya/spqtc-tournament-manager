@@ -37,6 +37,7 @@ describe("editLocks", () => {
       chips: false,
       entryRules: false,
       addonAmount: false,
+      addonChips: false,
     });
   });
 
@@ -45,6 +46,7 @@ describe("editLocks", () => {
       chips: false,
       entryRules: true,
       addonAmount: true,
+      addonChips: false,
     });
   });
 
@@ -53,6 +55,7 @@ describe("editLocks", () => {
       chips: true,
       entryRules: true,
       addonAmount: true,
+      addonChips: true,
     });
   });
 
@@ -65,6 +68,42 @@ describe("editLocks", () => {
 
   it.each(["pending", "running"] as const)("valor do add-on trava com %s se alguem ja fez add-on, mesmo sem add-on permitido", (status) => {
     expect(editLocks({ status, allowAddon: false }, { hasConfirmedBuyIn: true, hasAddon: true }).addonAmount).toBe(true);
+  });
+
+  it("fichas de add-on ficam livres com Rodando enquanto o add-on nao e permitido e ninguem fez add-on; as outras fichas travam", () => {
+    const locks = editLocks({ status: "running", allowAddon: false }, BUY_IN);
+    expect(locks.addonChips).toBe(false);
+    expect(locks.chips).toBe(true);
+  });
+
+  it("fichas de add-on travam com Rodando se alguem ja fez add-on, mesmo sem add-on permitido", () => {
+    expect(editLocks({ status: "running", allowAddon: false }, { hasConfirmedBuyIn: true, hasAddon: true }).addonChips).toBe(true);
+  });
+});
+
+describe("lockedFieldError: fichas de add-on ao ligar o add-on com o torneio Rodando", () => {
+  it("torneio Rodando sem add-on permitido e sem add-on registrado aceita ligar o add-on com valor e fichas", () => {
+    const before = { ...current("running", false), addonAmount: 0, addonChips: 0 };
+    expect(lockedFieldError(before, BUY_IN, { ...VALUES, addonAmount: 3000, addonChips: 15000 })).toBeNull();
+  });
+
+  it("torneio Rodando com add-on permitido recusa mudar as fichas de add-on", () => {
+    expect(lockedFieldError(current("running", true), BUY_IN, { ...VALUES, addonChips: 20000 })).toBe(STATUS_RULES.chips.error);
+  });
+
+  it("torneio Rodando com add-on desligado mas com add-on registrado recusa mudar as fichas de add-on", () => {
+    const facts = { hasConfirmedBuyIn: true, hasAddon: true };
+    expect(lockedFieldError(current("running", false), facts, { ...VALUES, addonChips: 20000 })).toBe(STATUS_RULES.chips.error);
+  });
+
+  it.each([
+    ["initialChips", 20000],
+    ["rebuyChips", 20000],
+    ["bonusChipAmount", 5000],
+  ] as const)("fichas de add-on livres nao destravam %s", (field, value) => {
+    expect(
+      lockedFieldError(current("running", false), BUY_IN, { ...VALUES, addonChips: 20000, [field]: value })
+    ).toBe(STATUS_RULES.chips.error);
   });
 });
 
