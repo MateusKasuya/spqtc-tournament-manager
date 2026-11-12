@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { allowsAddon, allowsBonusChip, rebuyLimit, totalPaid } from "@/lib/tournament-entries";
+import { allowsAddon, allowsBonusChip, canRebuy, hasConfirmedBuyIn, rebuyLimit, totalPaid } from "@/lib/tournament-entries";
 
 const tournament = { buyInAmount: 5000, rebuyAmount: 3000, addonAmount: 2000 };
 
@@ -31,5 +31,37 @@ describe("rebuyLimit", () => {
   it("devolve o limite de Rebuys, e null quando o limite e 0 (ilimitado)", () => {
     expect(rebuyLimit({ maxRebuys: 2 })).toBe(2);
     expect(rebuyLimit({ maxRebuys: 0 })).toBeNull();
+  });
+});
+
+describe("canRebuy", () => {
+  const limit2 = { rebuyAmount: 3000, maxRebuys: 2 };
+
+  it("recusa quando o torneio nao permite Rebuy", () => {
+    expect(canRebuy({ rebuyCount: 0 }, { rebuyAmount: 0, maxRebuys: 0 }, 1)).toBe(false);
+  });
+
+  it("permite sempre quando o limite e 0 (ilimitado)", () => {
+    expect(canRebuy({ rebuyCount: 50 }, { rebuyAmount: 3000, maxRebuys: 0 }, 2)).toBe(true);
+  });
+
+  it("permite o Rebuy que chega exatamente no limite", () => {
+    expect(canRebuy({ rebuyCount: 1 }, limit2, 1)).toBe(true);
+    expect(canRebuy({ rebuyCount: 0 }, limit2, 2)).toBe(true);
+  });
+
+  it("recusa o Rebuy duplo que passaria do limite", () => {
+    expect(canRebuy({ rebuyCount: 1 }, limit2, 2)).toBe(false);
+  });
+
+  it("recusa qualquer Rebuy de quem ja esta no limite", () => {
+    expect(canRebuy({ rebuyCount: 2 }, limit2, 1)).toBe(false);
+  });
+});
+
+describe("hasConfirmedBuyIn", () => {
+  it("segue o buy-in confirmado do Participante", () => {
+    expect(hasConfirmedBuyIn({ buyInPaid: true })).toBe(true);
+    expect(hasConfirmedBuyIn({ buyInPaid: false })).toBe(false);
   });
 });

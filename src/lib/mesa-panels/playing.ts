@@ -1,4 +1,5 @@
 import type { MesaParticipant } from "@/db/queries/mesa";
+import { hasConfirmedBuyIn } from "@/lib/tournament-entries";
 
 // Em jogo (CONTEXT.md) pelo status do Participante, nunca pela Posição final: uma
 // distribuição de prêmios grava posição até em quem ainda está Em jogo. É a única
@@ -14,5 +15,5 @@ export function countPlaying(participants: Pick<MesaParticipant, "status">[]): n
 // Participantes com buy-in confirmado, Em jogo ou não: a única contagem "com
 // buy-in" dos painéis.
 export function countWithBuyIn(participants: Pick<MesaParticipant, "buyInPaid">[]): number {
-  return participants.filter((p) => p.buyInPaid).length;
+  return participants.filter(hasConfirmedBuyIn).length;
 }

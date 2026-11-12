@@ -7,7 +7,7 @@ import { Skull, RefreshCw, Plus, RotateCcw, CheckCircle, Zap, ChevronRight } fro
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/format";
 import { displayName } from "@/lib/display-name";
-import { allowsAddon, allowsBonusChip, allowsRebuy, totalPaid } from "@/lib/tournament-entries";
+import { allowsAddon, allowsBonusChip, allowsRebuy, canRebuy, totalPaid } from "@/lib/tournament-entries";
 import {
   Dialog,
   DialogContent,
@@ -19,7 +19,7 @@ import type { MesaParticipant, MesaTournament } from "@/db/queries/mesa";
 
 type Tournament = Pick<
   MesaTournament,
-  "rebuyAmount" | "addonAmount" | "allowAddon" | "bonusChipAmount" | "buyInAmount" | "tournamentType"
+  "rebuyAmount" | "maxRebuys" | "addonAmount" | "allowAddon" | "bonusChipAmount" | "buyInAmount" | "tournamentType"
 >;
 
 interface QuickActionsProps {
@@ -303,7 +303,7 @@ function ParticipantMobileCard({
                       <button
                         type="button"
                         onClick={() => isBounty ? setDialogAction("rebuy") : run(() => addRebuy(participant.id))}
-                        disabled={isPending}
+                        disabled={isPending || !canRebuy(participant, tournament, 1)}
                         className="inline-flex items-center justify-center gap-2 rounded-md border px-3 py-3 transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40"
                       >
                         <RefreshCw className="h-5 w-5" />
@@ -312,7 +312,7 @@ function ParticipantMobileCard({
                       <button
                         type="button"
                         onClick={() => isBounty ? setDialogAction("doubleRebuy") : run(() => addDoubleRebuy(participant.id))}
-                        disabled={isPending}
+                        disabled={isPending || !canRebuy(participant, tournament, 2)}
                         className="inline-flex items-center justify-center gap-2 rounded-md border border-blue-500/40 px-3 py-3 text-blue-600 transition-colors hover:bg-blue-600 hover:text-white disabled:pointer-events-none disabled:opacity-40 dark:text-blue-400"
                       >
                         <RefreshCw className="h-5 w-5" />
@@ -580,7 +580,7 @@ function ParticipantRowFiltered({
                     <button
                       type="button"
                       onClick={() => isBounty ? setDialogAction("rebuy") : run(() => addRebuy(participant.id))}
-                      disabled={isPending}
+                      disabled={isPending || !canRebuy(participant, tournament, 1)}
                       title="Rebuy"
                       className="inline-flex flex-col items-center gap-0.5 rounded-md border px-2.5 py-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground disabled:opacity-40 disabled:pointer-events-none"
                     >
@@ -590,7 +590,7 @@ function ParticipantRowFiltered({
                     <button
                       type="button"
                       onClick={() => isBounty ? setDialogAction("doubleRebuy") : run(() => addDoubleRebuy(participant.id))}
-                      disabled={isPending}
+                      disabled={isPending || !canRebuy(participant, tournament, 2)}
                       title="Rebuy Duplo"
                       className="inline-flex flex-col items-center gap-0.5 rounded-md border border-blue-500/40 px-2.5 py-1.5 text-blue-600 dark:text-blue-400 transition-colors hover:bg-blue-600 hover:text-white disabled:opacity-40 disabled:pointer-events-none"
                     >

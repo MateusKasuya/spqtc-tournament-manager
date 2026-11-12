@@ -239,6 +239,7 @@ export default async function TorneioPage({ params }: PageProps) {
               bonusChipAmount: tournament.bonusChipAmount,
               buyInAmount: tournament.buyInAmount,
               rebuyAmount: tournament.rebuyAmount,
+              maxRebuys: tournament.maxRebuys,
               addonAmount: tournament.addonAmount,
             }}
             isBounty={isBountyTournament}

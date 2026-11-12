@@ -15,12 +15,30 @@ export function rebuyLimit(tournament: Pick<Tournament, "maxRebuys">): number | 
   return tournament.maxRebuys > 0 ? tournament.maxRebuys : null;
 }
 
+// O Participante ainda pode fazer `count` Rebuys (1, ou 2 no Rebuy duplo): o torneio
+// permite Rebuy e o total não passa do limite.
+export function canRebuy(
+  participant: Pick<Participant, "rebuyCount">,
+  tournament: Pick<Tournament, "rebuyAmount" | "maxRebuys">,
+  count: 1 | 2
+): boolean {
+  if (!allowsRebuy(tournament)) return false;
+  const limit = rebuyLimit(tournament);
+  return limit === null || participant.rebuyCount + count <= limit;
+}
+
 export function allowsAddon(tournament: Pick<Tournament, "allowAddon">): boolean {
   return tournament.allowAddon;
 }
 
 export function allowsBonusChip(tournament: Pick<Tournament, "bonusChipAmount">): boolean {
   return tournament.bonusChipAmount > 0;
+}
+
+// Buy-in confirmado (Em jogo ou não): é quem conta no Fundo de ranking, recebe Prêmio
+// e entra nas contagens "com buy-in" dos painéis.
+export function hasConfirmedBuyIn(participant: Pick<Participant, "buyInPaid">): boolean {
+  return participant.buyInPaid;
 }
 
 // Total pago pelo Participante: buy-in confirmado, Rebuys (o Rebuy duplo já conta 2
