@@ -1,5 +1,5 @@
 import { displayName } from "@/lib/display-name";
-import { isBountyBuilder } from "@/lib/knockout-ledger";
+import { isBountyBuilder, isCrowned } from "@/lib/knockout-ledger";
 import { countWithBuyIn, isPlaying } from "./playing";
 import { compareFinishPosition } from "./finish-position";
 import { deriveMoneyLine, type MoneyLine } from "./money-line";
@@ -72,11 +72,9 @@ function moneyLineSupportLine(moneyLine: MoneyLine | null): string | null {
   return null;
 }
 
-// Só há Campeão depois da Coroação (`finished` do Participante, que não é o
-// Status do torneio Encerrado). É quem tem a posição 1: um acordo pode dá-la a
-// outro que não o Coroado, mesmo a quem já caiu.
+// Um acordo pode dar a posição 1 a outro que não o Coroado, mesmo a quem já caiu.
 function findChampion(participants: MesaParticipant[]): MesaParticipant | undefined {
-  const crowned = participants.find((p) => p.status === "finished");
+  const crowned = participants.find(isCrowned);
   if (!crowned) return undefined;
   // Sem ninguém na posição 1 o dado está inconsistente; o Coroado é o palpite.
   return participants.find((p) => p.finishPosition === 1) ?? crowned;

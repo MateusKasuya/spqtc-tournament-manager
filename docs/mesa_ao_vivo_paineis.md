@@ -19,7 +19,7 @@ Decisões do grilling de 2026-09-25 sobre tornar clicáveis os cards de estatís
    - marcas de Rebuy, add-on e bônus;
    - Bounty, em Bounty Builder.
    A ordem é alfabética, porque o stack de cada um não é registrado.
-3. Eliminações, da mais recente para a mais antiga, com a Posição final gravada ("8º Fulano"). Depois da Coroação, o campeão aparece em destaque.
+3. Eliminações, da mais recente para a mais antiga, com a Posição final gravada ("8º Fulano"). Depois da Coroação, o Campeão aparece em destaque: quem tem a Posição final 1, que depois de um acordo pode não ser o Coroado.
 4. Seção "Aguardando buy-in".
 5. Linha "faltam N Eliminações para o dinheiro", "Bolha" ou "No dinheiro", com atalho para o painel do Prize pool.
 
@@ -43,7 +43,7 @@ Decisões do grilling de 2026-09-25 sobre tornar clicáveis os cards de estatís
 
 ### Bounty em jogo (só Bounty Builder)
 1. Bounty de cada Participante em jogo, do maior para o menor, com "derrubar sozinho: R$ X em dinheiro + R$ X no seu Bounty".
-2. Bounty coletado de cada Participante, do maior para o menor. O do campeão inclui o próprio Bounty coletado na Coroação.
+2. Bounty coletado de cada Participante, do maior para o menor. O do Coroado inclui o próprio Bounty coletado na Coroação.
 3. Linha de conferência: "Bounty armado = Bounty em jogo + Bounties coletados".
 
 ### Nível (novo: tocar no bloco do Nível/blinds)
@@ -71,7 +71,7 @@ Decisões do grilling de 2026-09-25 sobre tornar clicáveis os cards de estatís
 - **Posição final:** entre quem caiu ela é única e sem buracos (#71, renumerada pelo Desfazer e pelo buy-in tardio). Mesmo assim, filtrar Eliminações por status, nunca pela existência de posição, porque um acordo grava posição também em quem ainda está Em jogo (`src/actions/participants.ts:467`).
 - **Prêmio estimado:** usar sempre o arredondamento existente (`calculateRoundedPrizeAmounts`), nunca % × Prize pool.
 - **Um cálculo, dois lugares:** o card e o painel precisam usar a mesma derivação de Fichas em jogo e Stack médio.
-- **Campeão reversível:** o Desfazer pode descoroar. O destaque do campeão tem de vir sempre dos dados da mesa.
+- **Campeão reversível:** o Desfazer pode descoroar. O destaque do Campeão tem de vir sempre dos dados da mesa.
 
 ## Fica para depois
 

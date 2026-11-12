@@ -1,6 +1,6 @@
 import { displayName } from "@/lib/display-name";
 import { formatCurrency } from "@/lib/format";
-import { isBountyBuilder, splitBounty } from "@/lib/knockout-ledger";
+import { isBountyBuilder, isCrowned, splitBounty } from "@/lib/knockout-ledger";
 import { computePrizePool } from "@/lib/prize-pool";
 import type { CardFace, MesaPanelsInput } from "./types";
 
@@ -57,7 +57,7 @@ export function deriveBounty({ snapshot }: MesaPanelsInput): BountySlice | null 
     .sort((a, b) => b.bounty - a.bounty);
   const collected: BountyCollectedEntry[] = participants
     .filter((p) => p.bountiesCollected > 0)
-    .map((p) => ({ participantId: p.id, name: displayName(p), bountyCollected: p.bountiesCollected, crowned: p.status === "finished" }))
+    .map((p) => ({ participantId: p.id, name: displayName(p), bountyCollected: p.bountiesCollected, crowned: isCrowned(p) }))
     .sort((a, b) => b.bountyCollected - a.bountyCollected);
 
   const bountyInPlay = inPlay.reduce((sum, e) => sum + e.bounty, 0);

@@ -23,7 +23,7 @@ const BOUNTY_PERCENTAGE = 50;
 
 // O que a Mesa ao vivo deve mostrar de Bounty numa etapa, em reais.
 type BountyState = {
-  // Bounty de cada Participante Em jogo; quem não está aqui saiu (ou é o campeão).
+  // Bounty de cada Participante Em jogo; quem não está aqui saiu (ou é o Coroado).
   inPlay: Record<string, number>;
   // Bounty coletado; quem não está aqui não coletou nada.
   collected: Record<string, number>;
@@ -105,7 +105,7 @@ test("admin roda um Bounty Builder: Eliminacao, Rebuy, Desfazer e Coroacao movem
     await expectBounty(page, participants, afterRebuy);
   });
 
-  await test.step("a Coroacao da ao campeao o proprio Bounty e zera o Bounty em jogo", async () => {
+  await test.step("a Coroacao da ao Coroado o proprio Bounty e zera o Bounty em jogo", async () => {
     // Bruno derruba Carla (R$ 50) e vai a R$ 100; Ana derruba Bruno (R$ 100),
     // vai a R$ 125 e, sozinha em jogo, coleta o próprio Bounty na Coroação.
     await eliminate(page, carla, { eliminators: [bruno] });
@@ -124,7 +124,7 @@ test("admin roda um Bounty Builder: Eliminacao, Rebuy, Desfazer e Coroacao movem
 });
 
 // Coluna Status das Ações rápidas: "Jogando" (Em jogo), a Posição final de quem
-// caiu ou o troféu do campeão.
+// caiu ou o troféu do Coroado.
 async function expectStatus(page: Page, name: string, status: string) {
   await expect(mesaRow(page, name).getByText(status, { exact: true })).toBeVisible(ACTION_TIMEOUT);
 }

@@ -63,7 +63,7 @@ describe("painel Bounty em jogo", () => {
 
   it("lista o Bounty coletado do maior para o menor e sinaliza o do Coroado", () => {
     const crowned = makeParticipant({
-      name: "Campeao",
+      name: "Coroado",
       status: "finished",
       finishPosition: 1,
       currentBounty: 0,
@@ -76,7 +76,7 @@ describe("painel Bounty em jogo", () => {
     const { panel } = bountyOf([vice, crowned, terceiro, semKnockout]);
 
     expect(panel.collected).toEqual([
-      { participantId: crowned.id, name: "Campeao", bountyCollected: 9000, crowned: true },
+      { participantId: crowned.id, name: "Coroado", bountyCollected: 9000, crowned: true },
       { participantId: terceiro.id, name: "Terceiro", bountyCollected: 5000, crowned: false },
       { participantId: vice.id, name: "Vice", bountyCollected: 3000, crowned: false },
     ]);

@@ -141,7 +141,11 @@ _Avoid_: bounty pool
 Dinheiro que um participante já ganhou como Eliminador ao longo do torneio.
 
 **Coroação**:
-Knockout final que deixa um único participante em jogo; ele é o **Coroado** e coleta o próprio Bounty.
+Knockout final que deixa um único participante em jogo; ele é o Coroado e coleta o próprio Bounty.
+
+**Coroado**:
+Participante que a Coroação deixou como único em jogo. Fica com a Posição final 1, a não ser que um acordo dê o 1º a outro, e continua dono do próprio Bounty coletado na Coroação. O Desfazer o descoroa, e ele volta a ficar Em jogo.
+_Avoid_: campeão (quando o acordo deu o 1º a outro)
 
 **Campeão**:
 Participante com a Posição final 1, e só depois da Coroação. Sem acordo, é o Coroado. Se um acordo dá o 1º a outro, o Campeão é quem recebeu o 1º, mesmo que já tenha caído; o Coroado continua dono do próprio Bounty coletado na Coroação.

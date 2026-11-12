@@ -1,4 +1,4 @@
-import { renumberedFinalPositions, type LedgerParticipant } from "@/lib/knockout-ledger";
+import { isCrowned, renumberedFinalPositions, type LedgerParticipant } from "@/lib/knockout-ledger";
 
 export type PositionedParticipant = Pick<
   LedgerParticipant,
@@ -21,8 +21,8 @@ export function finalPositionsAfterPayout(
   for (const p of participants) {
     const dealPosition = dealPositionByPlayer.get(p.playerId);
     if (dealPosition !== undefined) positionById.set(p.id, dealPosition);
-    else if (p.status === "finished" && dealPositions.has(1)) displacedCrowned = p.id;
-    else if (p.status === "finished") positionById.set(p.id, 1);
+    else if (isCrowned(p) && dealPositions.has(1)) displacedCrowned = p.id;
+    else if (isCrowned(p)) positionById.set(p.id, 1);
     else if (p.status === "eliminated") fallenOutsideDeal.add(p.id);
     else positionById.set(p.id, null);
   }
