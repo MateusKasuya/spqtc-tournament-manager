@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from "vitest";
 import { PGlite } from "@electric-sql/pglite";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { supabaseLikePg } from "@/test/supabase-like";
 
 // A migration de RLS só age no Supabase (papéis anon/authenticated e auth.uid()).
 // Aqui o pglite imita esse ambiente para provar o que ela libera e o que ela barra.
@@ -35,19 +36,7 @@ async function schemaTables() {
 }
 
 async function supabaseLike() {
-  const pg = new PGlite();
-  await pg.exec(`
-    CREATE ROLE anon NOLOGIN;
-    CREATE ROLE authenticated NOLOGIN;
-    CREATE SCHEMA auth;
-    CREATE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE
-      AS $$ SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-    GRANT USAGE ON SCHEMA public, auth TO anon, authenticated;
-    GRANT EXECUTE ON FUNCTION auth.uid() TO anon, authenticated;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public
-      GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO anon, authenticated;
-    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO anon, authenticated;
-  `);
+  const pg = await supabaseLikePg();
   await applyMigrations(pg);
   await pg.exec(`
     INSERT INTO users (id, email, name, role) VALUES
