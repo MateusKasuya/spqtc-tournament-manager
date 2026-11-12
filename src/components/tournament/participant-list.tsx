@@ -17,7 +17,7 @@ import {
   removeParticipant,
 } from "@/actions/participants";
 import { formatCurrency } from "@/lib/format";
-import { allowsAddon, allowsBonusChip, allowsRebuy, canRebuy, totalPaid } from "@/lib/tournament-entries";
+import { allowsAddon, allowsBonusChip, allowsRebuy, canRebuy, hasConfirmedBuyIn, totalPaid } from "@/lib/tournament-entries";
 import { Trophy, Skull, RotateCcw, Trash2, DollarSign, RefreshCw, Plus, Zap } from "lucide-react";
 import { toast } from "sonner";
 import type { tournaments } from "@/db/schema";
@@ -116,7 +116,7 @@ function ParticipantActions({
 
   return (
     <div className="flex items-center gap-1">
-      {participant.status === "registered" && !participant.buyInPaid && (
+      {participant.status === "registered" && !hasConfirmedBuyIn(participant) && (
         <ActionButton
           onClick={() => run(() => confirmBuyIn(participant.id))}
           disabled={isPending}

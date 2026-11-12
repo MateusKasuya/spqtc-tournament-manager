@@ -5,7 +5,7 @@
 // Também é o único lugar das fórmulas de Bounty: inicial, de rebuy e a divisão.
 
 import { STATUS_RULES, statusAllows, type TournamentStatus } from "@/lib/tournament-status";
-import { allowsRebuy, canRebuy, rebuyLimit } from "@/lib/tournament-entries";
+import { allowsRebuy, canRebuy, hasConfirmedBuyIn, rebuyLimit } from "@/lib/tournament-entries";
 
 export type TournamentType = "normal" | "bounty_builder";
 export type ParticipantStatus = "registered" | "playing" | "eliminated" | "finished";
@@ -175,7 +175,7 @@ export function checkKnockout(snapshot: LedgerSnapshot, event: KnockoutEvent): {
   if (!victim) return { error: "Participante nao encontrado" };
 
   if (event.kind === "rebuy") {
-    if (!victim.buyInPaid) return { error: "Jogador ainda nao pagou buy-in" };
+    if (!hasConfirmedBuyIn(victim)) return { error: "Jogador ainda nao pagou buy-in" };
     if (victim.status !== "playing") return { error: "Jogador nao esta em jogo" };
     if (!allowsRebuy(rules)) return { error: "Torneio nao permite rebuy" };
     if (!canRebuy(victim, rules, event.count)) {

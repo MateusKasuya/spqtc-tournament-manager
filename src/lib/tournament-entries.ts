@@ -35,8 +35,7 @@ export function allowsBonusChip(tournament: Pick<Tournament, "bonusChipAmount">)
   return tournament.bonusChipAmount > 0;
 }
 
-// Buy-in confirmado (Em jogo ou não): é quem conta no Fundo de ranking, recebe Prêmio
-// e entra nas contagens "com buy-in" dos painéis.
+// Buy-in confirmado, Em jogo ou não.
 export function hasConfirmedBuyIn(participant: Pick<Participant, "buyInPaid">): boolean {
   return participant.buyInPaid;
 }
@@ -48,7 +47,7 @@ export function totalPaid(
   tournament: Pick<Tournament, "buyInAmount" | "rebuyAmount" | "addonAmount">
 ): number {
   return (
-    (participant.buyInPaid ? tournament.buyInAmount : 0) +
+    (hasConfirmedBuyIn(participant) ? tournament.buyInAmount : 0) +
     participant.rebuyCount * tournament.rebuyAmount +
     participant.addonCount * tournament.addonAmount
   );

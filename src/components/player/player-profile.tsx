@@ -42,6 +42,13 @@ interface PlayerProfileProps {
   seasonName: string | null;
 }
 
+type SeasonEntry = PlayerProfileProps["seasonHistory"][number];
+
+// A linha do histórico traz, junta, a entrada do Participante e os valores do torneio.
+function gastosDaEtapa(entry: SeasonEntry): number {
+  return totalPaid(entry, entry);
+}
+
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
     <Card>
@@ -55,14 +62,14 @@ function StatCard({ label, value }: { label: string; value: string }) {
 
 export function PlayerProfile({ player, stats, seasonHistory, seasonName }: PlayerProfileProps) {
   const totalGastos = seasonHistory.reduce((sum, e) => {
-    return sum + totalPaid(e, e);
+    return sum + gastosDaEtapa(e);
   }, 0);
 
   const totalPremio = seasonHistory.reduce((sum, e) => sum + e.prizeAmount, 0);
   const saldo = totalPremio - totalGastos;
 
   const chartData = seasonHistory.reduce<{ label: string; saldo: number }[]>((acc, e) => {
-    const gastos = totalPaid(e, e);
+    const gastos = gastosDaEtapa(e);
     const saldoEtapa = e.prizeAmount - gastos;
     const prev = acc.length > 0 ? acc[acc.length - 1].saldo : 0;
     acc.push({
@@ -140,7 +147,7 @@ export function PlayerProfile({ player, stats, seasonHistory, seasonName }: Play
                   </TableHeader>
                   <TableBody>
                     {seasonHistory.map((entry) => {
-                      const gastos = totalPaid(entry, entry);
+                      const gastos = gastosDaEtapa(entry);
                       return (
                         <TableRow key={entry.tournamentId}>
                           <TableCell>
