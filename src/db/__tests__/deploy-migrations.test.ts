@@ -101,21 +101,39 @@ function connectTo(pg: PGlite) {
 
 describe("migration no build de Production", () => {
   it.each([
-    [{ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "feat/x" }, "VERCEL_ENV=preview"],
-    [{ VERCEL_ENV: "development" }, "VERCEL_ENV=development"],
+    [{ VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "feat/x", MIGRATION_DATABASE_URL: "postgres://x" }, "VERCEL_ENV=preview"],
+    [{ VERCEL_ENV: "development", MIGRATION_DATABASE_URL: "postgres://x" }, "VERCEL_ENV=development"],
     [{}, "VERCEL_ENV=(indefinida)"],
+    [{ VERCEL_ENV: "", MIGRATION_DATABASE_URL: "" }, "VERCEL_ENV=(indefinida)"],
   ] as [DeployEnv, string][])("fora de Production (%o): pula sem abrir conexão", async (env, seen) => {
     const pg = await supabaseLikePg();
     const { connect, opened } = connectTo(pg);
 
-    const outcome = await deployMigrations(
-      { ...env, MIGRATION_DATABASE_URL: "postgres://x" }, connect, { migrationsFolder }
-    );
+    const outcome = await deployMigrations(env, connect, { migrationsFolder });
 
     expect(outcome).toEqual({ status: "skipped", reason: expect.stringContaining(seen) });
     expect(opened).toEqual([]);
     expect(await hasControlTable(pg)).toBe(false);
   });
+
+  it.each([undefined, ""])(
+    "VERCEL_ENV vazia (%o) com MIGRATION_DATABASE_URL: falha sem abrir conexão",
+    async (vercelEnv) => {
+      const pg = await supabaseLikePg();
+      const { connect, opened } = connectTo(pg);
+
+      const outcome = await deployMigrations(
+        { ...PRODUCTION, VERCEL_ENV: vercelEnv }, connect, { migrationsFolder }
+      );
+
+      expect(outcome).toEqual({
+        status: "failed",
+        reason: expect.stringMatching(/VERCEL_ENV=\(indefinida\).*MIGRATION_DATABASE_URL/),
+      });
+      expect(opened).toEqual([]);
+      expect(await hasControlTable(pg)).toBe(false);
+    }
+  );
 
   it("Production com ref diferente de main: falha, banco intocado", async () => {
     // É o Preview promovido a Production: o build refeito migraria uma branch não mergeada.
