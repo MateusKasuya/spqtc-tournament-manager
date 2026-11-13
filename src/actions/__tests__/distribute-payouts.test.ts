@@ -653,9 +653,8 @@ describe("o Acordo fixa a Posicao final de quem esta nele (#168)", () => {
     expect(await mesaChampion(t)).toBe("P0");
 
     await updateTournamentStatus(t, "finished");
-    expect(Number((await participantOf(a, t))?.pointsEarned)).toBeGreaterThan(
-      Number((await participantOf(b, t))?.pointsEarned)
-    );
+    expect(Number((await participantOf(a, t))?.pointsEarned)).toBe(12);
+    expect(Number((await participantOf(b, t))?.pointsEarned)).toBe(10);
     expect(await repeatedPositions()).toEqual([]);
   });
 

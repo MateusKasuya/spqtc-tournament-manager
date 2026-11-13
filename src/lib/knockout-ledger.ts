@@ -290,7 +290,6 @@ class WorkingState {
     return Array.from(this.work.values());
   }
 
-  // Reaplica a regra única da Posição final a todos os Participantes.
   renumber() {
     for (const [id, position] of finalPositions(this.all())) this.byId(id).finishPosition = position;
   }
@@ -396,7 +395,6 @@ class UndoBuilder {
     const latest = this.groupsOf(victim).at(-1);
     if (latest?.kind === "elimination") this.revertBounty(victim, latest);
     victim.status = "playing";
-    victim.finishPosition = null;
     victim.eliminatedAt = null;
     this.restoreEliminators(victim);
     this.state.renumber();
@@ -465,7 +463,6 @@ class UndoBuilder {
     const latest = this.groupsOf(crowned).at(-1);
     if (latest?.kind === "coronation") this.revertBounty(crowned, latest);
     crowned.status = "playing";
-    crowned.finishPosition = null;
     this.uncrowned = true;
   }
 }
@@ -501,6 +498,8 @@ export function planKnockout(snapshot: LedgerSnapshot, event: KnockoutEvent): Kn
 
   if (event.kind === "elimination") {
     victim.status = "eliminated";
+    // Sem posição, a Vítima é a melhor dos que caíram quando a ordem sai das
+    // posições gravadas (dados antigos sem carimbo de Eliminação).
     victim.finishPosition = null;
     victim.eliminatedAt = snapshot.now;
 

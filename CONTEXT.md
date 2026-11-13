@@ -110,7 +110,7 @@ Registrar os Prêmios pagos a cada posição. Pode ser feito com o torneio rodan
 _Avoid_: pagar payouts
 
 **Acordo**:
-A Distribuição de prêmios em vigor, com a Posição final que ela dá a cada participante dela. Feito na mesa final (torneio rodando) ou no acerto depois de Encerrar; refazer a distribuição o substitui. Fixa a Posição final de quem está nele: o jogo pode continuar depois de um Acordo, mas nenhum Knockout, Desfazer, Coroação ou buy-in tardio muda essas posições.
+O resultado em vigor de Distribuir prêmios: quem recebe e a Posição final que cada um recebe. Feito na mesa final (torneio rodando) ou no acerto depois de Encerrar; refazer a distribuição o substitui. Fixa a Posição final de quem está nele: o jogo pode continuar depois de um Acordo, mas nenhum Knockout, Desfazer, Coroação ou buy-in tardio muda essas posições.
 _Avoid_: deal, chop
 
 **Saldo**:

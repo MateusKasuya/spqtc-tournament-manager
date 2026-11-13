@@ -142,8 +142,8 @@ export async function undoKnockout(tx: LedgerExecutor, tournamentId: number, req
 }
 
 // Buy-in confirmado ou desfeito com o torneio em andamento muda quantos estão
-// em jogo sem passar por um Knockout: quem já caiu precisa descer ou subir uma
-// posição. Trava o torneio para serializar com os Knockouts em andamento; o
+// em jogo sem passar por um Knockout: reaplica a regra única da Posição final,
+// e quem caiu fora do Acordo desce ou sobe uma posição. Trava o torneio para serializar com os Knockouts em andamento; o
 // chamador trava antes de tocar em participante, na mesma ordem dos Knockouts.
 export async function renumberFinalPositions(tx: LedgerExecutor, tournamentId: number) {
   await lockTournament(tx, tournamentId);

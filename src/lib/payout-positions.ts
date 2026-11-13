@@ -1,6 +1,6 @@
-import { finalPositions, type LedgerParticipant } from "@/lib/knockout-ledger";
+import { finalPositions, type DealPositionedParticipant, type LedgerParticipant } from "@/lib/knockout-ledger";
 
-export type PositionedParticipant = Pick<LedgerParticipant, "id" | "playerId" | "status" | "finishPosition" | "eliminatedAt">;
+export type PositionedParticipant = Omit<DealPositionedParticipant, "dealPosition"> & Pick<LedgerParticipant, "playerId">;
 
 // Acordo novo de uma distribuição: a posição do Acordo por participantId (nula
 // para quem fica fora, inclusive quem estava no Acordo anterior) e a Posição
@@ -15,12 +15,4 @@ export function positionsAfterPayout(
   return new Map(
     withDeal.map((p) => [p.id, { dealPosition: p.dealPosition, finishPosition: finishById.get(p.id) ?? null }])
   );
-}
-
-// Posição final por participantId depois de uma distribuição.
-export function finalPositionsAfterPayout(
-  participants: PositionedParticipant[],
-  payouts: { playerId: number; position: number }[]
-): Map<number, number | null> {
-  return new Map(Array.from(positionsAfterPayout(participants, payouts), ([id, p]) => [id, p.finishPosition]));
 }

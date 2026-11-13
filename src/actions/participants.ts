@@ -94,7 +94,7 @@ export async function removeParticipant(participantId: number) {
       STATUS_RULES.registration,
       checkRemoveParticipant
     );
-    await refuseIfInDeal(tx, current);
+    await refuseIfInPayout(tx, current);
     await tx.delete(participants).where(eq(participants.id, participantId));
   });
   if (failed) return failed;
@@ -162,7 +162,7 @@ export async function undoBuyIn(participantId: number) {
       STATUS_RULES.registration,
       checkUndoBuyIn
     );
-    await refuseIfInDeal(tx, current);
+    await refuseIfInPayout(tx, current);
 
     await tx.delete(transactions).where(
       and(
@@ -234,7 +234,7 @@ async function lockAndReload(
 // Prêmio pago e posição do Acordo só saem refazendo a distribuição: remover o
 // participante ou desfazer o buy-in dele deixaria uma transação prize sem
 // Participante, ou um Acordo com posição de quem não joga. Chamar dentro do lock.
-async function refuseIfInDeal(
+async function refuseIfInPayout(
   tx: Tx,
   participant: Pick<Participant, "tournamentId" | "playerId" | "dealPosition">
 ) {
