@@ -61,8 +61,10 @@ jobs:
       - name: Supabase local
         run: pnpm supabase:start
 
-      - name: Migrations do zero
-        run: pnpm e2e:migrate
+      # Pelo caminho do deploy de Production (db:migrate:deploy sobre postgres-js,
+      # ADR 0004), e nao pelo drizzle-kit: e a unica cobertura dele no CI (#170).
+      - name: Migrations do zero (como o deploy de Production)
+        run: pnpm e2e:migrate:deploy
 
       - name: Build
         run: pnpm e2e:build
