@@ -41,7 +41,6 @@ export async function deployMigrations(
   { migrationsFolder = MIGRATIONS_FOLDER }: { migrationsFolder?: string } = {}
 ): Promise<DeployOutcome> {
   const { VERCEL_ENV, VERCEL_GIT_COMMIT_REF, MIGRATION_DATABASE_URL } = env;
-  // Os valores vistos vão no motivo: o log do build mostra que as variáveis chegaram.
   if (!VERCEL_ENV && MIGRATION_DATABASE_URL) {
     // A URL de migração só existe em Production, e a VERCEL_ENV só falta se a opção
     // de expor as variáveis de sistema foi desligada: pular seria a falha da #131.
@@ -52,6 +51,7 @@ export async function deployMigrations(
         '"Enable access to System Environment Variables" no projeto da Vercel',
     };
   }
+  // Os valores vistos vão no motivo: o log do build mostra que as variáveis chegaram.
   if (VERCEL_ENV !== "production") {
     return {
       status: "skipped",

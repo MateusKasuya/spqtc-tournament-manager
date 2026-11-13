@@ -119,9 +119,6 @@ describe("migration no build de Production", () => {
   it.each([undefined, ""])(
     "VERCEL_ENV vazia (%o) com MIGRATION_DATABASE_URL: falha sem abrir conexão",
     async (vercelEnv) => {
-      // A URL de migração só existe em Production: sem a VERCEL_ENV junto, a opção de
-      // expor as variáveis de sistema da Vercel foi desligada, e pular seria a falha
-      // silenciosa da #131.
       const pg = await supabaseLikePg();
       const { connect, opened } = connectTo(pg);
 
