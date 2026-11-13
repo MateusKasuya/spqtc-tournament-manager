@@ -19,6 +19,8 @@ import { getPlayerStats } from "@/db/queries/ranking";
 import { loadPrizePool } from "@/db/ledger/saldo";
 import { computeSaldo } from "@/lib/prize-pool";
 import { derivePrizesPaid } from "@/lib/mesa-panels/prizes-paid";
+import { buildMesaPanels } from "@/lib/mesa-panels";
+import { loadMesaSnapshot } from "@/db/queries/mesa";
 import { seedTournament, seedPlayer, seedParticipant } from "@/test/setup";
 import { and, eq, sql } from "drizzle-orm";
 import { testDb } from "@/test/db";
@@ -604,5 +606,143 @@ describe("refazer a distribuicao tira Premio e posicao de quem sai do acordo (#1
     expect(Number((await participantOf(c, t))?.pointsEarned)).toBe(12.25);
     expect(Number((await participantOf(a, t))?.pointsEarned)).toBe(10);
     expect(Number((await participantOf(b, t))?.pointsEarned)).toBe(8);
+  });
+});
+
+// O Acordo fixa a Posição final de quem está nele: o jogo continua depois dele,
+// mas nenhum Knockout, Desfazer, Coroação ou buy-in tardio muda essas posições (#168).
+describe("o Acordo fixa a Posicao final de quem esta nele (#168)", () => {
+  const participantOf = (playerId: number, t: number) => getParticipantByPlayerAndTournament(playerId, t);
+
+  async function positionsOf(t: number, players: number[]) {
+    return Promise.all(players.map(async (pl) => (await participantOf(pl, t))?.finishPosition ?? null));
+  }
+
+  async function mesaChampion(t: number) {
+    const snapshot = await loadMesaSnapshot(t);
+    if (!snapshot) throw new Error("torneio nao encontrado");
+    return buildMesaPanels({ snapshot, remainingSeconds: 0, isAdmin: true }).players.panel.champion?.name ?? null;
+  }
+
+  async function repeatedPositions() {
+    return (await testDb.execute(sql.raw(REPEATED_POSITION_QUERY))).rows;
+  }
+
+  // Prize pool 400 (4 buy-ins de 100, sem taxa). D cai primeiro: 4º.
+  async function setupFourAfterD() {
+    const t = await seedTournament({ status: "running", buyInAmount: 100, rankingFeeAmount: 0 });
+    const { players, parts } = await setupPlayers(t, 4);
+    await eliminatePlayer(parts[3]);
+    return { t, players, parts };
+  }
+
+  it("Acordo da o 1o a A e B vence a Coroacao: A continua Campeao e soma os pontos de 1o ao Encerrar", async () => {
+    const { t, players, parts } = await setupFourAfterD();
+    const [a, b, c] = players;
+    await distributePayouts(t, [
+      { playerId: a, amount: 200, position: 1 },
+      { playerId: b, amount: 120, position: 2 },
+      { playerId: c, amount: 80, position: 3 },
+    ]);
+
+    await eliminatePlayer(parts[2]); // C cai
+    await eliminatePlayer(parts[0]); // A cai, e B é Coroado
+
+    expect((await participantOf(b, t))?.status).toBe("finished");
+    expect(await positionsOf(t, players)).toEqual([1, 2, 3, 4]);
+    expect(await mesaChampion(t)).toBe("P0");
+
+    await updateTournamentStatus(t, "finished");
+    expect(Number((await participantOf(a, t))?.pointsEarned)).toBeGreaterThan(
+      Number((await participantOf(b, t))?.pointsEarned)
+    );
+    expect(await repeatedPositions()).toEqual([]);
+  });
+
+  it("Knockout de quem esta no Acordo nao muda a posicao do Acordo nem repete posicao", async () => {
+    const { t, players, parts } = await setupFourAfterD();
+    const [a, b, c] = players;
+    await distributePayouts(t, [
+      { playerId: b, amount: 200, position: 1 },
+      { playerId: c, amount: 120, position: 2 },
+      { playerId: a, amount: 80, position: 3 },
+    ]);
+
+    await eliminatePlayer(parts[2]); // C cai antes de A, mas tem o 2º do Acordo
+    expect(await positionsOf(t, players)).toEqual([3, 1, 2, 4]);
+    expect(await repeatedPositions()).toEqual([]);
+
+    await eliminatePlayer(parts[0]); // A cai, e B é Coroado
+    expect(await positionsOf(t, players)).toEqual([3, 1, 2, 4]);
+    expect(await mesaChampion(t)).toBe("P1");
+  });
+
+  it("Desfazer a Eliminacao de quem esta no Acordo devolve Em jogo com a posicao do Acordo", async () => {
+    const { t, players, parts } = await setupFourAfterD();
+    const [a, b, c] = players;
+    await distributePayouts(t, [
+      { playerId: b, amount: 200, position: 1 },
+      { playerId: c, amount: 120, position: 2 },
+      { playerId: a, amount: 80, position: 3 },
+    ]);
+    await eliminatePlayer(parts[2]); // C cai
+
+    expect(await undoElimination(parts[2])).toEqual({ success: true });
+
+    expect((await participantOf(c, t))?.status).toBe("playing");
+    expect(await positionsOf(t, players)).toEqual([3, 1, 2, 4]);
+  });
+
+  it("Desfazer a Coroacao mantem a posicao do Acordo do Coroado e tira o Campeao da Mesa", async () => {
+    const { t, players, parts } = await setupFourAfterD();
+    const [a, b, c] = players;
+    await distributePayouts(t, [
+      { playerId: a, amount: 200, position: 1 },
+      { playerId: b, amount: 120, position: 2 },
+      { playerId: c, amount: 80, position: 3 },
+    ]);
+    await eliminatePlayer(parts[2]); // C cai
+    await eliminatePlayer(parts[0]); // A cai, e B é Coroado
+
+    expect(await undoElimination(parts[1])).toEqual({ success: true });
+
+    expect((await participantOf(b, t))?.status).toBe("playing");
+    expect(await positionsOf(t, players)).toEqual([1, 2, 3, 4]);
+    expect(await mesaChampion(t)).toBeNull();
+  });
+
+  it("buy-in tardio depois do Acordo nao muda as posicoes do Acordo", async () => {
+    const { t, players } = await setupFourAfterD();
+    const [a, b, , d] = players;
+    const late = await seedParticipant(t, await seedPlayer("tardio"));
+    // D já caiu (4º), mas o Acordo lhe dá o 3º; C, Em jogo, fica fora do Acordo.
+    await distributePayouts(t, [
+      { playerId: a, amount: 200, position: 1 },
+      { playerId: b, amount: 120, position: 2 },
+      { playerId: d, amount: 80, position: 3 },
+    ]);
+
+    expect(await confirmBuyIn(late)).toEqual({ success: true });
+
+    expect(await positionsOf(t, players)).toEqual([1, 2, null, 3]);
+  });
+
+  it("desfazer o buy-in de quem esta no Acordo com Premio 0 e recusado", async () => {
+    const { t, players, parts } = await setupFourAfterD();
+    const [a, b] = players;
+    // Prize pool 400; com 300 pagos, desfazer um buy-in ainda cabe no Saldo.
+    await distributePayouts(t, [
+      { playerId: a, amount: 300, position: 1 },
+      { playerId: b, amount: 0, position: 2 },
+    ]);
+
+    expect(await undoBuyIn(parts[1])).toEqual({
+      error: "Participante esta no Acordo: refaca a distribuicao de premios sem ele antes",
+    });
+    expect((await participantOf(b, t))?.buyInPaid).toBe(true);
+
+    // Fora do Acordo, o buy-in volta a poder ser desfeito.
+    await distributePayouts(t, [{ playerId: a, amount: 300, position: 1 }]);
+    expect(await undoBuyIn(parts[1])).toEqual({ success: true });
   });
 });

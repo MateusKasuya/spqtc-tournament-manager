@@ -33,6 +33,7 @@ function makeSnapshot(n: number): LedgerSnapshot {
     status: "playing",
     buyInPaid: true,
     finishPosition: null,
+    dealPosition: null,
     rebuyCount: 0,
     currentBounty: initialBounty(RULES),
     bountiesCollected: 0,

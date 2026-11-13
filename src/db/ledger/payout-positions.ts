@@ -2,7 +2,7 @@
 // depois do lock do torneio.
 import { eq } from "drizzle-orm";
 import { participants, type tournaments } from "@/db/schema";
-import { finalPositionsAfterPayout } from "@/lib/payout-positions";
+import { positionsAfterPayout } from "@/lib/payout-positions";
 import type { LedgerExecutor } from "@/db/ledger/knockout-ledger";
 import { writeRankingPoints, type ScoredParticipant } from "@/db/ledger/ranking-points";
 
@@ -21,18 +21,20 @@ export async function applyPayoutPositions(
       playerId: participants.playerId,
       status: participants.status,
       finishPosition: participants.finishPosition,
+      dealPosition: participants.dealPosition,
       eliminatedAt: participants.eliminatedAt,
     })
     .from(participants)
     .where(eq(participants.tournamentId, tournament.id));
 
-  const positionById = finalPositionsAfterPayout(tournamentParticipants, payouts);
+  // O Acordo novo substitui o anterior: quem sai dele perde a posição do Acordo.
+  const positionById = positionsAfterPayout(tournamentParticipants, payouts);
   const moved: ScoredParticipant[] = [];
   for (const p of tournamentParticipants) {
-    const finishPosition = positionById.get(p.id) ?? null;
-    if (finishPosition === p.finishPosition) continue;
-    await tx.update(participants).set({ finishPosition }).where(eq(participants.id, p.id));
-    moved.push({ id: p.id, playerId: p.playerId, finishPosition });
+    const { dealPosition, finishPosition } = positionById.get(p.id) ?? { dealPosition: null, finishPosition: null };
+    if (dealPosition === p.dealPosition && finishPosition === p.finishPosition) continue;
+    await tx.update(participants).set({ dealPosition, finishPosition }).where(eq(participants.id, p.id));
+    if (finishPosition !== p.finishPosition) moved.push({ id: p.id, playerId: p.playerId, finishPosition });
   }
 
   if (tournament.status !== "finished" || moved.length === 0) return { rankingChanged: false };

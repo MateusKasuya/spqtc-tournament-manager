@@ -57,6 +57,13 @@
       "when": 1794253246348,
       "tag": "0007_supabase_auth_trigger_e_realtime",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794596493470,
+      "tag": "0008_acordo_deal_position",
+      "breakpoints": true
     }
   ]
 }

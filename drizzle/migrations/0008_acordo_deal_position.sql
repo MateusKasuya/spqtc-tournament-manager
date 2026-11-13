@@ -1,0 +1,1 @@
+ALTER TABLE "participants" ADD COLUMN "deal_position" integer;
