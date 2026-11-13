@@ -37,7 +37,7 @@ pnpm e2e              # roda os testes; sobe o `next dev` na porta 3100 se não 
 - Falhas guardam trace, screenshot e vídeo em `test-results/`; abra com `pnpm exec playwright show-trace <arquivo>.zip`.
 - `pnpm supabase:stop` derruba os containers. `pnpm test` (Vitest) ignora a pasta `e2e/` e não precisa de Docker.
 
-No CI, o job `e2e` faz o mesmo com `next build` + `next start` e sobe o relatório como artefato quando algo falha.
+No CI, o job `e2e` faz o mesmo com `next build` + `next start` e sobe o relatório como artefato quando algo falha. Lá as migrations entram pelo `pnpm e2e:migrate:deploy`, que roda o `pnpm db:migrate:deploy` do deploy de Production (ADR 0004) contra o Supabase local; localmente ele também funciona no lugar do `pnpm e2e:migrate`.
 
 ## Learn More
 
