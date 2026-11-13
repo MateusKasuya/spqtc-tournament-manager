@@ -39,6 +39,7 @@ function makeSnapshot(bounties: number[], overrides: Partial<LedgerRules> = {}):
     status: "playing",
     buyInPaid: true,
     finishPosition: null,
+    dealPosition: null,
     rebuyCount: 0,
     currentBounty: b,
     bountiesCollected: 0,

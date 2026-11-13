@@ -94,7 +94,7 @@ export async function removeParticipant(participantId: number) {
       STATUS_RULES.registration,
       checkRemoveParticipant
     );
-    await refuseIfPrizePaid(tx, current);
+    await refuseIfInPayout(tx, current);
     await tx.delete(participants).where(eq(participants.id, participantId));
   });
   if (failed) return failed;
@@ -162,7 +162,7 @@ export async function undoBuyIn(participantId: number) {
       STATUS_RULES.registration,
       checkUndoBuyIn
     );
-    await refuseIfPrizePaid(tx, current);
+    await refuseIfInPayout(tx, current);
 
     await tx.delete(transactions).where(
       and(
@@ -231,11 +231,18 @@ async function lockAndReload(
   return { tournament, participant };
 }
 
-// Prêmio pago só sai refazendo a distribuição: remover o participante ou desfazer
-// o buy-in dele deixaria uma transação prize sem Participante. Chamar dentro do lock.
-async function refuseIfPrizePaid(tx: Tx, participant: Pick<Participant, "tournamentId" | "playerId">) {
+// Prêmio pago e posição do Acordo só saem refazendo a distribuição: remover o
+// participante ou desfazer o buy-in dele deixaria uma transação prize sem
+// Participante, ou um Acordo com posição de quem não joga. Chamar dentro do lock.
+async function refuseIfInPayout(
+  tx: Tx,
+  participant: Pick<Participant, "tournamentId" | "playerId" | "dealPosition">
+) {
   if (await hasPaidPrize(participant.tournamentId, participant.playerId, tx)) {
     throw new ParticipantRefusal("Participante tem Premio pago: refaca a distribuicao de premios sem ele antes");
+  }
+  if (participant.dealPosition !== null) {
+    throw new ParticipantRefusal("Participante esta no Acordo: refaca a distribuicao de premios sem ele antes");
   }
 }
 

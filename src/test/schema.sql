@@ -29,6 +29,7 @@ CREATE TABLE "participants" (
 	"addon_count" integer DEFAULT 0 NOT NULL,
 	"bonus_chip_used" boolean DEFAULT false NOT NULL,
 	"finish_position" integer,
+	"deal_position" integer,
 	"points_earned" numeric(10, 2) DEFAULT '0' NOT NULL,
 	"prize_amount" integer DEFAULT 0 NOT NULL,
 	"current_bounty" integer DEFAULT 0 NOT NULL,

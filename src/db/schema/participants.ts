@@ -15,6 +15,8 @@ export const participants = pgTable("participants", {
   addonCount: integer("addon_count").notNull().default(0),
   bonusChipUsed: boolean("bonus_chip_used").notNull().default(false),
   finishPosition: integer("finish_position"),
+  // Posição que o Acordo em vigor deu (ADR 0005); nula fora do Acordo.
+  dealPosition: integer("deal_position"),
   pointsEarned: numeric("points_earned", { precision: 10, scale: 2 }).notNull().default("0"),
   prizeAmount: integer("prize_amount").notNull().default(0),
   currentBounty: integer("current_bounty").notNull().default(0),

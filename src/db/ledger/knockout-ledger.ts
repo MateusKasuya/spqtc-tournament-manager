@@ -7,7 +7,7 @@ import { participants, tournaments, transactions } from "@/db/schema";
 import {
   planKnockout,
   planUndo,
-  renumberedFinalPositions,
+  finalPositions,
   LedgerStateChangedError,
   type KnockoutEvent,
   type KnockoutPlan,
@@ -41,6 +41,7 @@ export async function loadKnockoutSnapshot(executor: LedgerExecutor, tournamentI
       status: participants.status,
       buyInPaid: participants.buyInPaid,
       finishPosition: participants.finishPosition,
+      dealPosition: participants.dealPosition,
       rebuyCount: participants.rebuyCount,
       currentBounty: participants.currentBounty,
       bountiesCollected: participants.bountiesCollected,
@@ -141,8 +142,8 @@ export async function undoKnockout(tx: LedgerExecutor, tournamentId: number, req
 }
 
 // Buy-in confirmado ou desfeito com o torneio em andamento muda quantos estão
-// em jogo sem passar por um Knockout: quem já caiu precisa descer ou subir uma
-// posição. Trava o torneio para serializar com os Knockouts em andamento; o
+// em jogo sem passar por um Knockout: reaplica a regra única da Posição final,
+// e quem caiu fora do Acordo desce ou sobe uma posição. Trava o torneio para serializar com os Knockouts em andamento; o
 // chamador trava antes de tocar em participante, na mesma ordem dos Knockouts.
 export async function renumberFinalPositions(tx: LedgerExecutor, tournamentId: number) {
   await lockTournament(tx, tournamentId);
@@ -151,12 +152,13 @@ export async function renumberFinalPositions(tx: LedgerExecutor, tournamentId: n
       id: participants.id,
       status: participants.status,
       finishPosition: participants.finishPosition,
+      dealPosition: participants.dealPosition,
       eliminatedAt: participants.eliminatedAt,
     })
     .from(participants)
     .where(eq(participants.tournamentId, tournamentId));
   const current = new Map(parts.map((p) => [p.id, p.finishPosition]));
-  for (const [id, position] of renumberedFinalPositions(parts)) {
+  for (const [id, position] of finalPositions(parts)) {
     if (current.get(id) !== position) {
       await tx.update(participants).set({ finishPosition: position }).where(eq(participants.id, id));
     }

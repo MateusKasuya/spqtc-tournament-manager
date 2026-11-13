@@ -23,7 +23,7 @@ Participante com buy-in confirmado que ainda disputa o torneio: nem teve Elimina
 _Avoid_: ativo, vivo, jogando
 
 **Posição final**:
-Colocação do Participante no torneio: 1 para o Campeão, que é o Coroado a não ser que um acordo dê o 1º a outro; para quem caiu, a ordem inversa das Eliminações, sem repetir e sem buracos (o último a cair fica logo abaixo de quem ainda está em jogo). É renumerada quando um Desfazer ou um buy-in tardio muda o número de Participantes. Um acordo pode fixá-la para quem ainda está em jogo; quem sai do acordo ao refazer a distribuição volta à posição que a mesa dá (sem posição se ainda está em jogo, a da Eliminação se caiu), pulando as posições do acordo. O Coroado fora do acordo mantém o 1º, a não ser que o acordo dê o 1º a outro: aí ele também pula as posições do acordo e fica com a primeira livre.
+Colocação do Participante no torneio: 1 para o Campeão, que é o Coroado a não ser que um acordo dê o 1º a outro; para quem caiu, a ordem inversa das Eliminações, sem repetir e sem buracos (o último a cair fica logo abaixo de quem ainda está em jogo). É renumerada quando um Desfazer ou um buy-in tardio muda o número de Participantes. Um acordo fixa a Posição final de quem está nele, mesmo de quem ainda está em jogo, e só refazer a distribuição a muda: o jogo pode continuar depois do acordo, mas Knockout, Desfazer, Coroação e buy-in tardio só posicionam quem está fora do acordo, pulando as posições do acordo. Quem sai do acordo ao refazer a distribuição volta à posição que a mesa dá (sem posição se ainda está em jogo, a da Eliminação se caiu), pulando as posições do acordo. O Coroado fora do acordo mantém o 1º, a não ser que o acordo dê o 1º a outro: aí ele também pula as posições do acordo e fica com a primeira livre.
 _Avoid_: colocação, finish position
 
 ### Torneio
@@ -106,8 +106,12 @@ Momento em que falta uma Eliminação para o dinheiro (Em jogo é uma a mais que
 _Avoid_: bubble
 
 **Distribuir prêmios**:
-Registrar os Prêmios pagos a cada posição. Pode ser feito com o torneio rodando (acordo na mesa final) ou encerrado, nunca em torneio cancelado; refazer substitui a distribuição anterior: quem fica fora da nova perde o Prêmio e a posição que o acordo lhe deu. Só entra quem tem buy-in confirmado: um Jogador não inscrito ou aguardando buy-in recusa a distribuição inteira. Refazer a distribuição sem um participante é o caminho para depois removê-lo ou desfazer o buy-in dele.
+Registrar os Prêmios pagos a cada posição. Pode ser feito com o torneio rodando (acordo na mesa final) ou encerrado, nunca em torneio cancelado; refazer substitui a distribuição anterior: quem fica fora da nova perde o Prêmio e a posição que o acordo lhe deu. Só entra quem tem buy-in confirmado: um Jogador não inscrito ou aguardando buy-in recusa a distribuição inteira. Refazer a distribuição sem um participante é o caminho para depois removê-lo ou desfazer o buy-in dele: quem está no Acordo, com ou sem Prêmio, não pode ser removido nem ter o buy-in desfeito.
 _Avoid_: pagar payouts
+
+**Acordo**:
+O resultado em vigor de Distribuir prêmios: quem recebe e a Posição final que cada um recebe. Feito na mesa final (torneio rodando) ou no acerto depois de Encerrar; refazer a distribuição o substitui. Fixa a Posição final de quem está nele: o jogo pode continuar depois de um Acordo, mas nenhum Knockout, Desfazer, Coroação ou buy-in tardio muda essas posições.
+_Avoid_: deal, chop
 
 **Saldo**:
 Prize pool menos os Prêmios já pagos. Pode sobrar, por acordo de mesa ou arredondamento; não pode ficar negativo. Distribuir prêmios acima do Prize pool, ou desfazer um buy-in, Rebuy ou add-on que o deixaria negativo, é recusado.
@@ -156,7 +160,7 @@ Registro de todos os Knockouts de um torneio e de seus efeitos sobre Bounty e Bo
 _Avoid_: ledger de bounty, histórico de transações
 
 **Desfazer**:
-Reversão do Knockout mais recente de uma Vítima, devolvendo a ela o Bounty e retirando dos Eliminadores exatamente o que receberam. Recusado quando um Eliminador daquele Knockout já foi Vítima depois. Desfazer uma Eliminação renumera a Posição final de quem caiu depois da Vítima.
+Reversão do Knockout mais recente de uma Vítima, devolvendo a ela o Bounty e retirando dos Eliminadores exatamente o que receberam. Recusado quando um Eliminador daquele Knockout já foi Vítima depois. Desfazer uma Eliminação renumera a Posição final de quem caiu depois da Vítima. Quem está no Acordo volta a ficar Em jogo com a posição do Acordo, inclusive o Coroado descoroado.
 _Avoid_: undo, estorno
 
 **Conservação**:

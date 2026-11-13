@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { finalPositionsAfterPayout, type PositionedParticipant } from "@/lib/payout-positions";
+import { positionsAfterPayout, type PositionedParticipant } from "@/lib/payout-positions";
+
+// Só a Posição final de cada participantId depois da distribuição.
+function finalPositionsAfterPayout(parts: PositionedParticipant[], payouts: { playerId: number; position: number }[]) {
+  return new Map(Array.from(positionsAfterPayout(parts, payouts), ([id, p]) => [id, p.finishPosition]));
+}
 
 const at = (minute: number) => new Date(Date.UTC(2026, 10, 7, 20, minute));
 
@@ -7,7 +12,7 @@ function part(id: number, status: PositionedParticipant["status"], finishPositio
   return { id, playerId: id * 10, status, finishPosition, eliminatedAt };
 }
 
-describe("finalPositionsAfterPayout", () => {
+describe("positionsAfterPayout", () => {
   it("Coroado fora da lista mantem o 1o", () => {
     const parts = [part(1, "finished", 1), part(2, "eliminated", 2, at(5)), part(3, "eliminated", 3, at(1))];
     const positions = finalPositionsAfterPayout(parts, [{ playerId: 20, position: 2 }]);

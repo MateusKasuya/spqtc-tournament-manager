@@ -33,6 +33,9 @@ export interface LedgerParticipant {
   status: ParticipantStatus;
   buyInPaid: boolean;
   finishPosition: number | null;
+  // Posição que o Acordo em vigor deu (ADR 0005); nula fora do Acordo. Knockout e
+  // Desfazer não a mudam: só Distribuir prêmios.
+  dealPosition: number | null;
   rebuyCount: number;
   currentBounty: number;
   bountiesCollected: number;
@@ -168,6 +171,50 @@ export function renumberedFinalPositions(
   return new Map(fallen.map((p, i) => [p.id, base + 1 + i]));
 }
 
+export type DealPositionedParticipant = Pick<
+  LedgerParticipant,
+  "id" | "status" | "finishPosition" | "eliminatedAt" | "dealPosition"
+>;
+
+// Posição final de todos os Participantes (CONTEXT.md, ADR 0005): quem está no
+// Acordo fica com a posição do Acordo; quem está fora é posicionado pela mesa
+// (o Coroado em 1, quem caiu pela ordem inversa das Eliminações), pulando as
+// posições do Acordo. Em jogo e Aguardando buy-in fora do Acordo ficam sem posição.
+// Knockout, Desfazer, buy-in tardio e Distribuir prêmios aplicam esta mesma regra.
+export function finalPositions(participants: DealPositionedParticipant[]): Map<number, number | null> {
+  const dealPositions = new Set(participants.flatMap((p) => (p.dealPosition === null ? [] : [p.dealPosition])));
+  const positionById = new Map<number, number | null>();
+  const fallenOutsideDeal = new Set<number>();
+  let crownedOutsideDeal: number | null = null;
+
+  for (const p of participants) {
+    if (p.dealPosition !== null) positionById.set(p.id, p.dealPosition);
+    else if (isCrowned(p)) crownedOutsideDeal = p.id;
+    else if (p.status === "eliminated") fallenOutsideDeal.add(p.id);
+    else positionById.set(p.id, null);
+  }
+
+  // Um Acordo anterior pode ter gravado em quem caiu uma posição fora da ordem
+  // das Eliminações; com toda Eliminação carimbada, a ordem sai só do carimbo.
+  const allEliminationsStamped = participants.every((p) => p.status !== "eliminated" || p.eliminatedAt !== null);
+  const eliminationPositions = renumberedFinalPositions(
+    allEliminationsStamped ? participants.map((p) => ({ ...p, finishPosition: null })) : participants
+  );
+
+  let lastAssigned = 0;
+  const assign = (id: number, tablePosition: number) => {
+    let position = Math.max(tablePosition, lastAssigned + 1);
+    while (dealPositions.has(position)) position++;
+    positionById.set(id, position);
+    lastAssigned = position;
+  };
+  if (crownedOutsideDeal !== null) assign(crownedOutsideDeal, 1);
+  for (const [id, eliminationPosition] of eliminationPositions) {
+    if (fallenOutsideDeal.has(id)) assign(id, eliminationPosition);
+  }
+  return positionById;
+}
+
 // Recusa do Status do torneio: relido no lock, pega um Encerrar ou Cancelar que
 // entrou entre a checagem de fora e a transação.
 function statusRefusal(snapshot: LedgerSnapshot): { error: string } | null {
@@ -243,8 +290,8 @@ class WorkingState {
     return Array.from(this.work.values());
   }
 
-  renumberEliminated() {
-    for (const [id, position] of renumberedFinalPositions(this.all())) this.byId(id).finishPosition = position;
+  renumber() {
+    for (const [id, position] of finalPositions(this.all())) this.byId(id).finishPosition = position;
   }
 
   patches(): ParticipantPatch[] {
@@ -339,6 +386,7 @@ class UndoBuilder {
     const victim = this.state.byId(victimId);
     if (isCrowned(victim)) {
       this.uncrown(victim);
+      this.state.renumber();
       return;
     }
     const crowned = this.state.all().find(isCrowned);
@@ -347,10 +395,9 @@ class UndoBuilder {
     const latest = this.groupsOf(victim).at(-1);
     if (latest?.kind === "elimination") this.revertBounty(victim, latest);
     victim.status = "playing";
-    victim.finishPosition = null;
     victim.eliminatedAt = null;
     this.restoreEliminators(victim);
-    this.state.renumberEliminated();
+    this.state.renumber();
   }
 
   // Remove uma linha de rebuy do grupo mais recente; quando o grupo esvazia
@@ -416,7 +463,6 @@ class UndoBuilder {
     const latest = this.groupsOf(crowned).at(-1);
     if (latest?.kind === "coronation") this.revertBounty(crowned, latest);
     crowned.status = "playing";
-    crowned.finishPosition = null;
     this.uncrowned = true;
   }
 }
@@ -452,13 +498,14 @@ export function planKnockout(snapshot: LedgerSnapshot, event: KnockoutEvent): Kn
 
   if (event.kind === "elimination") {
     victim.status = "eliminated";
+    // Sem posição, a Vítima é a melhor dos que caíram quando a ordem sai das
+    // posições gravadas (dados antigos sem carimbo de Eliminação).
     victim.finishPosition = null;
     victim.eliminatedAt = snapshot.now;
 
     if (playingBefore.length === 2) {
       const lastPlaying = playingBefore.find((p) => p.id !== victim.id)!;
       lastPlaying.status = "finished";
-      lastPlaying.finishPosition = 1;
       crowned = true;
       if (isBountyBuilder(rules)) {
         inserts.push({
@@ -480,6 +527,6 @@ export function planKnockout(snapshot: LedgerSnapshot, event: KnockoutEvent): Kn
     }
   }
 
-  if (event.kind === "elimination") state.renumberEliminated();
+  if (event.kind === "elimination") state.renumber();
   return { inserts, deleteIds: [], patches: state.patches(), crowned, uncrowned: false };
 }
